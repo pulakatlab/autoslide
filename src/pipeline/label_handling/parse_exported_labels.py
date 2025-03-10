@@ -48,32 +48,59 @@ for this_name in filenames:
 path_map = dict(zip(filenames, path_list))
 polygon_df['filepath'] = polygon_df['filename'].map(path_map)
 
-# Plot overlay
-ind = 0
-this_row = polygon_df.iloc[ind]
-this_filepath = this_row['filepath']
-this_polygon = this_row['polygon']
-this_img = plt.imread(this_filepath)
-poly_x = [x['x'] for x in this_polygon]
-poly_y = [x['y'] for x in this_polygon]
-plt.imshow(this_img)
-plt.plot(poly_x, poly_y, '-o', c='y')
-plt.show()
+# Copy all images to a directory 
+copy_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/images'
+os.makedirs(copy_dir, exist_ok=True)
+for this_name, this_path in path_map.items():
+    os.system(f'cp {this_path} {copy_dir}')
 
-# Create mask
+# # Plot overlay
+# ind = 0
+# this_row = polygon_df.iloc[ind]
+# this_filepath = this_row['filepath']
+# this_polygon = this_row['polygon']
+# this_img = plt.imread(this_filepath)
+# poly_x = [x['x'] for x in this_polygon]
+# poly_y = [x['y'] for x in this_polygon]
+# plt.imshow(this_img)
+# plt.plot(poly_x, poly_y, '-o', c='y')
+# plt.show()
 
-# polygon = [(x1,y1),(x2,y2),...] or [x1,y1,x2,y2,...]
-# width = ?
-# height = ?
+# Create mask and save to dir
+mask_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/masks'
+os.makedirs(mask_dir, exist_ok=True)
 
-width = this_img.shape[1]
-height = this_img.shape[0]
-polygon = [(x,y) for x,y in zip(poly_x, poly_y)]
-img = Image.new('L', (width, height), 0)
-ImageDraw.Draw(img).polygon(polygon, outline=1, fill=1)
-mask = np.array(img)
+for ind in trange(len(polygon_df)):
+    this_row = polygon_df.iloc[ind]
+    this_filepath = this_row['filepath']
+    this_polygon = this_row['polygon']
+    this_img = plt.imread(this_filepath)
+    poly_x = [x['x'] for x in this_polygon]
+    poly_y = [x['y'] for x in this_polygon]
 
-fig, ax = plt.subplots(1,2)
-ax[0].imshow(this_img)
-ax[1].imshow(mask)
-plt.show()
+    # polygon = [(x1,y1),(x2,y2),...] or [x1,y1,x2,y2,...]
+    # width = ?
+    # height = ?
+    width = this_img.shape[1]
+    height = this_img.shape[0]
+    polygon = [(x,y) for x,y in zip(poly_x, poly_y)]
+    img = Image.new('L', (width, height), 0)
+    ImageDraw.Draw(img).polygon(polygon, outline=1, fill=1)
+    mask = np.array(img)*255
+
+    mask_filename = os.path.basename(this_filepath).replace('.png', '_mask.png')
+    mask_filepath = os.path.join(mask_dir, mask_filename)
+    Image.fromarray(mask).save(mask_filepath)
+
+
+# width = this_img.shape[1]
+# height = this_img.shape[0]
+# polygon = [(x,y) for x,y in zip(poly_x, poly_y)]
+# img = Image.new('L', (width, height), 0)
+# ImageDraw.Draw(img).polygon(polygon, outline=1, fill=1)
+# mask = np.array(img)
+#
+# fig, ax = plt.subplots(1,2)
+# ax[0].imshow(this_img)
+# ax[1].imshow(mask)
+# plt.show()
