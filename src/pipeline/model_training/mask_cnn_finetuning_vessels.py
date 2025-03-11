@@ -16,6 +16,7 @@ from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 
 plot_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/plots'
+artifacts_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/artifacts'
 
 img_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/images/'
 mask_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/masks/'
@@ -144,16 +145,18 @@ optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 #     break
 
 
+n_epochs = 30
 all_train_losses = []
 all_val_losses = []
 flag = False
-for epoch in trange(30):
+for epoch in trange(n_epochs):
     train_epoch_loss = 0
     val_epoch_loss = 0
     model.train()
+    n_train = len(train_dl)
     pbar = tqdm(train_dl)
     for i , dt in enumerate(pbar): 
-        pbar.set_description(f"Sample {i}")
+        pbar.set_description(f"Epoch {epoch}/{n_epochs}, Batch {i}/{n_train}")
         imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
         targ = [dt[0][1] , dt[1][1]]
         targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
@@ -180,6 +183,12 @@ for epoch in trange(30):
         all_val_losses.append(val_epoch_loss)
     print(epoch , "  " , train_epoch_loss , "  " , val_epoch_loss)
 
+# Save model
+torch.save(model.state_dict(), artifacts_dir + '/mask_rcnn_model.pth')
+
+# Save loss histories
+np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
+np.save(artifacts_dir + '/val_losses.npy', all_val_losses)
 
 
 
@@ -193,8 +202,9 @@ fig.savefig(plot_dir + '/train_val_loss.png')
 plt.close(fig)
 
 
+# Plot example predicted mask from validation set
 model.eval()
-img = Image.open(img_dir + images[0]).convert("RGB")
+img = Image.open(img_dir + val_imgs[0]).convert("RGB")
 transform = T.ToTensor()
 ig = transform(img)
 with torch.no_grad():
@@ -205,7 +215,7 @@ n_preds = len(pred[0]["masks"])
 fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds,5))
 ax[0].imshow(img)
 for i in range(n_preds):
-    ax[i].imshow((pred[0]["masks"][i+1].cpu().detach().numpy() * 255).astype("uint8").squeeze())
+    ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
 # plt.show()
 fig.savefig(plot_dir + '/example_masks.png')
 plt.close(fig)
@@ -214,8 +224,9 @@ plt.close(fig)
 all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
 
 
-plt.imshow(all_preds.mean(axis = 0))
-plt.colorbar()
+fig, ax = plt.subplots(1, 2, figsize=(10,5))
+ax[0].imshow(img)
+ax[1].imshow(all_preds.mean(axis = 0))
 # plt.show()
 plt.savefig(plot_dir + '/mean_example_mask.png')
 plt.close()
