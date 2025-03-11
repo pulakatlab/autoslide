@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[37]:
-
 
 import numpy as np
 import os
@@ -17,25 +15,7 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 
-# In[3]:
-
-
-# import kagglehub
-
-# # Download latest version
-# path = kagglehub.dataset_download("psvishnu/pennfudan-database-for-pedestrian-detection-zip")
-
-# print("Path to dataset files:", path)
-
-
-# In[4]:
-
-
-# !mv /root/.cache/kagglehub/datasets/psvishnu/pennfudan-database-for-pedestrian-detection-zip/versions/1 /content/pennfudan-database-for-pedestrian-detection-zip/
-
-
-# In[8]:
-
+plot_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/plots'
 
 img_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/images/'
 mask_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/masks/'
@@ -43,33 +23,14 @@ images = sorted(os.listdir(img_dir))
 masks = sorted(os.listdir(mask_dir))
 
 
-# In[14]:
-
-
 idx = 0
 img = Image.open(img_dir + images[idx]).convert("RGB")
 mask = Image.open(mask_dir + masks[idx])
 
-
-# In[15]:
-
-
-img
-
-
-# In[11]:
-
-
-np.unique(mask)
-
-
-# In[18]:
-
-
-Image.fromarray(np.array(mask)//255 == 1)
-
-
-# In[30]:
+fig,axis = plt.subplots(1,2,figsize=(10,5))
+axis[0].imshow(img)
+axis[1].imshow(mask)
+plt.show()
 
 
 class CustDat(torch.utils.data.Dataset):
@@ -109,8 +70,6 @@ class CustDat(torch.utils.data.Dataset):
         return len(self.imgs)
 
 
-# In[20]:
-
 
 model = torchvision.models.detection.maskrcnn_resnet50_fpn()
 in_features = model.roi_heads.box_predictor.cls_score.in_features
@@ -120,20 +79,15 @@ hidden_layer = 256
 model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask , hidden_layer , 2)
 
 
-# In[21]:
-
-
 transform = T.ToTensor()
 
 
-# In[22]:
 
 
 def custom_collate(data):
   return data
 
 
-# In[23]:
 
 
 num = int(0.9 * len(images))
@@ -146,7 +100,6 @@ train_masks = np.array(masks)[train_imgs_inds]
 val_masks = np.array(masks)[val_imgs_inds]
 
 
-# In[31]:
 
 
 train_dl = torch.utils.data.DataLoader(CustDat(train_imgs , train_masks) ,
@@ -163,32 +116,32 @@ val_dl = torch.utils.data.DataLoader(CustDat(val_imgs , val_masks) ,
                                  pin_memory = True if torch.cuda.is_available() else False)
 
 
-# In[32]:
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device
 
 
-# In[33]:
 
 
 model.to(device)
 
 
-# In[34]:
 
 
 params = [p for p in model.parameters() if p.requires_grad]
 
 
-# In[35]:
 
 
 optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 
 
-# In[38]:
+# for i, dt in enumerate(train_dl):
+#     imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
+#     targ = [dt[0][1] , dt[1][1]]
+#     targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
+#     break
 
 
 all_train_losses = []
@@ -198,7 +151,9 @@ for epoch in trange(30):
     train_epoch_loss = 0
     val_epoch_loss = 0
     model.train()
-    for i , dt in enumerate(train_dl):
+    pbar = tqdm(train_dl)
+    for i , dt in enumerate(pbar): 
+        pbar.set_description(f"Sample {i}")
         imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
         targ = [dt[0][1] , dt[1][1]]
         targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
@@ -214,6 +169,8 @@ for epoch in trange(30):
     all_train_losses.append(train_epoch_loss)
     with torch.no_grad():
         for j , dt in enumerate(val_dl):
+            if len(dt) < 2:
+                continue
             imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
             targ = [dt[0][1] , dt[1][1]]
             targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
@@ -224,19 +181,16 @@ for epoch in trange(30):
     print(epoch , "  " , train_epoch_loss , "  " , val_epoch_loss)
 
 
-# In[ ]:
 
 
-plt.plot(all_train_losses)
-
-
-# In[ ]:
-
-
-plt.plot(all_val_losses)
-
-
-# In[ ]:
+fig, ax = plt.subplots(1, 2, figsize=(10,5))
+ax[0].plot(all_train_losses)
+ax[1].plot(all_val_losses)
+ax[0].set_title("Train Loss")
+ax[1].set_title("Validation Loss")
+# plt.show()
+fig.savefig(plot_dir + '/train_val_loss.png')
+plt.close(fig)
 
 
 model.eval()
@@ -247,47 +201,26 @@ with torch.no_grad():
     pred = model([ig.to(device)])
 
 
-# In[ ]:
-
-
-img
-
-
-# In[ ]:
-
-
-pred
-
-
-# In[ ]:
-
-
 n_preds = len(pred[0]["masks"])
-fig, ax = plt.subplots(1, n_preds, figsize=(5*n_preds,5))
+fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds,5))
+ax[0].imshow(img)
 for i in range(n_preds):
-    ax[i].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
-
-
-# In[ ]:
-
-
-img.size
-
-
-# In[ ]:
+    ax[i].imshow((pred[0]["masks"][i+1].cpu().detach().numpy() * 255).astype("uint8").squeeze())
+# plt.show()
+fig.savefig(plot_dir + '/example_masks.png')
+plt.close(fig)
 
 
 all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
 
 
-# In[ ]:
-
-
 plt.imshow(all_preds.mean(axis = 0))
 plt.colorbar()
+# plt.show()
+plt.savefig(plot_dir + '/mean_example_mask.png')
+plt.close()
 
 
-# In[ ]:
 
 
 
