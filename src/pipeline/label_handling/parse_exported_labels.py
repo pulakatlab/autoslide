@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 import numpy as np
 
-export_json_path = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/Export_catalog_query_3_10_2025.ndjson'
+export_json_path = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/ndjson/Export_catalog_query_3_10_2025.ndjson'
 # export_json_path = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/Export_catalog_query_3_10_2025_1_img.ndjson'
 
 export_df = pd.read_json(export_json_path, lines=True)
@@ -23,7 +23,7 @@ for row_ind in trange(len(export_df)):
 
     # this_key = project_keys[0]
     for this_key in project_keys:
-        labels = export_df.iloc[0]['projects'][this_key]['labels']
+        labels = export_df.iloc[row_ind]['projects'][this_key]['labels']
 
         for this_label in labels:
             objects = this_label['annotations']['objects']
