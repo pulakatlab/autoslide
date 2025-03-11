@@ -1,3 +1,11 @@
+"""
+Resources
+- https://github.com/DatumLearning/Mask-RCNN-finetuning-PyTorch/blob/main/notebook.ipynb
+- https://www.youtube.com/watch?v=vV9L71hK-RE
+- https://www.youtube.com/watch?v=t1MrzuAUdoE
+
+"""
+
 #!/usr/bin/env python
 # coding: utf-8
 
