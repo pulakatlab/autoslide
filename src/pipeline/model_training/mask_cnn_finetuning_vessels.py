@@ -212,32 +212,34 @@ plt.close(fig)
 
 # Plot example predicted mask from validation set
 model.eval()
-img = Image.open(img_dir + val_imgs[0]).convert("RGB")
-transform = T.ToTensor()
-ig = transform(img)
-with torch.no_grad():
-    pred = model([ig.to(device)])
+
+for img_path in tqdm(val_imgs):
+    img = Image.open(img_dir + img_path).convert("RGB")
+    transform = T.ToTensor()
+    ig = transform(img)
+    with torch.no_grad():
+        pred = model([ig.to(device)])
 
 
-n_preds = len(pred[0]["masks"])
-fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds,5))
-ax[0].imshow(img)
-for i in range(n_preds):
-    ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
-# plt.show()
-fig.savefig(plot_dir + '/example_masks.png')
-plt.close(fig)
+    n_preds = len(pred[0]["masks"])
+    fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds,5))
+    ax[0].imshow(img)
+    for i in range(n_preds):
+        ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
+    # plt.show()
+    fig.savefig(plot_dir + f'/{img_path.split(".")[0]}example_masks.png')
+    plt.close(fig)
 
 
-all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
+    all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
 
 
-fig, ax = plt.subplots(1, 2, figsize=(10,5))
-ax[0].imshow(img)
-ax[1].imshow(all_preds.mean(axis = 0))
-# plt.show()
-plt.savefig(plot_dir + '/mean_example_mask.png')
-plt.close()
+    fig, ax = plt.subplots(1, 2, figsize=(10,5))
+    ax[0].imshow(img)
+    ax[1].imshow(all_preds.mean(axis = 0))
+    # plt.show()
+    plt.savefig(plot_dir + f'/{img_path.split(".")[0]}mean_example_mask.png')
+    plt.close()
 
 
 
