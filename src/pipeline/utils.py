@@ -31,10 +31,32 @@ class slide_handler():
         self.og_height = int(self.metadata['OriginalHeight'])
         self.magnification = int(self.metadata['AppMag'])
 
-def gen_step_windows(step_shape, window_shape, image_shape):
+def gen_step_windows(
+        step_shape = None, 
+        window_shape = None, 
+        image_shape = None,
+        overlap = 0.8
+        ):
     """
     Generate steps for sliding windows in image.
+
+    Inputs:
+        step_shape: step shape
+        window_shape: window shape
+        image_shape: image shape
+        overlap: overlap between windows
+
+    Outputs:
+        step_list: list of steps
+
     """
+    # Make sure window_shape is not larger than image_shape
+    assert (window_shape[0] <= image_shape[0]) and (window_shape[1] <= image_shape[1]), \
+            f'Window shape {window_shape} must be smaller than image shape {image_shape}'
+
+    if (step_shape is None) and (window_shape is not None) and (overlap is not None):
+        step_shape = [int(i*(1-overlap)) for i in window_shape]
+
     step_list = []
     for i in np.arange(0, image_shape[0]-window_shape[0], step_shape[0]):
         for j in np.arange(0, image_shape[1]-window_shape[1], step_shape[1]):
