@@ -1,6 +1,6 @@
 [core]
-    remote = drive
+    remote = s3
 ['remote "myremote"']
     url = /tmp/dvcstore
-['remote "drive"']
-    url = ../gdrive:/14nxZD1esWqehU01ytD0zUrAQQvLl221X
+['remote "s3"']
+    url = s3://abu-dvc-store/auto-slide

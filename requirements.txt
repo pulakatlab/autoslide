@@ -11,3 +11,4 @@ tqdm
 pillow
 scipy
 dvc
+dvc-s3
