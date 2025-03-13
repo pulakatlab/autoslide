@@ -10,3 +10,4 @@ scikit-learn
 tqdm
 pillow
 scipy
+dvc
