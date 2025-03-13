@@ -1,2 +1,3 @@
 slideio
-pytorch
+torch
+torchvision
