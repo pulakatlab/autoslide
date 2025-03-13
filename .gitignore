@@ -1,0 +1,6 @@
+*.git
+*.pyc
+*.svs
+*.cache*
+.aider*
+/artifacts
