@@ -1,94 +1,65 @@
-# Automated Slide Analysis Pipeline
+# 🔬 AutoSlide: AI-Powered Histological Analysis
 
-This project provides a pipeline for automated analysis of histological slides, particularly focusing on tissue identification, region extraction, and fibrosis analysis.
+**Unlock the hidden patterns in your histological slides with deep learning**
 
-## Overview
+AutoSlide is a comprehensive pipeline that transforms how researchers analyze histological slides, combining computer vision with deep learning to identify tissues, detect vessels, and quantify fibrosis with unprecedented precision.
 
-The pipeline processes histological slides (SVS format) through several stages:
-1. Initial thresholding to extract tissue samples
-2. Region identification and annotation
-3. Extraction of sections with specific properties
-4. Analysis of selected regions
-5. Vessel detection using Mask R-CNN
+## ✨ Key Features
 
-## Pipeline Stages
+- **Automated Tissue Recognition** - Instantly identify and classify different tissue types
+- **Smart Region Selection** - Automatically extract the most informative regions for analysis
+- **Advanced Vessel Detection** - Precisely locate and measure blood vessels using Mask R-CNN
+- **Fibrosis Quantification** - Objectively measure fibrotic changes in tissue samples
+- **Reproducible Workflow** - Ensure consistent results across multiple samples and studies
 
-### 1. Initial Annotation (`initial_annotation.py`)
-- Loads slide images and performs thresholding
-- Identifies distinct regions using morphological operations
-- Extracts region properties (area, eccentricity, dimensions)
-- Outputs regions for manual labeling
-- Generates visualization of identified regions
+## 🚀 The AutoSlide Pipeline
 
-### 2. Final Annotation (`final_annotation.py`)
-- Takes manually annotated CSV files
-- Merges marked tissues and applies appropriate tissue type labels
-- Creates labeled masks for downstream analysis
-- Generates visualization of the final annotation
+Our end-to-end workflow transforms raw histological slides into actionable insights:
 
-### 3. Region Suggestion (`suggest_regions.py`)
-- Identifies regions of interest based on tissue type
-- Applies edge removal to avoid boundary artifacts
-- Generates windows of specified size for analysis
-- Annotates sections with tissue metadata
-- Outputs selected regions for further analysis
+1. **🔍 Initial Annotation** - Intelligent thresholding and region identification
+2. **🏷️ Final Annotation** - Precise tissue labeling and mask generation
+3. **📊 Region Suggestion** - Strategic selection of analysis-ready sections
+4. **🧩 Pixel Clustering** - Advanced segmentation of tissue components
+5. **🔬 Vessel Detection** - Deep learning-based identification of vascular structures
 
-### 4. Pixel Clustering (`pixel_clustering.py`)
-- Performs clustering of pixels to identify tissue components
-- Uses dimensionality reduction (PCA) for visualization
-- Applies clustering algorithms (K-means, GMM) for tissue segmentation
-- Generates visualizations of clustering results
+## 💡 Why AutoSlide?
 
-### 5. Vessel Detection (`mask_cnn_finetuning_vessels.py`)
-- Fine-tunes a Mask R-CNN model on labeled vessel images
-- Uses PyTorch's torchvision implementation of Mask R-CNN
-- Trains on manually annotated vessel masks
-- Generates predictions for vessel locations and shapes
-- Outputs visualizations of detected vessels
+- **Save Time** - Automate tedious manual annotation and region selection
+- **Increase Accuracy** - Leverage deep learning for consistent, objective analysis
+- **Enhance Reproducibility** - Standardize your histological analysis workflow
+- **Discover More** - Identify patterns and features invisible to the human eye
 
-## Selection Criteria
+## 🛠️ Technical Highlights
 
-Sections are selected based on the following criteria:
-- Sufficient distance from tissue edge
-- Absence of blood vessels (or presence, depending on analysis goals)
-- Appropriate tissue type (e.g., heart tissue)
-- Minimal background
+- **Deep Learning Integration** - Fine-tuned Mask R-CNN models for precise vessel detection
+- **Advanced Image Processing** - Sophisticated morphological operations for tissue segmentation
+- **Intelligent Selection Algorithms** - Context-aware region extraction based on tissue properties
+- **Comprehensive Visualization** - Rich visual outputs at every stage of the pipeline
 
-## Data Preparation
+## 📊 Data Preparation & Model Training
 
-The pipeline includes tools for handling labeled data:
-- `parse_exported_labels.py` - Processes exported label data from annotation tools
-- Creates binary masks from polygon annotations
-- Organizes images and masks for model training
+AutoSlide includes specialized tools for:
+- Converting annotations from popular labeling tools into training-ready formats
+- Creating high-quality binary masks from polygon annotations
+- Fine-tuning state-of-the-art deep learning models on your specific tissue types
+- Generating insightful visualizations of model performance
 
-## Model Training
+## 📋 Requirements
 
-The Mask R-CNN model is trained using:
-- Manually annotated vessel images
-- Binary masks indicating vessel locations
-- PyTorch's implementation of Mask R-CNN with ResNet-50 backbone
-- Fine-tuning approach to leverage pre-trained weights
+The pipeline leverages powerful Python libraries:
+- **slideio** - For efficient slide image handling
+- **PyTorch** - For deep learning model training and inference
+- **scikit-learn** - For clustering and dimensionality reduction
+- **OpenCV** - For advanced image processing
+- **matplotlib/pandas** - For visualization and data handling
 
-## Output
+## 🔧 Getting Started
 
-The pipeline generates:
-- Annotated images showing identified regions
-- CSV files with region metadata
-- Extracted image sections for further analysis
-- Visualizations of the selection process
-- Vessel detection masks and overlays
-- Model training metrics and visualizations
+Run the complete pipeline with a single command:
+```bash
+python src/pipeline/run_pipeline.py
+```
 
-## Usage
+Or execute individual stages as needed for your specific workflow.
 
-Each stage of the pipeline can be run independently, with outputs from earlier stages feeding into later ones. The typical workflow follows the numbered pipeline stages described above.
-
-## Requirements
-
-The pipeline requires several Python libraries:
-- slideio - for handling slide images
-- PyTorch - for deep learning models
-- scikit-learn - for clustering and dimensionality reduction
-- OpenCV - for image processing
-- matplotlib - for visualization
-- numpy/pandas - for data handling
+Ready to transform your histological analysis? Get started with AutoSlide today!

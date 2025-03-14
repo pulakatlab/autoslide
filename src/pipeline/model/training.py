@@ -192,7 +192,8 @@ for epoch in trange(n_epochs):
     print(epoch , "  " , train_epoch_loss , "  " , val_epoch_loss)
 
 # Save model
-torch.save(model.state_dict(), os.path.join(artifacts_dir, '/mask_rcnn_model.pth'))
+torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
+
 
 # Save loss histories
 np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
