@@ -23,11 +23,11 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 
-plot_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/plots'
-artifacts_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/artifacts'
+plot_dir = '/home/abuzarmahmood/projects/auto_slide/plots'
+artifacts_dir = '/home/abuzarmahmood/projects/auto_slide/artifacts'
 
-img_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/images/'
-mask_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/masks/'
+img_dir = '/home/abuzarmahmood/projects/auto_slide/data/labelled_images/images/'
+mask_dir = '/home/abuzarmahmood/projects/auto_slide/data/labelled_images/masks/'
 images = sorted(os.listdir(img_dir))
 masks = sorted(os.listdir(mask_dir))
 
@@ -79,7 +79,6 @@ class CustDat(torch.utils.data.Dataset):
         return len(self.imgs)
 
 
-
 model = torchvision.models.detection.maskrcnn_resnet50_fpn()
 in_features = model.roi_heads.box_predictor.cls_score.in_features
 model.roi_heads.box_predictor = FastRCNNPredictor(in_features , 2)
@@ -90,14 +89,8 @@ model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask , hidden_lay
 
 transform = T.ToTensor()
 
-
-
-
 def custom_collate(data):
   return data
-
-
-
 
 num = int(0.9 * len(images))
 num = num if num % 2 == 0 else num + 1
@@ -107,9 +100,6 @@ train_imgs = np.array(images)[train_imgs_inds]
 val_imgs = np.array(images)[val_imgs_inds]
 train_masks = np.array(masks)[train_imgs_inds]
 val_masks = np.array(masks)[val_imgs_inds]
-
-
-
 
 train_dl = torch.utils.data.DataLoader(CustDat(train_imgs , train_masks) ,
                                  batch_size = 2 ,
@@ -129,9 +119,6 @@ val_dl = torch.utils.data.DataLoader(CustDat(val_imgs , val_masks) ,
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device
-
-
-
 
 model.to(device)
 
@@ -192,7 +179,7 @@ for epoch in trange(n_epochs):
     print(epoch , "  " , train_epoch_loss , "  " , val_epoch_loss)
 
 # Save model
-torch.save(model.state_dict(), artifacts_dir + '/mask_rcnn_model.pth')
+torch.save(model.state_dict(), model_save_pat '/mask_rcnn_model.pth')
 
 # Save loss histories
 np.save(artifacts_dir + '/train_losses.npy', all_train_losses)

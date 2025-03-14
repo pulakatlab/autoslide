@@ -1,6 +1,4 @@
 [core]
     remote = s3
-['remote "myremote"']
-    url = /tmp/dvcstore
 ['remote "s3"']
     url = s3://abu-dvc-store/auto-slide
