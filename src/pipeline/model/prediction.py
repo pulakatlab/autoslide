@@ -20,6 +20,14 @@ from skimage import morphology as morph
 from scipy.ndimage import binary_fill_holes
 from glob import glob
 
+import torch
+import torchvision
+from torchvision import transforms as T
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+from PIL import Image
+
+##############################
 data_dir = os.path.join(auto_slide_dir, 'data') 
 mask_dir = os.path.join(data_dir, 'final_annotation') 
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 
@@ -70,12 +78,17 @@ fin_metadata_df = fin_metadata_df.drop_duplicates(subset = 'section_hash')
 ##############################
 # Expand original section
 ##############################
-
 og_image_path = os.path.join(
         data_dir,
-        'suggested_regions/TRI_130_163A_40490/images/4_heart_6988590045.png'
+        'labelled_images/images/1_heart_1022472553.png'
         )
-sec_name = '4_heart_6988590045'
+
+# og_image_path = os.path.join(
+#         data_dir,
+#         'suggested_regions/TRI_130_163A_40490/images/4_heart_6988590045.png'
+#         )
+# sec_name = '4_heart_6988590045'
+sec_name = os.path.basename(og_image_path).split('.')[0]
 sec_hash = int(sec_name.split('_')[-1])
 
 sec_metadata = fin_metadata_df[fin_metadata_df['section_hash'] == sec_hash]
@@ -168,3 +181,32 @@ fig, ax = utils.visualize_sections(
 fig.suptitle('Expanded Section Step List')
 fig.savefig(os.path.join(plot_dir, f'{sec_name}_expanded_section_step_list.png'))
 plt.close(fig)
+
+##############################
+# Load model
+artifacts_dir = os.path.join(auto_slide_dir, 'artifacts') 
+model_save_path = artifacts_dir + '/mask_rcnn_model.pth'
+
+# Recrate base model
+model = torchvision.models.detection.maskrcnn_resnet50_fpn()
+in_features = model.roi_heads.box_predictor.cls_score.in_features
+model.roi_heads.box_predictor = FastRCNNPredictor(in_features , 2)
+in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
+hidden_layer = 256
+model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask , hidden_layer , 2)
+
+# Load model weights
+model.load_state_dict(torch.load(model_save_path, weights_only=True))
+model.eval()
+
+
+transform = T.ToTensor()
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+
+img = Image.open(og_image_path).convert("RGB")
+ig = transform(expanded_img)
+with torch.no_grad():
+    pred = model([ig.to(device)])
+n_preds = len(pred[0]["masks"])
+all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
