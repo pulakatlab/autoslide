@@ -43,18 +43,28 @@ plt.show()
 
 
 class CustDat(torch.utils.data.Dataset):
-    def __init__(self , images , masks):
+    def __init__(self, images, masks):
         self.imgs = images
         self.masks = masks
+        # Define augmentation transformations
+        self.transform = T.Compose([
+            T.RandomHorizontalFlip(0.5),
+            T.RandomVerticalFlip(0.5),
+            T.RandomRotation(degrees=30),
+            T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+            T.ToTensor()
+        ])
+        # Simple transform for validation/testing
+        self.base_transform = T.ToTensor()
 
-    def __getitem__(self , idx):
+    def __getitem__(self, idx):
         img = Image.open(img_dir + self.imgs[idx]).convert("RGB")
         mask = Image.open(mask_dir + self.masks[idx])
         mask = np.array(mask) // 255
         obj_ids = np.unique(mask)
         obj_ids = obj_ids[1:]
         num_objs = len(obj_ids)
-        masks = np.zeros((num_objs , mask.shape[0] , mask.shape[1]))
+        masks = np.zeros((num_objs, mask.shape[0], mask.shape[1]))
         for i in range(num_objs):
             masks[i][mask == i+1] = True
         boxes = []
@@ -64,16 +74,19 @@ class CustDat(torch.utils.data.Dataset):
             xmax = np.max(pos[1])
             ymin = np.min(pos[0])
             ymax = np.max(pos[0])
-            boxes.append([xmin , ymin , xmax , ymax])
-        boxes = torch.as_tensor(boxes , dtype = torch.float32)
-        labels = torch.ones((num_objs,) , dtype = torch.int64)
-        masks = torch.as_tensor(masks , dtype = torch.uint8)
+            boxes.append([xmin, ymin, xmax, ymax])
+        boxes = torch.as_tensor(boxes, dtype=torch.float32)
+        labels = torch.ones((num_objs,), dtype=torch.int64)
+        masks = torch.as_tensor(masks, dtype=torch.uint8)
 
         target = {}
         target["boxes"] = boxes
         target["labels"] = labels
         target["masks"] = masks
-        return T.ToTensor()(img) , target
+        
+        # Apply augmentation during training
+        img_tensor = self.transform(img)
+        return img_tensor, target
 
     def __len__(self):
         return len(self.imgs)
@@ -87,7 +100,7 @@ hidden_layer = 256
 model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask , hidden_layer , 2)
 
 
-transform = T.ToTensor()
+# No need for a separate transform variable as it's now in the CustDat class
 
 def custom_collate(data):
   return data
@@ -181,6 +194,7 @@ for epoch in trange(n_epochs):
 # Save model
 torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
 
+
 # Save loss histories
 np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
 np.save(artifacts_dir + '/val_losses.npy', all_val_losses)
@@ -202,6 +216,7 @@ model.eval()
 
 for img_path in tqdm(val_imgs):
     img = Image.open(img_dir + img_path).convert("RGB")
+    # Use the base transform for prediction to match training
     transform = T.ToTensor()
     ig = transform(img)
     with torch.no_grad():
