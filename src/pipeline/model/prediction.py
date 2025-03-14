@@ -2,10 +2,10 @@
 For prediction on every section, perform prediction on a radius larger than the image
 and aggregate the predictions.
 """
-auto_slide_dir = '/media/bigdata/projects/pulakat_lab/auto_slide'
+import os
+auto_slide_dir = '/media/bigdata/projects/auto_slide'
 plot_dir = os.path.join(auto_slide_dir, 'plots')
 
-import os
 import sys
 sys.path.append(os.path.join(auto_slide_dir, 'src', 'pipeline'))
 import utils
@@ -20,11 +20,11 @@ from skimage import morphology as morph
 from scipy.ndimage import binary_fill_holes
 from glob import glob
 
-data_dir = '/media/storage/svs_tri_files'
+data_dir = os.path.join(auto_slide_dir, 'data') 
 mask_dir = os.path.join(data_dir, 'final_annotation') 
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 
 section_dir = os.path.join(data_dir, 'suggested_regions')
-data_path_list = glob(os.path.join(data_dir, '*TRI*.svs'))
+data_path_list = glob(os.path.join(data_dir, '**', '*TRI*.svs'))
 
 # Get paths to all metadata files
 metadata_path_list = glob(os.path.join(section_dir, '**','*TRI*.csv'), recursive=True)
@@ -71,7 +71,10 @@ fin_metadata_df = fin_metadata_df.drop_duplicates(subset = 'section_hash')
 # Expand original section
 ##############################
 
-og_image_path = '/media/storage/svs_tri_files/suggested_regions/TRI_130_163A_40490/images/4_heart_6988590045.png'
+og_image_path = os.path.join(
+        data_dir,
+        'suggested_regions/TRI_130_163A_40490/images/4_heart_6988590045.png'
+        )
 sec_name = '4_heart_6988590045'
 sec_hash = int(sec_name.split('_')[-1])
 
@@ -99,6 +102,11 @@ expanded_section = [
         section_center[0] + x_radius,
         section_center[1] + y_radius
         ]
+
+expanded_section_size = (
+        expanded_section[2] - expanded_section[0],
+        expanded_section[3] - expanded_section[1]
+        )
 
 expanded_img = utils.get_section(scene, expanded_section, down_sample=10)
 
@@ -129,8 +137,34 @@ plt.close(fig)
 # Perform prediction by stepping through expanded section 
 ##############################
 
-step_list = gen_step_windows(
-        window_shape = np.array(expanded_img.shape[:2]) // 2,
-        image_shape = expanded_img.shape[:2],
-        overlap = 0.8,
+# step_list = gen_step_windows(
+#         window_shape = np.array(expanded_img.shape[:2]) // 2,
+#         image_shape = expanded_img.shape[:2],
+#         overlap = 0.8,
+#         )
+# step_list = np.array(step_list)
+#
+step_list = utils.gen_step_windows(
+        window_shape = np.array(expanded_section_size) // 2, 
+        image_shape = expanded_section_size,
+        overlap = 0.5,
         )
+step_list = np.array(step_list)
+step_list[:,0] = step_list[:,0] + expanded_section[0]
+step_list[:,1] = step_list[:,1] + expanded_section[1]
+step_list[:,2] = step_list[:,2] + expanded_section[0]
+step_list[:,3] = step_list[:,3] + expanded_section[1]
+
+from importlib import reload
+reload(utils)
+
+# Plot step_list
+fig, ax = utils.visualize_sections(
+        scene, step_list, return_image=True, crop_to_sections=True,
+        down_sample=10,
+        edgecolor=np.arange(len(step_list)),
+        linewidth=5,
+        )
+fig.suptitle('Expanded Section Step List')
+fig.savefig(os.path.join(plot_dir, f'{sec_name}_expanded_section_step_list.png'))
+plt.close(fig)

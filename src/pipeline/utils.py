@@ -68,39 +68,80 @@ def visualize_sections(
         step_list,
         plot_n = 10,
         down_sample = 100,
-        edgecolor = 'r',
+        edgecolor = 'y',
         return_image = False,
+        crop_to_sections = False,
+        linewidth = 1,
         ):
     """
     Visualize step window sizes.
+
+    Inputs:
+        scene: slideio scene object
+        step_list: list of steps
+        plot_n: number of steps to plot
+        down_sample: down sample factor
+        edgecolor: edge color
+        return_image: return image or show it
+        crop_to_sections: crop image to sections
+
+    Outputs:
+        fig: figure
+        ax: axis
     """
 
     # If edgecolor is string, keep it the same for all windows
-    # Else, if it is a vector, use it to color the windows
+    # Else, if it is a vector of strings, use it to color the windows
     if isinstance(edgecolor, str):
         edgecolor = [edgecolor]*len(step_list)
         label_colormap = {edgecolor[0]: edgecolor[0]}
-    else:
+    elif all(isinstance(i, str) for i in edgecolor):
         assert len(edgecolor) == len(step_list)
         cmap = mpl.colormaps.get_cmap('tab10') 
         edgecolor_labels = [str(i) for i in edgecolor]
         unique_labels = np.unique(edgecolor_labels)
         label_colormap = {label: cmap(i) for i, label in enumerate(unique_labels)}
+    else:
+        cmap = mpl.colormaps.get_cmap('tab10')
+        label_colormap = {i: cmap(i) for i in edgecolor} 
 
     if plot_n == -1:
         plot_n = len(step_list)
 
-    image_shape = scene.rect[2:]
+    if not crop_to_sections:
+        image_shape = scene.rect[2:]
     
-    # Check that windows are not larger than image
-    for i, j, i_end, j_end in step_list:
-        assert i_end <= image_shape[0]
-        assert j_end <= image_shape[1]
+        # Check that windows are not larger than image
+        for i, j, i_end, j_end in step_list:
+            assert i_end <= image_shape[0]
+            assert j_end <= image_shape[1]
 
-    down_shape = [int(i/down_sample) for i in image_shape]
+        down_shape = [int(i/down_sample) for i in image_shape]
 
-    small_image = scene.read_block(size=down_shape)
-    if small_image.shape[:2] != down_shape:
+        small_image = scene.read_block(size=down_shape)
+    else:
+        step_list_array = np.array(step_list)
+        # Get min and max x and y coordinates
+        min_x = np.min(step_list_array[:, 0])
+        min_y = np.min(step_list_array[:, 1])
+        max_x = np.max(step_list_array[:, 2])
+        max_y = np.max(step_list_array[:, 3])
+        width = max_x - min_x
+        height = max_y - min_y
+
+        # Correct step_list to be relative to the new image
+        step_list = step_list_array - np.array([min_x, min_y, min_x, min_y])
+
+        image_shape = (max_x - min_x, max_y - min_y)
+        down_shape = [int(i/down_sample) for i in image_shape]
+
+        small_image = scene.read_block(
+                rect=(min_x, min_y, width, height), 
+                size=down_shape,
+                )
+
+    if small_image.shape[:2] != down_shape and \
+            small_image.shape[:2][::-1] == image_shape:
         small_image = np.swapaxes(small_image, 0, 1) 
 
     fig, ax = plt.subplots(1,1)
@@ -123,7 +164,7 @@ def visualize_sections(
                     (j, i),
                     j_end-j,
                     i_end-i,
-                    linewidth=1,
+                    linewidth=linewidth,
                     edgecolor= label_colormap[edgecolor[counter]],
                     facecolor='none')
             ax.add_patch(rect)
@@ -252,40 +293,6 @@ def get_section(
             size=down_size,
             )
     return image
-
-def get_section(
-        scene,
-        section,
-        down_sample,
-        ):
-    """
-    Get section from scene.
-
-    Inputs:
-        scene: slideio scene object
-        section: section to single out
-        down_sample: down sample factor
-
-    Outputs:
-        image: image
-    """
-    section_size = (section[2]-section[0], section[3]-section[1])
-    down_size = (
-            int(section_size[0]/down_sample), 
-            int(section_size[1]/down_sample)
-            )
-
-    x = section[0]
-    y = section[1]
-    w = section[2]-section[0]
-    h = section[3]-section[1]
-    block_tuple = (x, y, w, h)
-    image = scene.read_block(
-            block_tuple,
-            size=down_size,
-            )
-    return image
-
 
 def single_out(
         scene, 
