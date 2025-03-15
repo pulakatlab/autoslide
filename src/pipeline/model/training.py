@@ -34,6 +34,9 @@ mask_dir = os.path.join(labelled_data_dir, 'masks/')
 images = sorted(os.listdir(img_dir))
 masks = sorted(os.listdir(mask_dir))
 
+for img_path, mask_path in zip(images, masks):
+    assert img_path.split(".")[0] in mask_path
+
 transform = T.Compose([
             T.RandomHorizontalFlip(0.5),
             T.RandomVerticalFlip(0.5),
@@ -135,6 +138,30 @@ val_imgs = np.array(images)[val_imgs_inds]
 train_masks = np.array(masks)[train_imgs_inds]
 val_masks = np.array(masks)[val_imgs_inds]
 
+test_plot_dir = os.path.join(plot_dir, 'train_val_split')
+os.makedirs(test_plot_dir, exist_ok=True)
+
+
+for img_name, mask_name in zip(train_imgs, train_masks):
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    img = Image.open(img_dir + img_name).convert("RGB")
+    mask = Image.open(mask_dir + mask_name)
+    ax[0].imshow(img)
+    ax[1].imshow(mask)
+    # plt.show()
+    fig.savefig(test_plot_dir + f'/{img_name.split(".")[0]}train.png')
+    plt.close(fig)
+
+for img_name, mask_name in zip(val_imgs, val_masks):
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    img = Image.open(img_dir + img_name).convert("RGB")
+    mask = Image.open(mask_dir + mask_name)
+    ax[0].imshow(img)
+    ax[1].imshow(mask)
+    # plt.show()
+    fig.savefig(test_plot_dir + f'/{img_name.split(".")[0]}val.png')
+    plt.close(fig)
+
 train_dl = torch.utils.data.DataLoader(CustDat(train_imgs , train_masks, transform),
                                  batch_size = 2 ,
                                  shuffle = True ,
@@ -166,6 +193,8 @@ optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 n_epochs = 30
 all_train_losses = []
 all_val_losses = []
+best_val_loss = float('inf')  # Track the best validation loss
+best_model = None
 flag = False
 for epoch in trange(n_epochs):
     train_epoch_loss = 0
@@ -200,9 +229,15 @@ for epoch in trange(n_epochs):
             val_epoch_loss += losses.cpu().detach().numpy()
         all_val_losses.append(val_epoch_loss)
     print(epoch , "  " , train_epoch_loss , "  " , val_epoch_loss)
+    
+    # Save model only if validation loss improves
+    if val_epoch_loss < best_val_loss:
+        best_val_loss = val_epoch_loss
+        best_model = model.state_dict()
+        # torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
+        # print(f"New best model saved with validation loss: {best_val_loss}")
 
-# Save model
-torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
+torch.save(best_model, os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
 
 
 # Save loss histories
@@ -224,8 +259,9 @@ plt.close(fig)
 # Plot example predicted mask from validation set
 model.eval()
 
-for img_path in tqdm(val_imgs):
+for img_path, mask_path in tqdm(zip(val_imgs, val_masks), total=len(val_imgs)):
     img = Image.open(img_dir + img_path).convert("RGB")
+    mask = Image.open(mask_dir + mask_path)
     # Use the base transform for prediction to match training
     transform = T.ToTensor()
     ig = transform(img)
@@ -252,10 +288,12 @@ for img_path in tqdm(val_imgs):
         all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
 
 
-        fig, ax = plt.subplots(1, 2, figsize=(10,5))
+        fig, ax = plt.subplots(1, 3, figsize=(10,5))
         ax[0].imshow(img)
-        ax[1].imshow(all_preds.mean(axis = 0))
-        # plt.show()
+        ax[1].imshow(all_preds.mean(axis = 0) > 0)
+        ax[2].imshow(mask.T)
+        plt.show()
+
         plt.savefig(plot_dir + f'/{img_path.split(".")[0]}mean_example_mask.png')
         plt.close()
 
