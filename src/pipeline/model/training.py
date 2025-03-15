@@ -23,10 +23,13 @@ from torchvision.transforms import v2 as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
-autoslide_dir = '/media/bigdata/projects/auto_slide'
+autoslide_dir = '/home/exouser/project/auto_slide'
 
 plot_dir = os.path.join(autoslide_dir, 'plots') 
 artifacts_dir = os.path.join(autoslide_dir, 'artifacts')
+
+os.makedirs(plot_dir, exist_ok = True)
+os.makedirs(artifacts_dir, exist_ok = True)
 
 labelled_data_dir = os.path.join(autoslide_dir, 'data/labelled_images')
 img_dir = os.path.join(labelled_data_dir, 'images/') 
@@ -231,7 +234,7 @@ val_dl = torch.utils.data.DataLoader(CustDat(val_imgs , val_masks, transform),
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device
+print(f'Using device : {device}')
 
 model.to(device)
 params = [p for p in model.parameters() if p.requires_grad]
