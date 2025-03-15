@@ -156,6 +156,7 @@ optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 n_epochs = 30
 all_train_losses = []
 all_val_losses = []
+best_val_loss = float('inf')  # Track the best validation loss
 flag = False
 for epoch in trange(n_epochs):
     train_epoch_loss = 0
@@ -190,9 +191,12 @@ for epoch in trange(n_epochs):
             val_epoch_loss += losses.cpu().detach().numpy()
         all_val_losses.append(val_epoch_loss)
     print(epoch , "  " , train_epoch_loss , "  " , val_epoch_loss)
-
-# Save model
-torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
+    
+    # Save model only if validation loss improves
+    if val_epoch_loss < best_val_loss:
+        best_val_loss = val_epoch_loss
+        torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
+        print(f"New best model saved with validation loss: {best_val_loss}")
 
 
 # Save loss histories
