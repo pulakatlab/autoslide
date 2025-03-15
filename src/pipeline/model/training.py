@@ -22,12 +22,14 @@ from torchvision import transforms as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
+autoslide_dir = '/media/bigdata/projects/auto_slide'
 
-plot_dir = '/home/abuzarmahmood/projects/auto_slide/plots'
-artifacts_dir = '/home/abuzarmahmood/projects/auto_slide/artifacts'
+plot_dir = os.path.join(autoslide_dir, 'plots') 
+artifacts_dir = os.path.join(autoslide_dir, 'artifacts')
 
-img_dir = '/home/abuzarmahmood/projects/auto_slide/data/labelled_images/images/'
-mask_dir = '/home/abuzarmahmood/projects/auto_slide/data/labelled_images/masks/'
+labelled_data_dir = os.path.join(autoslide_dir, 'data/labelled_images')
+img_dir = os.path.join(labelled_data_dir, 'images/') 
+mask_dir = os.path.join(labelled_data_dir, 'masks/') 
 images = sorted(os.listdir(img_dir))
 masks = sorted(os.listdir(mask_dir))
 
@@ -224,24 +226,25 @@ for img_path in tqdm(val_imgs):
 
 
     n_preds = len(pred[0]["masks"])
-    fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds,5))
-    ax[0].imshow(img)
-    for i in range(n_preds):
-        ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
-    # plt.show()
-    fig.savefig(plot_dir + f'/{img_path.split(".")[0]}example_masks.png')
-    plt.close(fig)
+    if n_preds > 0:
+        fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds,5))
+        ax[0].imshow(img)
+        for i in range(n_preds):
+            ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
+        # plt.show()
+        fig.savefig(plot_dir + f'/{img_path.split(".")[0]}example_masks.png')
+        plt.close(fig)
 
 
-    all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
+        all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
 
 
-    fig, ax = plt.subplots(1, 2, figsize=(10,5))
-    ax[0].imshow(img)
-    ax[1].imshow(all_preds.mean(axis = 0))
-    # plt.show()
-    plt.savefig(plot_dir + f'/{img_path.split(".")[0]}mean_example_mask.png')
-    plt.close()
+        fig, ax = plt.subplots(1, 2, figsize=(10,5))
+        ax[0].imshow(img)
+        ax[1].imshow(all_preds.mean(axis = 0))
+        # plt.show()
+        plt.savefig(plot_dir + f'/{img_path.split(".")[0]}mean_example_mask.png')
+        plt.close()
 
 
 
