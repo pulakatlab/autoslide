@@ -51,11 +51,16 @@ path_list = []
 for this_name in filenames:
     # Search for this_name in data_dir 
     glob_str = os.path.join(data_dir, '**', this_name)
-    filepaths = glob(glob_str, recursive=True)[0]
-    path_list.append(filepaths)
+    filepaths = glob(glob_str, recursive=True)
+    if len(filepaths) == 0:
+        path_list.append(None)
+    else:
+        path_list.append(filepaths[0])
 
 path_map = dict(zip(filenames, path_list))
 polygon_df['filepath'] = polygon_df['filename'].map(path_map)
+
+polygon_df = polygon_df.dropna()
 
 # Copy all images to a directory 
 # copy_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/images'
@@ -108,14 +113,16 @@ for ind, this_group in tqdm(polygon_groups):
         ImageDraw.Draw(img).polygon(polygon, outline= this_obj_num+1, fill=this_obj_num+1)
         img_list.append(img)
     summed_img = np.sum(np.array(img_list), axis=0)
-    mask = np.array(img)*255
+    summed_img = summed_img / np.max(summed_img)
+    mask = np.array(summed_img)*255
+    mask = mask.astype(np.uint8)
 
     fig, ax = plt.subplots(1,2, figsize=(10,5))
     ax[0].imshow(this_img)
     ax[1].imshow(summed_img)
+    # plt.show()
     fig.savefig(os.path.join(test_plot_dir, filename_stem + '.png'))
     plt.close(fig)
-    # plt.show()
 
     mask_filename = os.path.basename(this_filepath).replace('.png', '_mask.png')
     mask_filepath = os.path.join(mask_dir, mask_filename)
