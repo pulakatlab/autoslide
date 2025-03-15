@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 import numpy as np
 
-export_json_path = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/ndjson/Export_catalog_query_3_10_2025.ndjson'
+autoslide_dir = '/media/bigdata/projects/auto_slide'
+export_json_path = '/media/bigdata/projects/auto_slide/data/labelled_images/ndjson/Export_catalog_query_3_10_2025.ndjson'
 # export_json_path = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/Export_catalog_query_3_10_2025_1_img.ndjson'
 
 export_df = pd.read_json(export_json_path, lines=True)
@@ -14,6 +15,7 @@ export_df = pd.read_json(export_json_path, lines=True)
 
 filename_list = []
 polygon_list = []
+object_num_list = []
 for row_ind in trange(len(export_df)):
     # this_row = export_df.iloc[0]
     this_row = export_df.iloc[row_ind]
@@ -27,14 +29,21 @@ for row_ind in trange(len(export_df)):
 
         for this_label in labels:
             objects = this_label['annotations']['objects']
-            for this_object in objects:
+            for i, this_object in enumerate(objects):
                 polygon = this_object['polygon']
                 filename_list.append(file_name)
                 polygon_list.append(polygon)
+                object_num_list.append(i)
 
-polygon_df = pd.DataFrame({'filename':filename_list, 'polygon':polygon_list})
+polygon_df = pd.DataFrame(
+        {
+            'filename':filename_list, 
+            'polygon':polygon_list,
+            'object_num':object_num_list
+            }
+        )
 
-data_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data'
+data_dir = os.path.join(autoslide_dir, 'data')
 
 # Find filepaths and plot overlays
 filenames = polygon_df['filename'].unique()
@@ -49,7 +58,8 @@ path_map = dict(zip(filenames, path_list))
 polygon_df['filepath'] = polygon_df['filename'].map(path_map)
 
 # Copy all images to a directory 
-copy_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/images'
+# copy_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/images'
+copy_dir = os.path.join(data_dir, 'labelled_images', 'images')
 os.makedirs(copy_dir, exist_ok=True)
 for this_name, this_path in path_map.items():
     os.system(f'cp {this_path} {copy_dir}')
@@ -67,40 +77,75 @@ for this_name, this_path in path_map.items():
 # plt.show()
 
 # Create mask and save to dir
-mask_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/masks'
+# mask_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/masks'
+mask_dir = os.path.join(data_dir, 'labelled_images', 'masks')
+test_plot_dir = os.path.join(data_dir, 'labelled_images', 'test_plots')
 os.makedirs(mask_dir, exist_ok=True)
+os.makedirs(test_plot_dir, exist_ok=True)
 
-for ind in trange(len(polygon_df)):
-    this_row = polygon_df.iloc[ind]
-    this_filepath = this_row['filepath']
-    this_polygon = this_row['polygon']
-    this_img = plt.imread(this_filepath)
-    poly_x = [x['x'] for x in this_polygon]
-    poly_y = [x['y'] for x in this_polygon]
+polygon_groups = polygon_df.groupby('filename')
+for ind, this_group in tqdm(polygon_groups):
+    # this_row = polygon_df.iloc[ind]
+    this_filepath = this_group.iloc[0]['filepath'] 
+    this_filename = this_group.iloc[0]['filename']
+    filename_stem = os.path.splitext(this_filename)[0]
+    img_list = []
+    for this_row in this_group.iterrows(): 
+        this_polygon = this_row[1]['polygon'] 
+        this_obj_num = this_row[1]['object_num']
+        # this_polygon = this_row['polygon']
+        this_img = plt.imread(this_filepath)
+        poly_x = [x['x'] for x in this_polygon]
+        poly_y = [x['y'] for x in this_polygon]
 
-    # polygon = [(x1,y1),(x2,y2),...] or [x1,y1,x2,y2,...]
-    # width = ?
-    # height = ?
-    width = this_img.shape[1]
-    height = this_img.shape[0]
-    polygon = [(x,y) for x,y in zip(poly_x, poly_y)]
-    img = Image.new('L', (width, height), 0)
-    ImageDraw.Draw(img).polygon(polygon, outline=1, fill=1)
+        # polygon = [(x1,y1),(x2,y2),...] or [x1,y1,x2,y2,...]
+        # width = ?
+        # height = ?
+        width = this_img.shape[1]
+        height = this_img.shape[0]
+        polygon = [(x,y) for x,y in zip(poly_x, poly_y)]
+        img = Image.new('L', (width, height), 0)
+        ImageDraw.Draw(img).polygon(polygon, outline= this_obj_num+1, fill=this_obj_num+1)
+        img_list.append(img)
+    summed_img = np.sum(np.array(img_list), axis=0)
     mask = np.array(img)*255
+
+    fig, ax = plt.subplots(1,2, figsize=(10,5))
+    ax[0].imshow(this_img)
+    ax[1].imshow(summed_img)
+    fig.savefig(os.path.join(test_plot_dir, filename_stem + '.png'))
+    plt.close(fig)
+    # plt.show()
 
     mask_filename = os.path.basename(this_filepath).replace('.png', '_mask.png')
     mask_filepath = os.path.join(mask_dir, mask_filename)
     Image.fromarray(mask).save(mask_filepath)
 
+############################################################
+# Validation step
+############################################################
+# Many of the masks did not line up with the images.
+# If a name cannot be found in the test_plots dir, delete the mask and image
 
-# width = this_img.shape[1]
-# height = this_img.shape[0]
-# polygon = [(x,y) for x,y in zip(poly_x, poly_y)]
-# img = Image.new('L', (width, height), 0)
-# ImageDraw.Draw(img).polygon(polygon, outline=1, fill=1)
-# mask = np.array(img)
-#
-# fig, ax = plt.subplots(1,2)
-# ax[0].imshow(this_img)
-# ax[1].imshow(mask)
-# plt.show()
+val_img_paths = glob(os.path.join(test_plot_dir, '*.png'))
+val_basenames = [os.path.basename(x) for x in val_img_paths]
+
+wanted_mask_names = [x.replace('.png', '_mask.png') for x in val_basenames]
+mask_paths = glob(os.path.join(mask_dir, '*.png'))
+img_paths = glob(os.path.join(copy_dir, '*.png'))
+
+del_mask_count = 0
+for this_mask_path in mask_paths:
+    this_mask_name = os.path.basename(this_mask_path)
+    if this_mask_name not in wanted_mask_names:
+        os.remove(this_mask_path) 
+        print(f'Deleted {this_mask_path}')
+        del_mask_count += 1
+
+del_img_count = 0
+for this_img_path in img_paths:
+    this_img_name = os.path.basename(this_img_path)
+    if this_img_name not in val_basenames:
+        os.remove(this_img_path) 
+        print(f'Deleted {this_img_path}')
+        del_img_count += 1
