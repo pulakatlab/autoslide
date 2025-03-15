@@ -18,49 +18,62 @@ from tqdm import tqdm, trange
 
 import torch
 import torchvision
-from torchvision import transforms as T
+# from torchvision import transforms as T
+from torchvision.transforms import v2 as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
+autoslide_dir = '/media/bigdata/projects/auto_slide'
 
-plot_dir = '/home/abuzarmahmood/projects/auto_slide/plots'
-artifacts_dir = '/home/abuzarmahmood/projects/auto_slide/artifacts'
+plot_dir = os.path.join(autoslide_dir, 'plots') 
+artifacts_dir = os.path.join(autoslide_dir, 'artifacts')
 
-img_dir = '/home/abuzarmahmood/projects/auto_slide/data/labelled_images/images/'
-mask_dir = '/home/abuzarmahmood/projects/auto_slide/data/labelled_images/masks/'
+labelled_data_dir = os.path.join(autoslide_dir, 'data/labelled_images')
+img_dir = os.path.join(labelled_data_dir, 'images/') 
+mask_dir = os.path.join(labelled_data_dir, 'masks/') 
 images = sorted(os.listdir(img_dir))
 masks = sorted(os.listdir(mask_dir))
 
-
-idx = 0
-img = Image.open(img_dir + images[idx]).convert("RGB")
-mask = Image.open(mask_dir + masks[idx])
-
-fig,axis = plt.subplots(1,2,figsize=(10,5))
-axis[0].imshow(img)
-axis[1].imshow(mask)
-plt.show()
-
-
-class CustDat(torch.utils.data.Dataset):
-    def __init__(self, images, masks):
-        self.imgs = images
-        self.masks = masks
-        # Define augmentation transformations
-        self.transform = T.Compose([
+transform = T.Compose([
             T.RandomHorizontalFlip(0.5),
             T.RandomVerticalFlip(0.5),
             T.RandomRotation(degrees=30),
             T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
             T.ToTensor()
         ])
+
+idx = 1
+img = Image.open(img_dir + images[idx]).convert("RGB")
+mask = Image.open(mask_dir + masks[idx])
+
+img, mask = transform(img, mask)
+
+fig,axis = plt.subplots(1,2,figsize=(10,5))
+axis[0].imshow(img.T)
+axis[1].imshow(mask.T)
+plt.show()
+
+
+class CustDat(torch.utils.data.Dataset):
+    def __init__(self, images, masks, transform=None):
+        self.imgs = images
+        self.masks = masks
+        # Define augmentation transformations
         # Simple transform for validation/testing
         self.base_transform = T.ToTensor()
+        if transform is not None:
+            self.transform = transform
+        else:
+            self.transform = self.base_transform
 
     def __getitem__(self, idx):
         img = Image.open(img_dir + self.imgs[idx]).convert("RGB")
         mask = Image.open(mask_dir + self.masks[idx])
         mask = np.array(mask) // 255
+
+        # Apply transformations
+        img_tensor, mask_tensor = self.transform(img, mask)
+
         obj_ids = np.unique(mask)
         obj_ids = obj_ids[1:]
         num_objs = len(obj_ids)
@@ -79,13 +92,21 @@ class CustDat(torch.utils.data.Dataset):
         labels = torch.ones((num_objs,), dtype=torch.int64)
         masks = torch.as_tensor(masks, dtype=torch.uint8)
 
+        # fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+        # ax[0].imshow(img_tensor.permute(1, 2, 0).cpu().numpy())
+        # ax[1].imshow(mask_tensor.permute(1, 2, 0).cpu().numpy())
+        # # Also draw bounding boxes
+        # for box in boxes:
+        #     ax[0].add_patch(
+        #             plt.Rectangle((box[0], box[1]), box[2]-box[0], box[3]-box[1], 
+        #                           fill=False, color="y", linewidth=2))
+        # plt.show()
+
         target = {}
         target["boxes"] = boxes
         target["labels"] = labels
         target["masks"] = masks
         
-        # Apply augmentation during training
-        img_tensor = self.transform(img)
         return img_tensor, target
 
     def __len__(self):
@@ -114,37 +135,26 @@ val_imgs = np.array(images)[val_imgs_inds]
 train_masks = np.array(masks)[train_imgs_inds]
 val_masks = np.array(masks)[val_imgs_inds]
 
-train_dl = torch.utils.data.DataLoader(CustDat(train_imgs , train_masks) ,
+train_dl = torch.utils.data.DataLoader(CustDat(train_imgs , train_masks, transform),
                                  batch_size = 2 ,
                                  shuffle = True ,
                                  collate_fn = custom_collate ,
                                  num_workers = 1 ,
                                  pin_memory = True if torch.cuda.is_available() else False)
-val_dl = torch.utils.data.DataLoader(CustDat(val_imgs , val_masks) ,
+val_dl = torch.utils.data.DataLoader(CustDat(val_imgs , val_masks, transform),
                                  batch_size = 2 ,
                                  shuffle = True ,
                                  collate_fn = custom_collate ,
                                  num_workers = 1 ,
                                  pin_memory = True if torch.cuda.is_available() else False)
-
-
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device
 
 model.to(device)
-
-
-
-
 params = [p for p in model.parameters() if p.requires_grad]
-
-
-
-
 optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
-
 
 # for i, dt in enumerate(train_dl):
 #     imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
@@ -230,29 +240,30 @@ for img_path in tqdm(val_imgs):
     with torch.no_grad():
         pred = model([ig.to(device)])
 
+    # fig, ax = plt.subplots(1, 2, figsize=(10,5))
+    # ax[0].imshow(img)
+    # ax[1].imshow(ig.cpu().detach().numpy().transpose(1,2,0))
+    # plt.show()
+
 
     n_preds = len(pred[0]["masks"])
-    fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds,5))
-    ax[0].imshow(img)
-    for i in range(n_preds):
-        ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
-    # plt.show()
-    fig.savefig(plot_dir + f'/{img_path.split(".")[0]}example_masks.png')
-    plt.close(fig)
+    if n_preds > 0:
+        fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds,5))
+        ax[0].imshow(img)
+        for i in range(n_preds):
+            ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
+        # plt.show()
+        fig.savefig(plot_dir + f'/{img_path.split(".")[0]}example_masks.png')
+        plt.close(fig)
 
 
-    all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
+        all_preds = np.stack([(pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() for i in range(n_preds)])
 
 
-    fig, ax = plt.subplots(1, 2, figsize=(10,5))
-    ax[0].imshow(img)
-    ax[1].imshow(all_preds.mean(axis = 0))
-    # plt.show()
-    plt.savefig(plot_dir + f'/{img_path.split(".")[0]}mean_example_mask.png')
-    plt.close()
-
-
-
-
-
+        fig, ax = plt.subplots(1, 2, figsize=(10,5))
+        ax[0].imshow(img)
+        ax[1].imshow(all_preds.mean(axis = 0))
+        # plt.show()
+        plt.savefig(plot_dir + f'/{img_path.split(".")[0]}mean_example_mask.png')
+        plt.close()
 
