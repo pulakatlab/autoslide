@@ -4,3 +4,4 @@
 *.cache*
 .aider*
 /artifacts
+/plots
