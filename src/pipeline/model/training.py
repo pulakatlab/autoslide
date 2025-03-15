@@ -157,6 +157,7 @@ n_epochs = 30
 all_train_losses = []
 all_val_losses = []
 best_val_loss = float('inf')  # Track the best validation loss
+best_model = None
 flag = False
 for epoch in trange(n_epochs):
     train_epoch_loss = 0
@@ -195,8 +196,11 @@ for epoch in trange(n_epochs):
     # Save model only if validation loss improves
     if val_epoch_loss < best_val_loss:
         best_val_loss = val_epoch_loss
-        torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
-        print(f"New best model saved with validation loss: {best_val_loss}")
+        best_model = model.state_dict()
+        # torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
+        # print(f"New best model saved with validation loss: {best_val_loss}")
+
+torch.save(best_model, os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
 
 
 # Save loss histories
