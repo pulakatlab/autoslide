@@ -246,7 +246,7 @@ optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 run_test_plot_dir = os.path.join(plot_dir, 'run_test_plot')
 os.makedirs(run_test_plot_dir, exist_ok=True)
 
-n_epochs = 30
+n_epochs = 60
 all_train_losses = []
 all_val_losses = []
 best_val_loss = float('inf')  # Track the best validation loss
@@ -307,6 +307,16 @@ for epoch in trange(n_epochs):
         # torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
         # print(f"New best model saved with validation loss: {best_val_loss}")
 
+    fig, ax = plt.subplots(1, 2, figsize=(10,5))
+    ax[0].plot(all_train_losses)
+    ax[1].plot(all_val_losses)
+    ax[0].set_title("Train Loss")
+    ax[1].set_title("Validation Loss")
+    ax[1].axhline(y=best_val_loss, color='r', linestyle='--', label='Best Val Loss')
+    # plt.show()
+    fig.savefig(plot_dir + '/train_val_loss.png')
+    plt.close(fig)
+
 
 # pbar = tqdm(train_dl)
 # for i , dt in enumerate(pbar): 
@@ -330,16 +340,6 @@ torch.save(best_model, os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
 np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
 np.save(artifacts_dir + '/val_losses.npy', all_val_losses)
 
-
-fig, ax = plt.subplots(1, 2, figsize=(10,5))
-ax[0].plot(all_train_losses)
-ax[1].plot(all_val_losses)
-ax[0].set_title("Train Loss")
-ax[1].set_title("Validation Loss")
-ax[1].axhline(y=best_val_loss, color='r', linestyle='--', label='Best Val Loss')
-# plt.show()
-fig.savefig(plot_dir + '/train_val_loss.png')
-plt.close(fig)
 
 
 # Plot example predicted mask from validation set
