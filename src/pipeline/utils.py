@@ -471,3 +471,145 @@ def write_out_images(
         img_path = os.path.join(output_dir, f'{name}.png')
         plt.imsave(img_path, img)
 
+
+def generate_negative_samples(img, mask, num_samples=1):
+    """
+    Generate negative samples by creating regions without vessels.
+    
+    Inputs:
+        img: Original image
+        mask: Original mask
+        num_samples: Number of negative samples to generate
+        
+    Outputs:
+        neg_images: List of negative sample images
+        neg_masks: List of empty masks
+    """
+    neg_images = []
+    neg_masks = []
+    
+    # Create a binary mask where vessels are present
+    vessel_present = mask > 0
+    
+    for _ in range(num_samples):
+        # Create a copy of the original image
+        neg_img = img.copy()
+        
+        # Create an empty mask (all zeros)
+        neg_mask = np.zeros_like(mask)
+        
+        # Add to the lists
+        neg_images.append(neg_img)
+        neg_masks.append(neg_mask)
+        
+    return neg_images, neg_masks
+
+def generate_artificial_vessels(img, mask, num_samples=1):
+    """
+    Generate artificial vessel samples by warping and transforming existing vessels.
+    
+    Inputs:
+        img: Original image
+        mask: Original mask
+        num_samples: Number of artificial samples to generate
+        
+    Outputs:
+        art_images: List of images with artificial vessels
+        art_masks: List of masks for artificial vessels
+    """
+    import cv2
+    
+    art_images = []
+    art_masks = []
+    
+    # Check if there are any vessels in the mask
+    if np.max(mask) == 0:
+        return [], []
+    
+    for _ in range(num_samples):
+        # Create copies of the original image and mask
+        art_img = img.copy()
+        art_mask = np.zeros_like(mask)
+        
+        # Find vessel regions
+        vessel_regions = mask > 0
+        
+        if np.sum(vessel_regions) > 0:
+            # Extract vessel pixels
+            vessel_img = np.zeros_like(img)
+            vessel_img[vessel_regions] = img[vessel_regions]
+            
+            # Apply random transformations
+            # 1. Random rotation
+            angle = np.random.uniform(-15, 15)
+            rows, cols = vessel_img.shape[:2]
+            M = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)
+            
+            # 2. Random scaling
+            scale = np.random.uniform(0.8, 1.2)
+            M[:, 0:2] = M[:, 0:2] * scale
+            
+            # 3. Random translation
+            tx = np.random.randint(-20, 20)
+            ty = np.random.randint(-20, 20)
+            M[0, 2] += tx
+            M[1, 2] += ty
+            
+            # Apply transformations
+            warped_vessel = cv2.warpAffine(vessel_img, M, (cols, rows), borderMode=cv2.BORDER_REFLECT)
+            warped_mask = cv2.warpAffine(mask.astype(np.float32), M, (cols, rows), borderMode=cv2.BORDER_REFLECT)
+            
+            # Threshold the warped mask to make it binary again
+            warped_mask = (warped_mask > 0).astype(np.uint8) * 255
+            
+            # Place the warped vessel in a different location
+            # Find non-vessel regions in the original image
+            non_vessel = ~vessel_regions
+            
+            # Create a new mask for the artificial vessel
+            art_mask = warped_mask
+            
+            # Combine the original image with the warped vessel
+            art_img = img.copy()
+            art_img[warped_mask > 0] = warped_vessel[warped_mask > 0]
+            
+            art_images.append(art_img)
+            art_masks.append(art_mask)
+    
+    return art_images, art_masks
+
+def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
+    """
+    Augment a dataset with negative samples and artificial vessels.
+    
+    Inputs:
+        images: List of original images
+        masks: List of original masks
+        neg_ratio: Ratio of negative samples to add
+        art_ratio: Ratio of artificial vessel samples to add
+        
+    Outputs:
+        aug_images: List of augmented images
+        aug_masks: List of augmented masks
+    """
+    aug_images = images.copy()
+    aug_masks = masks.copy()
+    
+    num_orig = len(images)
+    num_neg = int(num_orig * neg_ratio)
+    num_art = int(num_orig * art_ratio)
+    
+    # Generate negative samples
+    for i in range(min(num_neg, num_orig)):
+        neg_imgs, neg_msks = generate_negative_samples(images[i], masks[i])
+        aug_images.extend(neg_imgs)
+        aug_masks.extend(neg_msks)
+    
+    # Generate artificial vessel samples
+    for i in range(min(num_art, num_orig)):
+        art_imgs, art_msks = generate_artificial_vessels(images[i], masks[i])
+        aug_images.extend(art_imgs)
+        aug_masks.extend(art_msks)
+    
+    return aug_images, aug_masks
+

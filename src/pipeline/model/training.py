@@ -15,6 +15,7 @@ import os
 from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm, trange
+import sys
 
 import torch
 import torchvision
@@ -22,6 +23,10 @@ import torchvision
 from torchvision.transforms import v2 as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+
+# Add parent directory to path to import utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import augment_dataset, generate_negative_samples, generate_artificial_vessels
 
 autoslide_dir = '/home/exouser/project/auto_slide'
 
@@ -195,6 +200,47 @@ val_imgs = np.array(image_names)[val_imgs_inds]
 train_masks = np.array(mask_names)[train_imgs_inds]
 val_masks = np.array(mask_names)[val_imgs_inds]
 
+# Create augmented dataset paths
+print("Creating augmented dataset...")
+# Load a few images to augment
+aug_img_list = []
+aug_mask_list = []
+for i in range(min(10, len(train_imgs))):
+    img = np.array(Image.open(img_dir + train_imgs[i]).convert("RGB"))
+    mask = np.array(Image.open(mask_dir + train_masks[i]))
+    aug_img_list.append(img)
+    aug_mask_list.append(mask)
+
+# Augment the dataset
+aug_images, aug_masks = augment_dataset(aug_img_list, aug_mask_list, neg_ratio=0.3, art_ratio=0.5)
+
+# Save augmented images and masks
+aug_img_dir = os.path.join(labelled_data_dir, 'augmented_images/')
+aug_mask_dir = os.path.join(labelled_data_dir, 'augmented_masks/')
+os.makedirs(aug_img_dir, exist_ok=True)
+os.makedirs(aug_mask_dir, exist_ok=True)
+
+aug_img_names = []
+aug_mask_names = []
+for i, (img, mask) in enumerate(zip(aug_images, aug_masks)):
+    img_name = f'aug_{i}.png'
+    mask_name = f'aug_{i}_mask.png'
+    
+    # Save the augmented image and mask
+    plt.imsave(os.path.join(aug_img_dir, img_name), img)
+    plt.imsave(os.path.join(aug_mask_dir, mask_name), mask, cmap='gray')
+    
+    aug_img_names.append(img_name)
+    aug_mask_names.append(mask_name)
+
+# Add augmented images to training set
+train_imgs = np.append(train_imgs, aug_img_names)
+train_masks = np.append(train_masks, aug_mask_names)
+
+# Update img_dir and mask_dir to include augmented directories
+orig_img_dir = img_dir
+orig_mask_dir = mask_dir
+
 test_plot_dir = os.path.join(plot_dir, 'train_val_split')
 os.makedirs(test_plot_dir, exist_ok=True)
 
@@ -219,13 +265,88 @@ for img_name, mask_name in zip(val_imgs, val_masks):
     fig.savefig(test_plot_dir + f'/{img_name.split(".")[0]}val.png')
     plt.close(fig)
 
-train_dl = torch.utils.data.DataLoader(CustDat(train_imgs , train_masks, transform),
+# Create a custom dataset that can handle both original and augmented images
+class AugmentedCustDat(torch.utils.data.Dataset):
+    def __init__(self, image_names, mask_names, transform=None):
+        self.image_names = image_names
+        self.mask_names = mask_names
+        self.base_transform = T.ToTensor()
+        if transform is not None:
+            self.transform = transform
+        else:
+            self.transform = self.base_transform
+
+    def __getitem__(self, idx):
+        img_name = self.image_names[idx]
+        mask_name = self.mask_names[idx]
+        
+        # Check if this is an augmented image
+        if 'aug_' in img_name:
+            img = Image.open(os.path.join(aug_img_dir, img_name)).convert("RGB")
+            mask = Image.open(os.path.join(aug_mask_dir, mask_name))
+        else:
+            img = Image.open(orig_img_dir + img_name).convert("RGB")
+            mask = Image.open(orig_mask_dir + mask_name)
+
+        # Apply transformations
+        img_tensor, mask_tensor = self.transform(img, mask)
+        
+        # Convert mask back to numpy array
+        mask = mask_tensor.numpy()[0] * 255
+        mask = mask.astype(np.uint8)
+
+        # Filter objects by size
+        obj_ids = np.unique(mask)
+        obj_ids = obj_ids[1:]
+        fin_objs = []
+        for obj in obj_ids:
+            if np.mean(mask == obj) > 0.005:
+                fin_objs.append(obj)
+
+        obj_ids = np.array(fin_objs)
+
+        num_objs = len(obj_ids)
+        masks = np.zeros((num_objs, mask.shape[0], mask.shape[1]))
+        for i in range(num_objs):
+            masks[i][mask == obj_ids[i]] = True
+
+        boxes = []
+        for i in range(num_objs):
+            pos = np.where(masks[i]>0)
+            if len(pos[0]) == 0:  # Skip if mask is empty
+                continue
+            xmin = np.min(pos[1])
+            xmax = np.max(pos[1])
+            ymin = np.min(pos[0])
+            ymax = np.max(pos[0])
+            boxes.append([xmin, ymin, xmax, ymax])
+
+        if len(boxes) == 0:  # If no valid boxes, create a dummy box
+            boxes = torch.zeros((0, 4), dtype=torch.float32)
+            labels = torch.zeros((0,), dtype=torch.int64)
+            masks = torch.zeros((0, mask.shape[0], mask.shape[1]), dtype=torch.uint8)
+        else:
+            boxes = torch.as_tensor(boxes, dtype=torch.float32)
+            labels = torch.ones((len(boxes),), dtype=torch.int64)
+            masks = torch.as_tensor(masks, dtype=torch.uint8)
+
+        target = {}
+        target["boxes"] = boxes
+        target["labels"] = labels
+        target["masks"] = masks
+        
+        return img_tensor, target
+
+    def __len__(self):
+        return len(self.image_names)
+
+train_dl = torch.utils.data.DataLoader(AugmentedCustDat(train_imgs, train_masks, transform),
                                  batch_size = 2,
-                                 shuffle = False,
+                                 shuffle = True,  # Changed to True for better training
                                  collate_fn = custom_collate,
                                  num_workers = 1,
                                  pin_memory = True if torch.cuda.is_available() else False)
-val_dl = torch.utils.data.DataLoader(CustDat(val_imgs , val_masks, transform),
+val_dl = torch.utils.data.DataLoader(CustDat(val_imgs, val_masks, transform),
                                  batch_size = 2,
                                  shuffle = False,
                                  collate_fn = custom_collate,
