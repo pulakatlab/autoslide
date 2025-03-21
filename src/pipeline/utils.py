@@ -534,7 +534,7 @@ def generate_artificial_vessels(img, mask):
         # 1. Random rotation
         angle = np.random.uniform(-180, 180)
         rows, cols = vessel_img.shape[:2]
-        M = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)
+        M = cv.getRotationMatrix2D((cols/2, rows/2), angle, 1)
         
         # 2. Random scaling
         scale = np.random.uniform(0.25, 3)
@@ -554,8 +554,8 @@ def generate_artificial_vessels(img, mask):
         M[1, 2] += ty
         
         # Apply transformations
-        warped_vessel = cv2.warpAffine(vessel_img, M, (cols, rows), borderMode=cv2.BORDER_REFLECT)
-        warped_mask = cv2.warpAffine(mask.astype(np.uint8), M, (cols, rows), borderMode=cv2.BORDER_REFLECT)
+        warped_vessel = cv.warpAffine(vessel_img, M, (cols, rows), borderMode=cv.BORDER_REFLECT)
+        warped_mask = cv.warpAffine(mask.astype(np.uint8), M, (cols, rows), borderMode=cv.BORDER_REFLECT)
         
         # Warping introduces variability, so assign value to closest in original
         orig_mask_values = np.unique(mask)

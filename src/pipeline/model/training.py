@@ -26,8 +26,8 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 # Add parent directory to path to import utils
-autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
-# autoslide_dir = '/home/exouser/project/auto_slide'
+# autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
+autoslide_dir = '/home/exouser/project/auto_slide'
 
 if "__file__" not in globals():
     __file__ = os.path.join(autoslide_dir, 'src/pipeline/model/training.py')
@@ -406,13 +406,15 @@ train_dl = torch.utils.data.DataLoader(AugmentedCustDat(train_imgs, train_masks,
                                  shuffle = True,  # Changed to True for better training
                                  collate_fn = custom_collate,
                                  num_workers = 1,
-                                 pin_memory = True if torch.cuda.is_available() else False)
-val_dl = torch.utils.data.DataLoader(CustDat(val_imgs, val_masks, transform),
+                                 pin_memory = True if torch.cuda.is_available() else False,
+                                 drop_last=True)
+val_dl = torch.utils.data.DataLoader(AugmentedCustDat(val_imgs, val_masks, transform),
                                  batch_size = 2,
                                  shuffle = False,
                                  collate_fn = custom_collate,
                                  num_workers = 1,
-                                 pin_memory = True if torch.cuda.is_available() else False)
+                                 pin_memory = True if torch.cuda.is_available() else False,
+                                 drop_last=True)
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
