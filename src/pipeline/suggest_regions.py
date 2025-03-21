@@ -161,7 +161,7 @@ for data_path in data_path_list:
         section_frame['section_labels'] = section_labels
 
         # Generate truly unique identifiers for each section
-        section_frame['section_hash'] = [str(uuid.uuid4().int)[:10] for _ in range(len(section_frame))]
+        section_frame['section_hash'] = [str(uuid.uuid4().int)[:16] for _ in range(len(section_frame))]
 
         # Write out section_frame
         section_frame.to_csv(
