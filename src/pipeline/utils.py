@@ -472,37 +472,32 @@ def write_out_images(
         plt.imsave(img_path, img)
 
 
-def generate_negative_samples(img, mask, num_samples=1):
+def generate_negative_samples(img, mask):
     """
     Generate negative samples by creating regions without vessels.
     
     Inputs:
         img: Original image
         mask: Original mask
-        num_samples: Number of negative samples to generate
         
     Outputs:
-        neg_images: List of negative sample images
-        neg_masks: List of empty masks
+        neg_img: Image with negative samples
+        neg_mask: Mask for negative samples
     """
-    neg_images = []
-    neg_masks = []
-    
+
     # Create a binary mask where vessels are present
     vessel_present = mask > 0
     
-    for _ in range(num_samples):
-        # Create a copy of the original image
-        neg_img = img.copy()
-        
-        # Create an empty mask (all zeros)
-        neg_mask = np.zeros_like(mask)
-        
-        # Add to the lists
-        neg_images.append(neg_img)
-        neg_masks.append(neg_mask)
-        
-    return neg_images, neg_masks
+    # Create a copy of the original image
+    neg_img = img.copy()
+
+    # Make label area white
+    neg_img[vessel_present, :] = 255
+    
+    # Create an empty mask (all zeros)
+    neg_mask = np.zeros_like(mask)
+    
+    return neg_img, neg_mask 
 
 def generate_artificial_vessels(img, mask, num_samples=1):
     """
