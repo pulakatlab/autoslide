@@ -8,6 +8,7 @@ auto_slide_dir = '/media/bigdata/projects/pulakat_lab/auto_slide'
 
 import os
 import sys
+import uuid
 sys.path.append(os.path.join(auto_slide_dir, 'src', 'pipeline'))
 import utils
 
@@ -159,8 +160,8 @@ for data_path in data_path_list:
 
         section_frame['section_labels'] = section_labels
 
-        section_frame['section_hash'] = section_frame.apply(
-                lambda x: str(abs(hash(tuple(x))))[:10], axis = 1)
+        # Generate truly unique identifiers for each section
+        section_frame['section_hash'] = [str(uuid.uuid4().int)[:10] for _ in range(len(section_frame))]
 
         # Write out section_frame
         section_frame.to_csv(
