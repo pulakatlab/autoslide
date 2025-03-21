@@ -247,7 +247,7 @@ if os.path.exists(aug_img_dir) and os.path.exists(aug_mask_dir) \
 else:
     # Create augmented dataset paths
     print("Creating augmented dataset...")
-    n_augmented = len(train_imgs) * 2
+    n_augmented = len(train_imgs) * 10
     # Load a few images to augment
     aug_img_list = []
     aug_mask_list = []
@@ -483,7 +483,7 @@ optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 run_test_plot_dir = os.path.join(plot_dir, 'run_test_plot')
 os.makedirs(run_test_plot_dir, exist_ok=True)
 
-n_epochs = 30
+n_epochs = 90
 all_train_losses = []
 all_val_losses = []
 best_val_loss = float('inf')  # Track the best validation loss
@@ -523,6 +523,8 @@ for epoch in trange(n_epochs):
         optimizer.zero_grad()
         losses.backward()
         optimizer.step()
+        if np.isnan(train_epoch_loss):
+            raise Exception('Loss is Nan')
     all_train_losses.append(train_epoch_loss)
     with torch.no_grad():
         for j , dt in enumerate(val_dl):
@@ -541,8 +543,11 @@ for epoch in trange(n_epochs):
     if val_epoch_loss < best_val_loss:
         best_val_loss = val_epoch_loss
         best_model = model.state_dict()
+        torch.save(best_model, os.path.join(artifacts_dir, 'best_val_mask_rcnn_model.pth'))
         # torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
         # print(f"New best model saved with validation loss: {best_val_loss}")
+
+    torch.save(model.state_dict(), os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth'))
 
     fig, ax = plt.subplots(1, 2, figsize=(10,5))
     ax[0].plot(all_train_losses)
@@ -570,25 +575,32 @@ for epoch in trange(n_epochs):
 #                               fill=False, color="y", linewidth=2))
 # plt.show()
 
-torch.save(best_model, os.path.join(artifacts_dir, 'best_val_mask_rcnn_model.pth'))
-# Also save final model
-torch.save(model.state_dict(), os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth'))
-
-
 
 # Save loss histories
 np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
 np.save(artifacts_dir + '/val_losses.npy', all_val_losses)
 
 
-
 # Plot example predicted mask from validation set
 model.eval()
 
+pred_out_path = os.path.join(plot_dir, 'pred_plots')
+os.makedirs(pred_out_path, exist_ok = True)
+
 transform = T.ToTensor()
-for img_path, mask_path in tqdm(zip(val_imgs, val_masks), total=len(val_imgs)):
-    img = Image.open(img_dir + img_path).convert("RGB")
-    mask = Image.open(mask_dir + mask_path)
+for img_name, mask_name in tqdm(zip(val_imgs, val_masks), total=len(val_imgs)):
+    if 'aug_' in img_name:
+        img = Image.open(aug_img_dir + img_name).convert("RGB")
+        mask = Image.open(aug_mask_dir + mask_name)
+    elif 'neg_' in img_name:
+        img = Image.open(neg_image_dir + img_name).convert("RGB")
+        mask = Image.open(neg_mask_dir + mask_name)
+    else:
+        img = Image.open(img_dir + img_name).convert("RGB")
+        mask = Image.open(mask_dir + mask_name)
+
+    # img = Image.open(img_dir + img_path).convert("RGB")
+    # mask = Image.open(mask_dir + mask_path)
     # Use the base transform for prediction to match training
     ig = transform(img)
     with torch.no_grad():
@@ -607,7 +619,7 @@ for img_path, mask_path in tqdm(zip(val_imgs, val_masks), total=len(val_imgs)):
         for i in range(n_preds):
             ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
         # plt.show()
-        fig.savefig(plot_dir + f'/{img_path.split(".")[0]}example_masks.png')
+        fig.savefig(pred_out_path + f'/{img_path.split(".")[0]}example_masks.png')
         plt.close(fig)
 
 
@@ -624,6 +636,6 @@ for img_path, mask_path in tqdm(zip(val_imgs, val_masks), total=len(val_imgs)):
         ax[1].imshow(all_preds.mean(axis = 0))
         ax[2].imshow(np.array(mask))
         # plt.show()
-        plt.savefig(plot_dir + f'/{img_path.split(".")[0]}mean_example_mask.png')
+        plt.savefig(pred_out_path + f'/{img_path.split(".")[0]}mean_example_mask.png')
         plt.close()
 
