@@ -13,6 +13,7 @@ import slideio
 import pylab as plt
 import pandas as pd
 from scipy.stats import mode
+from tqdm import tqdm, trange
 
 
 class slide_handler():
@@ -511,7 +512,6 @@ def generate_artificial_vessels(img, mask):
         art_img: Image with artificial vessels 
         art_mask: Mask for artificial vessels
     """
-    import cv2
     
     # Check if there are any vessels in the mask
     if np.max(mask) == 0:
@@ -579,11 +579,11 @@ def generate_artificial_vessels(img, mask):
         fin_mask = fin_mask / np.max(fin_mask) * 255    
         art_mask = fin_mask.astype(np.uint8)
 
-        # fig, ax = plt.subplots(1, 3)
-        # ax[0].imshow(mask)
-        # ax[1].imshow(warped_mask)
-        # ax[2].imshow(fin_mask)
-        # plt.show()
+        fig, ax = plt.subplots(1, 3)
+        ax[0].imshow(mask)
+        ax[1].imshow(warped_mask)
+        ax[2].imshow(fin_mask)
+        plt.show()
 
         # # Renormalize mask
         # warped_mask = warped_mask / np.max(warped_mask) * 255
@@ -625,16 +625,18 @@ def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
     num_art = int(num_orig * art_ratio)
     
     # Generate negative samples
-    for i in range(min(num_neg, num_orig)):
+    print('Generating negative samples...')
+    for i in trange(min(num_neg, num_orig)):
         neg_imgs, neg_msks = generate_negative_samples(images[i], masks[i])
-        aug_images.extend(neg_imgs)
-        aug_masks.extend(neg_msks)
+        aug_images.append(neg_imgs)
+        aug_masks.append(neg_msks)
     
     # Generate artificial vessel samples
-    for i in range(min(num_art, num_orig)):
+    print('Generating artificial vessel samples...')
+    for i in trange(min(num_art, num_orig)):
         art_imgs, art_msks = generate_artificial_vessels(images[i], masks[i])
-        aug_images.extend(art_imgs)
-        aug_masks.extend(art_msks)
+        aug_images.append(art_imgs)
+        aug_masks.append(art_msks)
     
     return aug_images, aug_masks
 
