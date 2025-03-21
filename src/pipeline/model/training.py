@@ -450,7 +450,7 @@ optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 run_test_plot_dir = os.path.join(plot_dir, 'run_test_plot')
 os.makedirs(run_test_plot_dir, exist_ok=True)
 
-n_epochs = 60
+n_epochs = 30
 all_train_losses = []
 all_val_losses = []
 best_val_loss = float('inf')  # Track the best validation loss
@@ -537,7 +537,10 @@ for epoch in trange(n_epochs):
 #                               fill=False, color="y", linewidth=2))
 # plt.show()
 
-torch.save(best_model, os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
+torch.save(best_model, os.path.join(artifacts_dir, 'best_val_mask_rcnn_model.pth'))
+# Also save final model
+torch.save(model.state_dict(), os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth'))
+
 
 
 # Save loss histories
