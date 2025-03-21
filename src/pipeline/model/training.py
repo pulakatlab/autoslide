@@ -26,8 +26,8 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 # Add parent directory to path to import utils
-autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
-# autoslide_dir = '/home/exouser/project/auto_slide'
+# autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
+autoslide_dir = '/home/exouser/project/auto_slide'
 
 if "__file__" not in globals():
     __file__ = os.path.join(autoslide_dir, 'src/pipeline/model/training.py')
@@ -267,8 +267,8 @@ else:
     aug_img_names = []
     aug_mask_names = []
     for i, (img, mask) in enumerate(tqdm(zip(aug_images, aug_masks))):
-        img_name = f'aug_{i}.png'
-        mask_name = f'aug_{i}_mask.png'
+        img_name = f'aug_{i:03}.png'
+        mask_name = f'aug_{i:03}_mask.png'
         
         # Save the augmented image and mask
         plt.imsave(os.path.join(aug_img_dir, img_name), img)
@@ -276,6 +276,9 @@ else:
         
         aug_img_names.append(img_name)
         aug_mask_names.append(mask_name)
+
+for img_name, mask_name in zip(aug_img_names, aug_mask_names):
+    assert img_name.split(".")[0] in mask_name
 
 # Also add negative images
 neg_image_dir = os.path.join(labelled_data_dir, 'negative_images/')
