@@ -640,3 +640,17 @@ def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
     
     return aug_images, aug_masks
 
+def gen_negative_masks(neg_dir, output_dir):
+    neg_image_names = os.listdir(neg_dir)
+    out_mask_names = [f'{name.split(".")[0]}_mask.png' for name in neg_image_names]
+    for img_name, mask_name in zip(neg_image_names, out_mask_names):
+        img_path = os.path.join(neg_dir, img_name)
+        mask_path = os.path.join(output_dir, mask_name)
+        img = plt.imread(img_path)
+        mask = np.zeros_like(img)
+        plt.imsave(mask_path, mask)
+
+
+# neg_dir = '/home/abuzarmahmood/projects/auto_slide/data/labelled_images/negative_images'
+# out_dir = '/home/abuzarmahmood/projects/auto_slide/data/labelled_images/negative_masks'
+# gen_negative_masks(neg_dir, out_dir)
