@@ -16,6 +16,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm, trange
 import sys
+import cv2
 
 import torch
 import torchvision
@@ -25,10 +26,13 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 # Add parent directory to path to import utils
+autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
+# autoslide_dir = '/home/exouser/project/auto_slide'
+
+if "__file__" not in globals():
+    __file__ = os.path.join(autoslide_dir, 'src/pipeline/model/training.py')
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import augment_dataset, generate_negative_samples, generate_artificial_vessels
-
-autoslide_dir = '/home/exouser/project/auto_slide'
 
 plot_dir = os.path.join(autoslide_dir, 'plots') 
 artifacts_dir = os.path.join(autoslide_dir, 'artifacts')
@@ -78,6 +82,31 @@ axis[0].imshow(img.T)
 axis[1].imshow(mask.T)
 plt.show()
 
+# Test negative image generation
+img = np.array(img)
+mask = np.array(mask)
+neg_img, neg_mask = generate_negative_samples(img, mask)
+
+fig,axis = plt.subplots(1,2,figsize=(10,5))
+axis[0].imshow(neg_img)
+axis[1].imshow(neg_mask)
+plt.show()
+
+def get_mask_outline(mask):
+    mask = mask.astype(np.uint8)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    mask_outline = np.zeros_like(mask)
+    mask_outline = cv2.drawContours(mask_outline, contours, -1, 255, 1)
+    return mask_outline
+
+# Test artificial vessel generation
+art_img, art_mask = generate_artificial_vessels(img, mask)
+art_mask_outline = get_mask_outline(art_mask)
+fig,axis = plt.subplots(1,2,figsize=(10,5))
+axis[0].imshow(art_img)
+axis[1].imshow(art_mask)
+axis[0].scatter(*np.where(art_mask_outline)[::-1], c='y', s=1)
+plt.show()
 
 class CustDat(torch.utils.data.Dataset):
     def __init__(self, image_names, mask_names, transform=None):

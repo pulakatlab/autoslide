@@ -499,79 +499,109 @@ def generate_negative_samples(img, mask):
     
     return neg_img, neg_mask 
 
-def generate_artificial_vessels(img, mask, num_samples=1):
+def generate_artificial_vessels(img, mask): 
     """
     Generate artificial vessel samples by warping and transforming existing vessels.
     
     Inputs:
         img: Original image
         mask: Original mask
-        num_samples: Number of artificial samples to generate
         
     Outputs:
-        art_images: List of images with artificial vessels
-        art_masks: List of masks for artificial vessels
+        art_img: Image with artificial vessels 
+        art_mask: Mask for artificial vessels
     """
     import cv2
     
-    art_images = []
-    art_masks = []
-    
     # Check if there are any vessels in the mask
     if np.max(mask) == 0:
-        return [], []
+        return None, None
     
-    for _ in range(num_samples):
-        # Create copies of the original image and mask
+    # Create copies of the original image and mask
+    art_img = img.copy()
+
+    img_len = img.shape[0]
+    
+    # Find vessel regions
+    vessel_regions = mask > 0
+    
+    if np.sum(vessel_regions) > 0:
+        # Extract vessel pixels
+        vessel_img = np.zeros_like(img)
+        vessel_img[vessel_regions] = img[vessel_regions]
+        
+        # Apply random transformations
+        # 1. Random rotation
+        angle = np.random.uniform(-180, 180)
+        rows, cols = vessel_img.shape[:2]
+        M = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)
+        
+        # 2. Random scaling
+        scale = np.random.uniform(0.25, 3)
+        M[:, 0:2] = M[:, 0:2] * scale
+        # x_scale = np.random.uniform(0.8, 1.2)
+        # y_scale = np.random.uniform(0.8, 1.2)
+        # M[:, 0] = M[:, 0] * x_scale
+        # M[:, 1] = M[:, 1] * y_scale
+        
+        # 3. Random translation
+        translation_factor = 0.5
+        tx = np.random.randint(-img_len * translation_factor, img_len * translation_factor)
+        ty = np.random.randint(-img_len * translation_factor, img_len * translation_factor)
+        # tx = np.random.randint(-20, 20)
+        # ty = np.random.randint(-20, 20)
+        M[0, 2] += tx
+        M[1, 2] += ty
+        
+        # Apply transformations
+        warped_vessel = cv2.warpAffine(vessel_img, M, (cols, rows), borderMode=cv2.BORDER_REFLECT)
+        warped_mask = cv2.warpAffine(mask.astype(np.uint8), M, (cols, rows), borderMode=cv2.BORDER_REFLECT)
+        
+        # Warping introduces variability, so assign value to closest in original
+        orig_mask_values = np.unique(mask)
+        warped_mask_list = []
+        for val in orig_mask_values:
+            this_mask = warped_mask.copy()
+            this_mask[warped_mask != val] = 0
+            this_mask = this_mask.astype(float)
+            val = val.astype(float)
+            max_orig = np.max(orig_mask_values).astype(float)
+            this_mask = (this_mask / val) * (val + max_orig + 1)
+            warped_mask_list.append(this_mask)
+        warped_mask = np.nansum(warped_mask_list, axis=0)
+        warped_mask = warped_mask.astype(np.uint16)
+
+        fin_mask = mask.copy()
+        fin_mask = fin_mask.astype(np.uint16)
+        fin_mask[warped_mask > 0] = warped_mask[warped_mask > 0]
+
+        # Renormalize
+        fin_mask = fin_mask / np.max(fin_mask) * 255    
+        art_mask = fin_mask.astype(np.uint8)
+
+        # fig, ax = plt.subplots(1, 3)
+        # ax[0].imshow(mask)
+        # ax[1].imshow(warped_mask)
+        # ax[2].imshow(fin_mask)
+        # plt.show()
+
+        # # Renormalize mask
+        # warped_mask = warped_mask / np.max(warped_mask) * 255
+        #
+        # warped_mask = (warped_mask > 0).astype(np.uint8) * 255
+        # 
+        # # Place the warped vessel in a different location
+        # # Find non-vessel regions in the original image
+        # non_vessel = ~vessel_regions
+        # 
+        # # Create a new mask for the artificial vessel
+        # art_mask = warped_mask
+        # 
+        # Combine the original image with the warped vessel
         art_img = img.copy()
-        art_mask = np.zeros_like(mask)
+        art_img[warped_mask > 0] = warped_vessel[warped_mask > 0]
         
-        # Find vessel regions
-        vessel_regions = mask > 0
-        
-        if np.sum(vessel_regions) > 0:
-            # Extract vessel pixels
-            vessel_img = np.zeros_like(img)
-            vessel_img[vessel_regions] = img[vessel_regions]
-            
-            # Apply random transformations
-            # 1. Random rotation
-            angle = np.random.uniform(-15, 15)
-            rows, cols = vessel_img.shape[:2]
-            M = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)
-            
-            # 2. Random scaling
-            scale = np.random.uniform(0.8, 1.2)
-            M[:, 0:2] = M[:, 0:2] * scale
-            
-            # 3. Random translation
-            tx = np.random.randint(-20, 20)
-            ty = np.random.randint(-20, 20)
-            M[0, 2] += tx
-            M[1, 2] += ty
-            
-            # Apply transformations
-            warped_vessel = cv2.warpAffine(vessel_img, M, (cols, rows), borderMode=cv2.BORDER_REFLECT)
-            warped_mask = cv2.warpAffine(mask.astype(np.float32), M, (cols, rows), borderMode=cv2.BORDER_REFLECT)
-            
-            # Threshold the warped mask to make it binary again
-            warped_mask = (warped_mask > 0).astype(np.uint8) * 255
-            
-            # Place the warped vessel in a different location
-            # Find non-vessel regions in the original image
-            non_vessel = ~vessel_regions
-            
-            # Create a new mask for the artificial vessel
-            art_mask = warped_mask
-            
-            # Combine the original image with the warped vessel
-            art_img = img.copy()
-            art_img[warped_mask > 0] = warped_vessel[warped_mask > 0]
-            
-            art_images.append(art_img)
-            art_masks.append(art_mask)
-    
-    return art_images, art_masks
+    return art_img, art_mask 
 
 def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
     """
