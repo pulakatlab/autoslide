@@ -247,7 +247,7 @@ if os.path.exists(aug_img_dir) and os.path.exists(aug_mask_dir) \
 else:
     # Create augmented dataset paths
     print("Creating augmented dataset...")
-    n_augmented = len(train_imgs) * 10
+    n_augmented = len(train_imgs) * 2
     # Load a few images to augment
     aug_img_list = []
     aug_mask_list = []
@@ -283,6 +283,30 @@ neg_mask_dir = os.path.join(labelled_data_dir, 'negative_masks/')
 neg_img_names = sorted(os.listdir(neg_image_dir))
 neg_mask_names = sorted(os.listdir(neg_mask_dir))
 
+# Randomly plot n augmented images
+n_plot = 25
+fig, ax = plt.subplots(
+        np.ceil(np.sqrt(n_plot)).astype(int), 
+        np.ceil(np.sqrt(n_plot)).astype(int), 
+        figsize=(15, 15))
+for i in range(n_plot):
+    rand_ind = np.random.choice(range(len(aug_img_names)))
+    img_name = aug_img_names[rand_ind]
+    mask_name = aug_mask_names[rand_ind]
+    img = Image.open(aug_img_dir + img_name).convert("RGB")
+    mask = Image.open(aug_mask_dir + mask_name).convert("L")
+    # Get outline of mask
+    ax.flatten()[i].imshow(img)
+    mask_array = np.array(mask)
+    if np.sum(mask_array) > 0:
+        mask_outline = get_mask_outline(np.array(mask)>0)
+        ax.flatten()[i].scatter(*np.where(mask_outline)[::-1], c='y', s=1)
+    ax.flatten()[i].axis('off')
+    ax.flatten()[i].set_title(img_name + '\n' + mask_name)
+# plt.show()
+fig.savefig(plot_dir + '/augmented_images.png')
+plt.close(fig)
+
 # Add augmented images to both training and validation sets
 # train_imgs = np.append(train_imgs, aug_img_names)
 # train_masks = np.append(train_masks, aug_mask_names)
@@ -294,6 +318,12 @@ train_imgs = np.concatenate([train_imgs, aug_img_names[:n_aug_train], neg_img_na
 train_masks = np.concatenate([train_masks, aug_mask_names[:n_aug_train], neg_mask_names[:n_neg_train]])
 val_imgs = np.concatenate([val_imgs, aug_img_names[n_aug_train:], neg_img_names[n_neg_train:]])
 val_masks = np.concatenate([val_masks, aug_mask_names[n_aug_train:], neg_mask_names[n_neg_train:]])
+
+# Check that all images have corresponding masks
+for img_name, mask_name in zip(train_imgs, train_masks):
+    assert img_name.split(".")[0] in mask_name
+for img_name, mask_name in zip(val_imgs, val_masks):
+    assert img_name.split(".")[0] in mask_name
 
 # Update img_dir and mask_dir to include augmented directories
 orig_img_dir = img_dir

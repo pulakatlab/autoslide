@@ -579,11 +579,11 @@ def generate_artificial_vessels(img, mask):
         fin_mask = fin_mask / np.max(fin_mask) * 255    
         art_mask = fin_mask.astype(np.uint8)
 
-        fig, ax = plt.subplots(1, 3)
-        ax[0].imshow(mask)
-        ax[1].imshow(warped_mask)
-        ax[2].imshow(fin_mask)
-        plt.show()
+        # fig, ax = plt.subplots(1, 3)
+        # ax[0].imshow(mask)
+        # ax[1].imshow(warped_mask)
+        # ax[2].imshow(fin_mask)
+        # plt.show()
 
         # # Renormalize mask
         # warped_mask = warped_mask / np.max(warped_mask) * 255
