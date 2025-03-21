@@ -26,8 +26,8 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 # Add parent directory to path to import utils
-# autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
-autoslide_dir = '/home/exouser/project/auto_slide'
+autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
+# autoslide_dir = '/home/exouser/project/auto_slide'
 
 if "__file__" not in globals():
     __file__ = os.path.join(autoslide_dir, 'src/pipeline/model/training.py')
@@ -277,15 +277,23 @@ else:
         aug_img_names.append(img_name)
         aug_mask_names.append(mask_name)
 
+# Also add negative images
+neg_image_dir = os.path.join(labelled_data_dir, 'negative_images/')
+neg_mask_dir = os.path.join(labelled_data_dir, 'negative_masks/')
+neg_img_names = sorted(os.listdir(neg_image_dir))
+neg_mask_names = sorted(os.listdir(neg_mask_dir))
+
 # Add augmented images to both training and validation sets
 # train_imgs = np.append(train_imgs, aug_img_names)
 # train_masks = np.append(train_masks, aug_mask_names)
 n_aug_train = int(0.9 * len(aug_img_names))
 n_aug_val = len(aug_img_names) - n_aug_train
-train_imgs = np.append(train_imgs, aug_img_names[:n_aug_train])
-train_masks = np.append(train_masks, aug_mask_names[:n_aug_train])
-val_imgs = np.append(val_imgs, aug_img_names[n_aug_train:])
-val_masks = np.append(val_masks, aug_mask_names[n_aug_train:])
+n_neg_train = int(0.9 * len(neg_img_names))
+n_neg_val = len(neg_img_names) - n_neg_train
+train_imgs = np.concatenate([train_imgs, aug_img_names[:n_aug_train], neg_img_names[:n_neg_train]])
+train_masks = np.concatenate([train_masks, aug_mask_names[:n_aug_train], neg_mask_names[:n_neg_train]])
+val_imgs = np.concatenate([val_imgs, aug_img_names[n_aug_train:], neg_img_names[n_neg_train:]])
+val_masks = np.concatenate([val_masks, aug_mask_names[n_aug_train:], neg_mask_names[n_neg_train:]])
 
 # Update img_dir and mask_dir to include augmented directories
 orig_img_dir = img_dir
@@ -302,6 +310,9 @@ for img_name, mask_name in zip(train_imgs[train_inds], train_masks[train_inds]):
     if 'aug_' in img_name:
         img = Image.open(aug_img_dir + img_name).convert("RGB")
         mask = Image.open(aug_mask_dir + mask_name)
+    elif 'neg_' in img_name:
+        img = Image.open(neg_image_dir + img_name).convert("RGB")
+        mask = Image.open(neg_mask_dir + mask_name)
     else:
         img = Image.open(img_dir + img_name).convert("RGB")
         mask = Image.open(mask_dir + mask_name)
@@ -317,6 +328,9 @@ for img_name, mask_name in zip(val_imgs[val_inds], val_masks[val_inds]):
     if 'aug_' in img_name:
         img = Image.open(aug_img_dir + img_name).convert("RGB")
         mask = Image.open(aug_mask_dir + mask_name)
+    elif 'neg_' in img_name:
+        img = Image.open(neg_image_dir + img_name).convert("RGB")
+        mask = Image.open(neg_mask_dir + mask_name)
     else:
         img = Image.open(img_dir + img_name).convert("RGB")
         mask = Image.open(mask_dir + mask_name)
@@ -345,6 +359,9 @@ class AugmentedCustDat(torch.utils.data.Dataset):
         if 'aug_' in img_name:
             img = Image.open(os.path.join(aug_img_dir, img_name)).convert("RGB")
             mask = Image.open(os.path.join(aug_mask_dir, mask_name))
+        elif 'neg_' in img_name:
+            img = Image.open(os.path.join(neg_image_dir, img_name)).convert("RGB")
+            mask = Image.open(os.path.join(neg_mask_dir, mask_name))
         else:
             img = Image.open(orig_img_dir + img_name).convert("RGB")
             mask = Image.open(orig_mask_dir + mask_name)
