@@ -34,6 +34,13 @@ if "__file__" not in globals():
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import augment_dataset, generate_negative_samples, generate_artificial_vessels
 
+##############################
+##############################
+retrain_bool = False
+
+##############################
+##############################
+
 plot_dir = os.path.join(autoslide_dir, 'plots') 
 artifacts_dir = os.path.join(autoslide_dir, 'artifacts')
 
@@ -48,6 +55,9 @@ mask_names = sorted(os.listdir(mask_dir))
 
 for img_path, mask_path in zip(image_names, mask_names):
     assert img_path.split(".")[0] in mask_path
+
+##############################
+##############################
 
 # Create random rotation strictly of 90 or 270 degrees
 class RandomRotation90():
@@ -480,105 +490,116 @@ optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 #     targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
 #     break
 
+##############################
+##############################
+
 run_test_plot_dir = os.path.join(plot_dir, 'run_test_plot')
 os.makedirs(run_test_plot_dir, exist_ok=True)
 
-n_epochs = 90
-all_train_losses = []
-all_val_losses = []
-best_val_loss = float('inf')  # Track the best validation loss
-best_model = None
-flag = False
-for epoch in trange(n_epochs):
-    train_epoch_loss = 0
-    val_epoch_loss = 0
-    model.train()
-    n_train = len(train_dl)
-    pbar = tqdm(train_dl)
-    for i , dt in enumerate(pbar): 
-        pbar.set_description(f"Epoch {epoch}/{n_epochs}, Batch {i}/{n_train}")
-        imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
-        targ = [dt[0][1] , dt[1][1]]
-        
-        # Plot example image and mask to make sure augmentation is working
-        if i==0:
-            fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-            ax[0].imshow(imgs[0].cpu().detach().numpy().transpose(1, 2, 0))
-            ax[1].imshow(np.sum(targ[0]['masks'].cpu().detach().numpy(), axis=0))
-            # Plot boxes
-            for box in targ[0]['boxes']:
-                ax[0].add_patch(
-                        plt.Rectangle((box[0], box[1]), box[2]-box[0], box[3]-box[1], 
-                                      fill=False, color="y", linewidth=2))
-            fig.savefig(run_test_plot_dir + f'/{epoch}_{i}_train.png')
-            plt.close(fig)
+best_model_path = os.path.join(artifacts_dir, 'best_val_mask_rcnn_model.pth')
+fin_model_path = os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth')
 
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
-        loss = model(imgs , targets)
-        if not flag:
-            print(loss)
-            flag = True
-        losses = sum([l for l in loss.values()])
-        train_epoch_loss += losses.cpu().detach().numpy()
-        optimizer.zero_grad()
-        losses.backward()
-        optimizer.step()
-        if np.isnan(train_epoch_loss):
-            raise Exception('Loss is Nan')
-    all_train_losses.append(train_epoch_loss)
-    with torch.no_grad():
-        for j , dt in enumerate(val_dl):
-            if len(dt) < 2:
-                continue
+if os.path.exists(best_model_path) and not retrain_bool:
+    print('Loading model from savefile')
+    model.load_state_dict(torch.load(best_model_path))
+
+else:
+    n_epochs = 90
+    all_train_losses = []
+    all_val_losses = []
+    best_val_loss = float('inf')  # Track the best validation loss
+    best_model = None
+    flag = False
+    for epoch in trange(n_epochs):
+        train_epoch_loss = 0
+        val_epoch_loss = 0
+        model.train()
+        n_train = len(train_dl)
+        pbar = tqdm(train_dl)
+        for i , dt in enumerate(pbar): 
+            pbar.set_description(f"Epoch {epoch}/{n_epochs}, Batch {i}/{n_train}")
             imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
             targ = [dt[0][1] , dt[1][1]]
+            
+            # Plot example image and mask to make sure augmentation is working
+            if i==0:
+                fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+                ax[0].imshow(imgs[0].cpu().detach().numpy().transpose(1, 2, 0))
+                ax[1].imshow(np.sum(targ[0]['masks'].cpu().detach().numpy(), axis=0))
+                # Plot boxes
+                for box in targ[0]['boxes']:
+                    ax[0].add_patch(
+                            plt.Rectangle((box[0], box[1]), box[2]-box[0], box[3]-box[1], 
+                                          fill=False, color="y", linewidth=2))
+                fig.savefig(run_test_plot_dir + f'/{epoch}_{i}_train.png')
+                plt.close(fig)
+
             targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
             loss = model(imgs , targets)
+            if not flag:
+                print(loss)
+                flag = True
             losses = sum([l for l in loss.values()])
-            val_epoch_loss += losses.cpu().detach().numpy()
-        all_val_losses.append(val_epoch_loss)
-    print(epoch , "  " , train_epoch_loss , "  " , val_epoch_loss)
-    
-    # Save model only if validation loss improves
-    if val_epoch_loss < best_val_loss:
-        best_val_loss = val_epoch_loss
-        best_model = model.state_dict()
-        torch.save(best_model, os.path.join(artifacts_dir, 'best_val_mask_rcnn_model.pth'))
-        # torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
-        # print(f"New best model saved with validation loss: {best_val_loss}")
+            train_epoch_loss += losses.cpu().detach().numpy()
+            optimizer.zero_grad()
+            losses.backward()
+            optimizer.step()
+            if np.isnan(train_epoch_loss):
+                raise Exception('Loss is Nan')
+        all_train_losses.append(train_epoch_loss)
+        with torch.no_grad():
+            for j , dt in enumerate(val_dl):
+                if len(dt) < 2:
+                    continue
+                imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
+                targ = [dt[0][1] , dt[1][1]]
+                targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
+                loss = model(imgs , targets)
+                losses = sum([l for l in loss.values()])
+                val_epoch_loss += losses.cpu().detach().numpy()
+            all_val_losses.append(val_epoch_loss)
+        print(epoch , "  " , train_epoch_loss , "  " , val_epoch_loss)
+        
+        # Save model only if validation loss improves
+        if val_epoch_loss < best_val_loss:
+            best_val_loss = val_epoch_loss
+            best_model = model.state_dict()
+            torch.save(best_model, best_model_path)
+            # torch.save(model.state_dict(), os.path.join(artifacts_dir, 'mask_rcnn_model.pth'))
+            # print(f"New best model saved with validation loss: {best_val_loss}")
 
-    torch.save(model.state_dict(), os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth'))
+        torch.save(model.state_dict(), fin_model_path)
 
-    fig, ax = plt.subplots(1, 2, figsize=(10,5))
-    ax[0].plot(all_train_losses)
-    ax[1].plot(all_val_losses)
-    ax[0].set_title("Train Loss")
-    ax[1].set_title("Validation Loss")
-    ax[1].axhline(y=best_val_loss, color='r', linestyle='--', label='Best Val Loss')
+        fig, ax = plt.subplots(1, 2, figsize=(10,5))
+        ax[0].plot(all_train_losses)
+        ax[1].plot(all_val_losses)
+        ax[0].set_title("Train Loss")
+        ax[1].set_title("Validation Loss")
+        ax[1].axhline(y=best_val_loss, color='r', linestyle='--', label='Best Val Loss')
+        # plt.show()
+        fig.savefig(plot_dir + '/train_val_loss.png')
+        plt.close(fig)
+
+
+    # pbar = tqdm(train_dl)
+    # for i , dt in enumerate(pbar): 
+    #     pbar.set_description(f"Epoch {epoch}/{n_epochs}, Batch {i}/{n_train}")
+    #     imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
+    #     targ = [dt[0][1] , dt[1][1]]
+    #     fig, ax = plt.subplots(1, 2, figsize=(10,5))
+    #     ax[0].imshow(imgs[0].cpu().detach().numpy().transpose(1,2,0))
+    #     ax[1].imshow(np.sum(targ[0]['masks'].cpu().detach().numpy(), axis=0))
+    #     # Plot boxes
+    #     for box in targ[0]['boxes']:
+    #         ax[0].add_patch(
+    #                 plt.Rectangle((box[0], box[1]), box[2]-box[0], box[3]-box[1], 
+    #                               fill=False, color="y", linewidth=2))
     # plt.show()
-    fig.savefig(plot_dir + '/train_val_loss.png')
-    plt.close(fig)
 
 
-# pbar = tqdm(train_dl)
-# for i , dt in enumerate(pbar): 
-#     pbar.set_description(f"Epoch {epoch}/{n_epochs}, Batch {i}/{n_train}")
-#     imgs = [dt[0][0].to(device) , dt[1][0].to(device)]
-#     targ = [dt[0][1] , dt[1][1]]
-#     fig, ax = plt.subplots(1, 2, figsize=(10,5))
-#     ax[0].imshow(imgs[0].cpu().detach().numpy().transpose(1,2,0))
-#     ax[1].imshow(np.sum(targ[0]['masks'].cpu().detach().numpy(), axis=0))
-#     # Plot boxes
-#     for box in targ[0]['boxes']:
-#         ax[0].add_patch(
-#                 plt.Rectangle((box[0], box[1]), box[2]-box[0], box[3]-box[1], 
-#                               fill=False, color="y", linewidth=2))
-# plt.show()
-
-
-# Save loss histories
-np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
-np.save(artifacts_dir + '/val_losses.npy', all_val_losses)
+    # Save loss histories
+    np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
+    np.save(artifacts_dir + '/val_losses.npy', all_val_losses)
 
 
 # Plot example predicted mask from validation set
@@ -619,7 +640,7 @@ for img_name, mask_name in tqdm(zip(val_imgs, val_masks), total=len(val_imgs)):
         for i in range(n_preds):
             ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
         # plt.show()
-        fig.savefig(pred_out_path + f'/{img_path.split(".")[0]}example_masks.png')
+        fig.savefig(pred_out_path + f'/{img_name.split(".")[0]}example_masks.png')
         plt.close(fig)
 
 
@@ -636,6 +657,6 @@ for img_name, mask_name in tqdm(zip(val_imgs, val_masks), total=len(val_imgs)):
         ax[1].imshow(all_preds.mean(axis = 0))
         ax[2].imshow(np.array(mask))
         # plt.show()
-        plt.savefig(pred_out_path + f'/{img_path.split(".")[0]}mean_example_mask.png')
+        plt.savefig(pred_out_path + f'/{img_name.split(".")[0]}mean_example_mask.png')
         plt.close()
 
