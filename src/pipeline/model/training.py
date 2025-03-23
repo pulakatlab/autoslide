@@ -296,6 +296,8 @@ neg_mask_dir = os.path.join(labelled_data_dir, 'negative_masks/')
 neg_img_names = sorted(os.listdir(neg_image_dir))
 neg_mask_names = sorted(os.listdir(neg_mask_dir))
 
+print(f'Negative images: {len(np.unique(neg_img_names))}')
+
 # Randomly plot n augmented images
 n_plot = 25
 fig, ax = plt.subplots(
@@ -659,4 +661,72 @@ for img_name, mask_name in tqdm(zip(val_imgs, val_masks), total=len(val_imgs)):
         # plt.show()
         plt.savefig(pred_out_path + f'/{img_name.split(".")[0]}mean_example_mask.png')
         plt.close()
+    else:
+        fig, ax = plt.subplots(1, 1, figsize=(10,5))
+        ax.imshow(img)
+        # plt.show()
+        ax.set_title('No predicted mask')
+        plt.savefig(pred_out_path + f'/{img_name.split(".")[0]}_{i}_mean_example_mask.png')
+        plt.close()
+        print('No predicted mask')
+
+for i, (img_name, mask_name) in enumerate(tqdm(zip(neg_img_names, neg_mask_names), total=len(neg_img_names))):
+    print(img_name)
+    if 'aug_' in img_name:
+        img = Image.open(aug_img_dir + img_name).convert("RGB")
+        mask = Image.open(aug_mask_dir + mask_name)
+    elif 'neg_' in img_name:
+        img = Image.open(neg_image_dir + img_name).convert("RGB")
+        mask = Image.open(neg_mask_dir + mask_name)
+    else:
+        img = Image.open(img_dir + img_name).convert("RGB")
+        mask = Image.open(mask_dir + mask_name)
+
+    # img = Image.open(img_dir + img_path).convert("RGB")
+    # mask = Image.open(mask_dir + mask_path)
+    # Use the base transform for prediction to match training
+    ig = transform(img)
+    with torch.no_grad():
+        pred = model([ig.to(device)])
+
+    # fig, ax = plt.subplots(1, 2, figsize=(10,5))
+    # ax[0].imshow(img)
+    # ax[1].imshow(ig.cpu().detach().numpy().transpose(1,2,0))
+    # plt.show()
+
+
+    n_preds = len(pred[0]["masks"])
+    if n_preds > 0:
+        fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds,5))
+        ax[0].imshow(img)
+        for i in range(n_preds):
+            ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze())
+        # plt.show()
+        fig.savefig(pred_out_path + f'/{img_name.split(".")[0]}_{i}_example_masks.png')
+        plt.close(fig)
+
+
+        all_preds = np.stack(
+                [
+                    (pred[0]["masks"][i].cpu().detach().numpy() * 255).astype("uint8").squeeze() \
+                            for i in range(n_preds)
+                            ]
+                )
+
+
+        fig, ax = plt.subplots(1, 3, figsize=(10,5))
+        ax[0].imshow(img)
+        ax[1].imshow(all_preds.mean(axis = 0))
+        ax[2].imshow(np.array(mask))
+        # plt.show()
+        plt.savefig(pred_out_path + f'/{img_name.split(".")[0]}_mean_example_mask.png')
+        plt.close()
+    else:
+        fig, ax = plt.subplots(1, 1, figsize=(10,5))
+        ax.imshow(img)
+        # plt.show()
+        ax.set_title('No predicted mask')
+        plt.savefig(pred_out_path + f'/{img_name.split(".")[0]}_mean_example_mask.png')
+        plt.close()
+        print('No predicted mask')
 
