@@ -52,12 +52,13 @@ def parse_args():
                         help='Select preferred annotation method after comparison')
     return parser.parse_args()
 
-def run_initial_annotation(data_dir=None, method='both'):
+def run_initial_annotation(data_dir=None, method='both', compare_annotations=False):
     """Run the initial annotation step
     
     Args:
         data_dir: Path to data directory (overrides default in scripts)
         method: Annotation method to use ('image_processing', 'knn', or 'both')
+        compare_annotations: Whether to generate comparison visualizations
     """
     logger.info(f"Starting initial annotation using method: {method}...")
     
@@ -85,7 +86,7 @@ def run_initial_annotation(data_dir=None, method='both'):
             logger.error(f"Error in KNN-based annotation: {str(e)}")
             success = False
     
-    if method == 'both' and args.compare_annotations:
+    if method == 'both' and compare_annotations:
         try:
             from annotation.compare_annotations import main as compare_annotations_main
             compare_annotations_main()
@@ -176,7 +177,7 @@ def main():
     
     # Run each step of the pipeline
     if not args.skip_annotation:
-        if not run_initial_annotation(args.data_dir, method=args.annotation_method):
+        if not run_initial_annotation(args.data_dir, method=args.annotation_method, compare_annotations=args.compare_annotations):
             logger.warning("Initial annotation failed, but continuing pipeline...")
         
         # If user specified a method to select, do it now
