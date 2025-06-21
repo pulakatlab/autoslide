@@ -65,7 +65,7 @@ Or execute individual stages as needed for your specific workflow.
 Ready to transform your histological analysis? Get started with AutoSlide today!
 
 <details>
-<summary>Using DVC for Model and Data Versioning</summary>
+<summary>## Using DVC for Model and Data Versioning</summary>
 
 # AutoSlide Artifacts
 
