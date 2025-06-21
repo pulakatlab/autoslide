@@ -11,17 +11,18 @@ Steps:
 5. Image is convex hull'd and regions segmented
 6. Separately, user is asked to input tissue type
 """
-auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
+# auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
+auto_slide_dir = '/media/bigdata/projects/auto_slide'
 
+import os
 import sys
 sys.path.append(os.path.join(auto_slide_dir, 'src'))
-import utils
+from pipeline import utils
 
 import slideio
 import pylab as plt
 import cv2 as cv
 import numpy as np 
-import os
 from pprint import pprint
 from glob import glob
 import pandas as pd
@@ -46,13 +47,14 @@ area_threshold = 10000
 # data_dir = '/media/fastdata/9_month_wistar_zdf_female'
 data_dir = os.path.join(auto_slide_dir, 'data')
 glob_pattern = 'TRI*.svs'
-file_list = glob(os.path.join(data_dir, glob_pattern))
+file_list = glob(os.path.join(data_dir, '**', glob_pattern), recursive = True)
 
 annot_dir = os.path.join(data_dir, 'initial_annotation')
 if not os.path.exists(annot_dir):
     os.makedirs(annot_dir)
 
 for data_path in tqdm(file_list):
+
     # data_path = file_list[0]
     file_basename = os.path.basename(data_path)
     slide = slideio.open_slide(data_path, 'SVS')
@@ -156,3 +158,15 @@ for data_path in tqdm(file_list):
                 bbox_inches = 'tight')
     plt.close(fig)
     # plt.show()
+
+    # Write out a json with:
+    # - file_basename
+    # - data_path
+    # - fin_label_image path
+    # - wanted_regions_frame path
+    json_data = {
+        'file_basename': file_basename,
+        'data_path': data_path,
+        'fin_label_image_path': os.path.join(annot_dir, file_basename.replace('.svs', '.npy')),
+        'wanted_regions_frame_path': os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
+    }
