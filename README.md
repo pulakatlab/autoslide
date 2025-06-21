@@ -63,3 +63,97 @@ python src/pipeline/run_pipeline.py
 Or execute individual stages as needed for your specific workflow.
 
 Ready to transform your histological analysis? Get started with AutoSlide today!
+
+<details>
+<summary>Using DVC for Model and Data Versioning</summary>
+
+# AutoSlide Artifacts
+
+This directory contains model artifacts and other large files used by the AutoSlide project.
+
+## Using DVC for Model and Data Versioning
+
+This project uses [DVC (Data Version Control)](https://dvc.org/) to track large files and model artifacts.
+
+### Setup
+
+1. Install DVC:
+```bash
+pip install dvc
+# For Google Drive storage
+pip install dvc[gdrive]
+# For S3 storage
+pip install dvc[s3]
+```
+
+2. Initialize DVC in your repository (already done):
+```bash
+dvc init
+```
+
+3. Configure remote storage:
+```bash
+# For Google Drive
+dvc remote add -d myremote gdrive://path/to/folder
+# For S3
+dvc remote add -d myremote s3://bucket/path
+```
+
+### Working with DVC
+
+#### Adding files to DVC
+
+```bash
+# Add a large file or directory to DVC
+dvc add data/large_dataset.svs
+dvc add artifacts/mask_rcnn_model.pth
+```
+
+This creates a small .dvc file that you commit to git instead of the large file.
+
+#### Pushing and pulling data
+
+```bash
+# Push your data to remote storage
+dvc push
+
+# Pull data from remote storage
+dvc pull
+```
+
+#### Versioning models
+
+When you train a new model version:
+
+```bash
+# Add the new model file
+dvc add artifacts/mask_rcnn_model.pth
+
+# Commit the .dvc file to git
+git add artifacts/mask_rcnn_model.pth.dvc
+git commit -m "Update model with improved accuracy"
+
+# Push the actual model file to remote storage
+dvc push
+```
+
+#### Switching between versions
+
+```bash
+# Checkout a specific git commit/tag
+git checkout <commit-hash>
+
+# Get the corresponding data files
+dvc pull
+```
+
+### Best Practices
+
+1. Always add large files with DVC, not git
+2. Commit .dvc files to git after running `dvc add`
+3. Run `dvc push` after adding new files to make them available to others
+4. Use `dvc pull` after checkout to get the correct version of data files
+
+For more information, visit the [DVC documentation](https://dvc.org/doc).
+
+</details>
