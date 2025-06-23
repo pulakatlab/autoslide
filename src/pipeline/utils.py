@@ -141,8 +141,9 @@ def visualize_sections(
                 size=down_shape,
                 )
 
-    if small_image.shape[:2] != down_shape and \
-            small_image.shape[:2][::-1] == image_shape:
+    # if small_image.shape[:2] != down_shape and \
+    #         small_image.shape[:2][::-1] == image_shape:
+    if not all(np.array(small_image.shape[:2]) == np.array(down_shape)):
         small_image = np.swapaxes(small_image, 0, 1) 
 
     fig, ax = plt.subplots(1,1)
