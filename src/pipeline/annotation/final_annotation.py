@@ -12,33 +12,46 @@ import pandas as pd
 from tqdm import tqdm
 from skimage.color import label2rgb
 from ast import literal_eval
+import json
 
 
 ############################################################
 auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
 
 data_dir = os.path.join(auto_slide_dir, 'data')
-init_annot_dir = os.path.join(data_dir, 'initial_annotation')
-file_list = os.listdir(init_annot_dir)
+tracking_dir = os.path.join(data_dir, '.tracking')
+# init_annot_dir = os.path.join(data_dir, 'initial_annotation')
+# file_list = os.listdir(init_annot_dir)
+file_list = os.listdir(tracking_dir)
 
 fin_annotation_dir = os.path.join(data_dir, 'final_annotation')
 if not os.path.exists(fin_annotation_dir):
     os.makedirs(fin_annotation_dir)
 
-basenames = [os.path.basename(x).split('.')[0] for x in file_list] 
-unique_basenames = np.unique(basenames)
+# basenames = [os.path.basename(x).split('.')[0] for x in file_list] 
+# unique_basenames = np.unique(basenames)
+
+json_path_list = glob(os.path.join(tracking_dir, '*.json'))
+json_list = [json.load(open(x, 'r')) for x in json_path_list]
+
 
 ############################################################
 
-for this_basename in tqdm(unique_basenames):
+# for this_basename in tqdm(unique_basenames):
+for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)): 
     # this_basename = unique_basenames[0]
+    this_basename = this_json['file_basename'].split('.')[0]
 
-    metadata = pd.read_csv(os.path.join(init_annot_dir, this_basename + '.csv'))
+    metadata_path = this_json['wanted_regions_frame_path']
+    # metadata = pd.read_csv(os.path.join(init_annot_dir, this_basename + '.csv'))
+    metadata = pd.read_csv(metadata_path)
 
     # Make sure tissue_num >0 as 0 is background
     assert np.all(metadata['tissue_num'] > 0), 'tissue_num should be >0'
 
-    mask = np.load(os.path.join(init_annot_dir, this_basename + '.npy'))
+    mask_path = this_json['initial_mask_path']
+    # mask = np.load(os.path.join(init_annot_dir, this_basename + '.npy'))
+    mask = np.load(mask_path)
 
     label_map = {}
     for i, row in metadata.iterrows():
@@ -68,5 +81,10 @@ for this_basename in tqdm(unique_basenames):
     fig.savefig(os.path.join(fin_annotation_dir, this_basename + '.png'))
     plt.close(fig)
 
-    np.save(os.path.join(fin_annotation_dir, this_basename + '.npy'), mask)
+    fin_mask_path = os.path.join(fin_annotation_dir, this_basename + '.npy')
+    np.save(fin_mask_path, mask)
+    this_json['fin_mask_path'] = fin_mask_path
 
+    # Save the updated json with final mask path
+    with open(json_path, 'w') as f:
+        json.dump(this_json, f, indent=4)

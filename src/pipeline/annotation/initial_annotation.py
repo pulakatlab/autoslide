@@ -54,6 +54,10 @@ annot_dir = os.path.join(data_dir, 'initial_annotation')
 if not os.path.exists(annot_dir):
     os.makedirs(annot_dir)
 
+tracking_dir = os.path.join(data_dir, '.tracking')
+if not os.path.exists(tracking_dir):
+    os.makedirs(tracking_dir)
+
 for data_path in tqdm(file_list):
 
     # data_path = file_list[0]
@@ -103,10 +107,10 @@ for data_path in tqdm(file_list):
     wanted_regions_frame['tissue_type'] = np.nan
     wanted_regions_frame['tissue_num'] = np.nan
 
-    # wanted_regions_frame.to_csv(
-    #         os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
-    #         index = False
-    #         )
+    wanted_regions_frame.to_csv(
+            os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
+            index = False
+            )
 
     # Drop regions that are not wanted
     fin_label_image = label_image.copy()
@@ -130,47 +134,48 @@ for data_path in tqdm(file_list):
     gradient_image = gradient(filled_binary, np.ones((10, 10)))
     grad_inds = np.where(gradient_image > 0)
 
-    # fig,ax = plt.subplots(1, 5, 
-    #                       sharex = True, sharey = True,
-    #                       figsize = (20, 10)
-    #                       )
-    # ax[0].imshow(np.swapaxes(image, 0, 1))
-    # ax[1].imshow(threshold_mask)
-    # ax[2].imshow(dilated_mask)
-    # ax[3].imshow(image_label_overlay)
-    # ax[4].imshow(np.swapaxes(image, 0, 1))
-    # ax[4].scatter(grad_inds[1], grad_inds[0], 
-    #               s = 1, color = 'orange', alpha = 0.7,
-    #               label = 'Outline')
-    # ax[0].set_title('Original')
-    # ax[1].set_title('Threshold')
-    # ax[2].set_title('Dilated')
-    # ax[3].set_title('Labelled')
-    # ax[4].set_title('Outline Overlay')
-    # ax[4].legend()
-    # # Add labels at the center of each region
-    # for this_row in wanted_regions_frame.itertuples():
-    #     ax[3].text(this_row.centroid[1], this_row.centroid[0], 
-    #                this_row.label, color = 'r', fontsize = 25,
-    #                weight = 'bold')
-    # fig.suptitle(file_basename)
-    # plt.tight_layout()
-    # fig.savefig(os.path.join(annot_dir, file_basename.replace('.svs', '.png')),
-    #             bbox_inches = 'tight')
-    # plt.close(fig)
-    # # plt.show()
-    #
+    fig,ax = plt.subplots(1, 5, 
+                          sharex = True, sharey = True,
+                          figsize = (20, 10)
+                          )
+    ax[0].imshow(np.swapaxes(image, 0, 1))
+    ax[1].imshow(threshold_mask)
+    ax[2].imshow(dilated_mask)
+    ax[3].imshow(image_label_overlay)
+    ax[4].imshow(np.swapaxes(image, 0, 1))
+    ax[4].scatter(grad_inds[1], grad_inds[0], 
+                  s = 1, color = 'orange', alpha = 0.7,
+                  label = 'Outline')
+    ax[0].set_title('Original')
+    ax[1].set_title('Threshold')
+    ax[2].set_title('Dilated')
+    ax[3].set_title('Labelled')
+    ax[4].set_title('Outline Overlay')
+    ax[4].legend()
+    # Add labels at the center of each region
+    for this_row in wanted_regions_frame.itertuples():
+        ax[3].text(this_row.centroid[1], this_row.centroid[0], 
+                   this_row.label, color = 'r', fontsize = 25,
+                   weight = 'bold')
+    fig.suptitle(file_basename)
+    plt.tight_layout()
+    fig.savefig(os.path.join(annot_dir, file_basename.replace('.svs', '.png')),
+                bbox_inches = 'tight')
+    plt.close(fig)
+    # plt.show()
+
     # Write out a json with:
     # - file_basename
     # - data_path
     # - fin_label_image path
     # - wanted_regions_frame path
+
     json_data = {
         'file_basename': file_basename,
         'data_path': data_path,
-        'fin_label_image_path': os.path.join(annot_dir, file_basename.replace('.svs', '.npy')),
+        'initial_mask_path': os.path.join(annot_dir, file_basename.replace('.svs', '.npy')),
         'wanted_regions_frame_path': os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
     }
 
-    with open(os.path.join(annot_dir, file_basename.replace('.svs', '.json')), 'w') as f:
+    with open(os.path.join(tracking_dir, file_basename.replace('.svs', '.json')), 'w') as f:
         json.dump(json_data, f, indent=4)
