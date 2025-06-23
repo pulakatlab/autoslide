@@ -156,6 +156,9 @@ def main():
     if section is not None:
         # Visualize the section
         fig, ax = visualize_section(section, utils)
+        fig.suptitle(f"Section: {section['basename']}, Hash: {section['section_hash']}" +\
+                f"\nData Path: {section['data_path']},\nSection Bounds: {section['section_bounds']}")
+        plt.tight_layout()
         plt.show()
     else:
         print(f"No section found with hash {test_hash}")
