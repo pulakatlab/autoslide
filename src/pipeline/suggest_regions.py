@@ -195,6 +195,12 @@ for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_
                         for i in range(len(section_frame))
                         ]
 
+        # Make sure section_bounds are a list (otherwise they are converted weirdly to np.int64)
+        # This way they are easier to load
+        section_frame['section_bounds'] = section_frame['section_bounds'].apply(
+                lambda x: [int(y) for y in x]
+                )
+
         # Write out section_frame
         section_frame.to_csv(
                 os.path.join(
