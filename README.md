@@ -22,6 +22,22 @@ Our end-to-end workflow transforms raw histological slides into actionable insig
 4. **🧩 Pixel Clustering** - Advanced segmentation of tissue components
 5. **🔬 Vessel Detection** - Deep learning-based identification of vascular structures
 
+### Initial Annotation
+![TRI_85B-113_86A-118_38696](https://github.com/user-attachments/assets/5e149cdc-6469-4fe7-9c11-4e710237eb35)
+
+### Final Annotation
+<img src="https://github.com/user-attachments/assets/5976b0c1-0631-4360-8c65-9313ea431ffd" alt="Alt Text" height="800">
+
+### Region Suggestion
+<img src="https://github.com/user-attachments/assets/37600c55-e6da-4e7c-af2d-248f5ccdbb80" alt="Alt Text" height="800">
+
+#### Examples of extracted sections
+<img src="https://github.com/user-attachments/assets/315ffd0d-a0d8-4de3-b472-ae7cc939b65f" alt="Alt Text" width="300" height="300">
+<img src="https://github.com/user-attachments/assets/4399c97c-00d5-4efa-9612-a6806c8d1ac0" alt="Alt Text" width="300" height="300">
+
+
+
+
 ## 💡 Why AutoSlide?
 
 - **Save Time** - Automate tedious manual annotation and region selection
