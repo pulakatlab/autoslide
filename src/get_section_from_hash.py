@@ -163,5 +163,22 @@ def main():
     else:
         print(f"No section found with hash {test_hash}")
 
+    ############################## 
+    # Make sure all current images are accounted for
+    image_dirs = glob(os.path.join(data_dir, 'suggested_regions', '*', "images"))
+    image_path_list = []
+    for x in image_dirs:
+        image_path_list.extend(glob(os.path.join(x, '*.png')))
+    hash_list = [x.split('_')[-1].split('.')[0] for x in image_path_list] 
+    # Make sure all images have unique hashes
+    unique_hashes = set(hash_list)
+    assert len(unique_hashes) == len(hash_list), "There are duplicate hashes in the images."
+
+    all_accounted = all(hash in final_df['section_hash'].values for hash in unique_hashes)
+    if all_accounted:
+        print("All images are accounted for in the final dataframe.")
+    else:
+        print("Some images are not accounted for in the final dataframe.")
+
 if __name__ == "__main__":
     main()
