@@ -1,6 +1,0 @@
-outs:
-- md5: 70a47fe1164a6f0edc57f92c6cf76030.dir
-  size: 147591474
-  nfiles: 230
-  hash: md5
-  path: labelled_images
