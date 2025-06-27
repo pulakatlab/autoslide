@@ -40,12 +40,12 @@ area_threshold = 10000
 ############################################################
 
 
-# data_dir = '/media/bigdata/projects/pulakat_lab/auto_slide/data/'
-# data_dir = '/media/fastdata/9_month_wistar_zdf_female'
-# Define project directory
-auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide'
+# Import config
+from autoslide import config
 
-data_dir = os.path.join(auto_slide_dir, 'data')
+# Get directories from config
+auto_slide_dir = config['auto_slide_dir']
+data_dir = config['data_dir']
 glob_pattern = 'TRI*.svs'
 file_list = glob(os.path.join(data_dir, glob_pattern))
 

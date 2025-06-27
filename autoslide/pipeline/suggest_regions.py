@@ -15,10 +15,7 @@ import pandas as pd
 from skimage import morphology as morph
 from scipy.ndimage import binary_fill_holes
 from glob import glob
-
-# Define project directory
-# auto_slide_dir = '/media/bigdata/projects/pulakat_lab/auto_slide'
-# auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
+from autoslide import config
 
 # Import utilities directly
 from autoslide.pipeline import utils
@@ -52,9 +49,8 @@ def remove_mask_edge(
 
     return eroded_mask
 
-data_dir = '/media/storage/svs_tri_files'
-# data_dir = '/media/fastdata/9_month_wistar_zdf_female/'
-# data_dir = os.path.join(auto_slide_dir, 'data')
+# Get directories from config
+data_dir = config['data_dir']
 mask_dir = os.path.join(data_dir, 'final_annotation') 
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 
 output_base_dir = os.path.join(data_dir, 'suggested_regions')

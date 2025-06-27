@@ -12,11 +12,11 @@ import pandas as pd
 from tqdm import tqdm
 from skimage.color import label2rgb
 from ast import literal_eval
+from autoslide import config
 
-# Define project directory
-auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide'
-
-data_dir = os.path.join(auto_slide_dir, 'data')
+# Get directories from config
+auto_slide_dir = config['auto_slide_dir']
+data_dir = config['data_dir']
 init_annot_dir = os.path.join(data_dir, 'initial_annotation')
 file_list = os.listdir(init_annot_dir)
 
