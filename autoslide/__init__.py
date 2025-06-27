@@ -7,15 +7,16 @@ def load_config():
     
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
-            return json.load(f)
+            path_dict = json.load(f)
+            data_dir = path_dict.get('data_dir', os.path.join(os.path.dirname(__file__), 'data'))
     else:
-        # Default configuration
-        return {
-            "data_dir": os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data'),
-            "auto_slide_dir": os.path.dirname(os.path.dirname(__file__)),
-            "plot_dir": os.path.join(os.path.dirname(os.path.dirname(__file__)), 'plots'),
-            "artifacts_dir": os.path.join(os.path.dirname(os.path.dirname(__file__)), 'artifacts')
-        }
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data'),
+
+    return {
+        'data_dir': data_dir,
+        'artifacts_dir': os.path.join(data_dir, 'artifacts'),
+        'plot_dirs': os.path.join(data_dir, 'plots'),
+    }
 
 # Load configuration when module is imported
 config = load_config()

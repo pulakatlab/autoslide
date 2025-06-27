@@ -1,6 +1,3 @@
 {
-    "data_dir": "/media/storage/svs_tri_files",
-    "auto_slide_dir": "/home/abuzarmahmood/projects/auto_slide",
-    "plot_dir": "/home/abuzarmahmood/projects/auto_slide/plots",
-    "artifacts_dir": "/home/abuzarmahmood/projects/auto_slide/artifacts"
+    "data_dir": "/home/abuzarmahmood/projects/auto_slide/data",
 }
