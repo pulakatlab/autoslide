@@ -27,7 +27,7 @@ from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
 
 # Import utilities directly
-from src.pipeline.model.training_utils import (
+from autoslide.pipeline.model.training_utils import (
     setup_directories, load_data, get_mask_outline, RandomRotation90,
     create_transforms, test_transformations, CustDat, initialize_model,
     custom_collate, split_train_val, load_or_create_augmented_data,
