@@ -6,11 +6,9 @@ import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 import numpy as np
 
-# autoslide_dir = '/media/bigdata/projects/auto_slide'
+# Define project directory and paths
 autoslide_dir = '/home/abuzarmahmood/projects/auto_slide' 
-# export_json_path = '/media/bigdata/projects/auto_slide/data/labelled_images/ndjson/Export_catalog_query_3_10_2025.ndjson'
-export_json_path = '/home/abuzarmahmood/projects/auto_slide/data/labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson'
-# export_json_path = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/Export_catalog_query_3_10_2025_1_img.ndjson'
+export_json_path = os.path.join(autoslide_dir, 'data/labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
 
 export_df = pd.read_json(export_json_path, lines=True)
 # export_df = pd.DataFrame(export_df['data_row'].values.tolist())

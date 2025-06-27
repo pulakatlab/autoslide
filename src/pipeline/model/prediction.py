@@ -3,13 +3,6 @@ For prediction on every section, perform prediction on a radius larger than the 
 and aggregate the predictions.
 """
 import os
-auto_slide_dir = '/media/bigdata/projects/auto_slide'
-plot_dir = os.path.join(auto_slide_dir, 'plots')
-
-import sys
-sys.path.append(os.path.join(auto_slide_dir, 'src', 'pipeline'))
-import utils
-
 import slideio
 from matplotlib import pyplot as plt
 import cv2 as cv
@@ -19,13 +12,20 @@ import pandas as pd
 from skimage import morphology as morph
 from scipy.ndimage import binary_fill_holes
 from glob import glob
-
 import torch
 import torchvision
 from torchvision import transforms as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 from PIL import Image
+from importlib import reload
+
+# Define project directory
+auto_slide_dir = '/media/bigdata/projects/auto_slide'
+plot_dir = os.path.join(auto_slide_dir, 'plots')
+
+# Import utilities directly
+from src.pipeline.utils import visualize_sections, get_section, gen_step_windows
 
 ##############################
 data_dir = os.path.join(auto_slide_dir, 'data') 

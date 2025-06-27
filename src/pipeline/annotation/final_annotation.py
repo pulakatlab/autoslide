@@ -13,9 +13,8 @@ from tqdm import tqdm
 from skimage.color import label2rgb
 from ast import literal_eval
 
-
-############################################################
-auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
+# Define project directory
+auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide'
 
 data_dir = os.path.join(auto_slide_dir, 'data')
 init_annot_dir = os.path.join(data_dir, 'initial_annotation')
