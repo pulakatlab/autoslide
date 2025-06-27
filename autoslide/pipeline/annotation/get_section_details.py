@@ -13,10 +13,11 @@ import pandas as pd
 from skimage import morphology as morph
 from scipy.ndimage import binary_fill_holes
 from glob import glob
+from autoslide import config
 
-# Define project directory
-auto_slide_dir = '/media/bigdata/projects/pulakat_lab/auto_slide'
-plot_dir = os.path.join(auto_slide_dir, 'plots')
+# Get directories from config
+auto_slide_dir = config['auto_slide_dir']
+plot_dir = config['plot_dir']
 
 # Import utilities directly
 from autoslide.pipeline.utils import visualize_sections, get_section
@@ -28,7 +29,7 @@ class Utils:
 
 utils = Utils()
 
-data_dir = '/media/storage/svs_tri_files'
+data_dir = config['data_dir']
 mask_dir = os.path.join(data_dir, 'final_annotation') 
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 
 section_dir = os.path.join(data_dir, 'suggested_regions')

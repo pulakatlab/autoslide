@@ -15,13 +15,7 @@ import pandas as pd
 from skimage import morphology as morph
 from scipy.ndimage import binary_fill_holes
 from glob import glob
-import json
-from tqdm import tqdm
-import hashlib
-
-# Define project directory
-# auto_slide_dir = '/media/bigdata/projects/pulakat_lab/auto_slide'
-# auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
+from autoslide import config
 
 # Import utilities directly
 from autoslide.pipeline import utils
@@ -55,6 +49,7 @@ def remove_mask_edge(
 
     return eroded_mask
 
+<<<<<<< HEAD
 def str_to_hash(s):
     """
     Convert a string to a hash value.
@@ -73,6 +68,12 @@ def str_to_hash(s):
 data_dir = os.path.join(auto_slide_dir, 'data')
 tracking_dir = os.path.join(data_dir, '.tracking')
 
+=======
+# Get directories from config
+data_dir = config['data_dir']
+mask_dir = os.path.join(data_dir, 'final_annotation') 
+metadata_dir = os.path.join(data_dir, 'initial_annotation') 
+>>>>>>> 22a2d9a (feat: Implement configuration system using config.json for dynamic directory management)
 output_base_dir = os.path.join(data_dir, 'suggested_regions')
 if not os.path.exists(output_base_dir):
     os.mkdir(output_base_dir)
