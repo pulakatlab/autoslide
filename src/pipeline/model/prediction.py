@@ -27,6 +27,14 @@ plot_dir = os.path.join(auto_slide_dir, 'plots')
 # Import utilities directly
 from src.pipeline.utils import visualize_sections, get_section, gen_step_windows
 
+# Create a utils namespace for backward compatibility
+class Utils:
+    visualize_sections = visualize_sections
+    get_section = get_section
+    gen_step_windows = gen_step_windows
+
+utils = Utils()
+
 ##############################
 data_dir = os.path.join(auto_slide_dir, 'data') 
 mask_dir = os.path.join(data_dir, 'final_annotation') 

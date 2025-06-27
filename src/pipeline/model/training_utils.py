@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
-import cv2
+import cv2 as cv  # Alias cv2 as cv for consistency
 from torchvision.transforms import v2 as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor

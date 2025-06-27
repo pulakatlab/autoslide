@@ -32,6 +32,12 @@ auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide'
 # Import utilities directly
 from src.pipeline.utils import get_threshold_mask
 
+# Create a utils namespace for backward compatibility
+class Utils:
+    get_threshold_mask = get_threshold_mask
+
+utils = Utils()
+
 ############################################################
 # PARAMS
 down_sample = 100
