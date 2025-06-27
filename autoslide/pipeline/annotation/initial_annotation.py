@@ -28,7 +28,7 @@ from scipy.ndimage import binary_fill_holes
 
 
 # Import utilities directly
-from auto_slide.src.pipeline.utils import get_threshold_mask
+from autoslide.pipeline.utils import get_threshold_mask
 
 ############################################################
 # PARAMS
@@ -43,7 +43,6 @@ area_threshold = 10000
 from autoslide import config
 
 # Get directories from config
-auto_slide_dir = config['auto_slide_dir']
 data_dir = config['data_dir']
 glob_pattern = 'TRI*.svs'
 file_list = glob(os.path.join(data_dir, '**', glob_pattern), recursive = True)
