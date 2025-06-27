@@ -44,8 +44,6 @@ polygon_df = pd.DataFrame(
             }
         )
 
-data_dir = config['data_dir']
-
 # Find filepaths and plot overlays
 filenames = polygon_df['filename'].unique()
 path_list = []
