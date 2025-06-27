@@ -20,24 +20,11 @@ from tqdm import tqdm
 import hashlib
 
 # Define project directory
-auto_slide_dir = '/media/bigdata/projects/pulakat_lab/auto_slide'
+# auto_slide_dir = '/media/bigdata/projects/pulakat_lab/auto_slide'
 # auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
 
 # Import utilities directly
-from src.pipeline.utils import slide_handler, gen_step_windows, get_wanted_sections, visualize_sections, get_section, output_sections, annotate_sections, write_out_images as utils_write_out_images
-
-# Create a utils namespace for backward compatibility
-class Utils:
-    slide_handler = slide_handler
-    gen_step_windows = gen_step_windows
-    get_wanted_sections = get_wanted_sections
-    visualize_sections = visualize_sections
-    get_section = get_section
-    output_sections = output_sections
-    annotate_sections = annotate_sections
-    write_out_images = utils_write_out_images
-
-utils = Utils()
+from autoslide.pipeline import utils
 
 def remove_mask_edge(
         mask,
