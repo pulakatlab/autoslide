@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import shutil
 
+from autoslide import config
 from autoslide.pipeline.model.training_utils import (
     setup_directories, create_transforms, initialize_model,
     get_mask_outline, RandomRotation90, generate_negative_samples,
@@ -18,9 +19,11 @@ from autoslide.pipeline.model.training_utils import (
 @pytest.fixture
 def test_dirs():
     """Create temporary directories for testing"""
-    test_root = os.path.join(autoslide_dir, 'tests/test_data')
+    # Use the project's test directory
+    test_root = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tests/test_data')
     os.makedirs(test_root, exist_ok=True)
     
+    # Use the same directory structure as in the config
     plot_dir = os.path.join(test_root, 'plots')
     artifacts_dir = os.path.join(test_root, 'artifacts')
     
@@ -72,10 +75,13 @@ def test_setup_directories(test_dirs):
     """Test that setup_directories creates the necessary directories"""
     test_root, _, _ = test_dirs
     
+    # Test with the test_root as data_dir
     plot_dir, artifacts_dir = setup_directories(test_root)
     
     assert os.path.exists(plot_dir)
     assert os.path.exists(artifacts_dir)
+    assert plot_dir == os.path.join(test_root, 'plots')
+    assert artifacts_dir == os.path.join(test_root, 'artifacts')
 
 def test_get_mask_outline(sample_image_mask):
     """Test that get_mask_outline correctly extracts the outline of a mask"""
