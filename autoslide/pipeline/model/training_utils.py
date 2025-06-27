@@ -14,41 +14,43 @@ import torchvision
 # Directory and Data Management Functions
 #############################################################################
 
-def setup_directories(autoslide_dir=None):
+def setup_directories(data_dir=None):
     """
     Set up necessary directories for saving artifacts and plots.
     
     Args:
-        autoslide_dir (str, optional): Root directory of the AutoSlide project
+        data_dir (str, optional): Root data directory
         
     Returns:
         tuple: (plot_dir, artifacts_dir) - Paths to the plot and artifacts directories
     """
-    if autoslide_dir is None:
-        # Try to determine autoslide_dir from current file location
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        autoslide_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    from autoslide import config
     
-    plot_dir = os.path.join(autoslide_dir, 'plots') 
-    artifacts_dir = os.path.join(autoslide_dir, 'artifacts')
+    plot_dir = config['plot_dirs']
+    artifacts_dir = config['artifacts_dir']
     
     os.makedirs(plot_dir, exist_ok=True)
     os.makedirs(artifacts_dir, exist_ok=True)
     
     return plot_dir, artifacts_dir
 
-def load_data(autoslide_dir=None):
+def load_data(data_dir=None):
     """
     Load original image and mask data from the labelled_images directory.
     
     Args:
-        autoslide_dir (str): Root directory of the AutoSlide project
+        data_dir (str): Root data directory
         
     Returns:
         tuple: (labelled_data_dir, img_dir, mask_dir, image_names, mask_names) - 
                Directories and lists of image and mask filenames
     """
-    labelled_data_dir = os.path.join(autoslide_dir, 'data/labelled_images')
+    from autoslide import config
+    
+    if data_dir is None:
+        data_dir = config['data_dir']
+        
+    labelled_data_dir = os.path.join(data_dir, 'labelled_images')
     img_dir = os.path.join(labelled_data_dir, 'images/') 
     mask_dir = os.path.join(labelled_data_dir, 'masks/') 
     image_names = sorted(os.listdir(img_dir))

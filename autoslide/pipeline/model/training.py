@@ -26,8 +26,10 @@ from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 # Import config
 from autoslide import config
 
-# Get autoslide directory from config
-autoslide_dir = config['auto_slide_dir']
+# Get directories from config
+data_dir = config['data_dir']
+artifacts_dir = config['artifacts_dir']
+plot_dir = config['plot_dirs']
 
 # Import utilities directly
 from autoslide.pipeline.model.training_utils import (
@@ -51,10 +53,10 @@ retrain_bool = False
 def main():
     """Main function to run the training pipeline"""
     # Setup directories
-    plot_dir, artifacts_dir = setup_directories(autoslide_dir)
+    plot_dir, artifacts_dir = setup_directories(data_dir)
     
     # Load data
-    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(autoslide_dir)
+    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(data_dir)
     
     # Create transforms
     transform = create_transforms()

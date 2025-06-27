@@ -55,7 +55,7 @@ mask_dir = os.path.join(data_dir, 'final_annotation')
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 
 output_base_dir = os.path.join(data_dir, 'suggested_regions')
 if not os.path.exists(output_base_dir):
-    os.mkdir(output_base_dir)
+    os.makedirs(output_base_dir, exist_ok=True)
 
 ############################################################
 data_path_list = glob(os.path.join(data_dir, '*TRI*.svs'))

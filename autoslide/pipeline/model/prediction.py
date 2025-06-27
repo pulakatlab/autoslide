@@ -22,8 +22,9 @@ from importlib import reload
 from autoslide import config
 
 # Get directories from config
-auto_slide_dir = config['auto_slide_dir']
-plot_dir = config['plot_dir']
+data_dir = config['data_dir']
+artifacts_dir = config['artifacts_dir']
+plot_dir = config['plot_dirs']
 
 # Import utilities directly
 from autoslide.pipeline.utils import visualize_sections, get_section, gen_step_windows
@@ -37,7 +38,6 @@ class Utils:
 utils = Utils()
 
 ##############################
-data_dir = config['data_dir']
 mask_dir = os.path.join(data_dir, 'final_annotation') 
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 
 section_dir = os.path.join(data_dir, 'suggested_regions')
@@ -193,7 +193,6 @@ plt.close(fig)
 
 ##############################
 # Load model
-artifacts_dir = config['artifacts_dir']
 model_save_path = os.path.join(artifacts_dir, 'mask_rcnn_model.pth')
 
 # Recrate base model
