@@ -11,9 +11,11 @@ from sklearn.decomposition import PCA
 from matplotlib.colors import LogNorm
 from tqdm import tqdm, trange
 from pprint import pprint as pp
-from src.pipeline.utils import get_threshold_mask
+import autoslide
+from autoslide.pipeline.utils import get_threshold_mask
 
-data_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data'
+# data_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data'
+data_dir = autoslide.__path__.replace('autoslide', 'data') 
 
 img_dir = os.path.join(data_dir, 'images') 
 img_list = sorted(glob(os.path.join(img_dir, '*')))

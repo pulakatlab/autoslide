@@ -19,7 +19,7 @@ auto_slide_dir = '/media/bigdata/projects/pulakat_lab/auto_slide'
 plot_dir = os.path.join(auto_slide_dir, 'plots')
 
 # Import utilities directly
-from src.pipeline.utils import visualize_sections, get_section
+from autoslide.pipeline.utils import visualize_sections, get_section
 
 # Create a utils namespace for backward compatibility
 class Utils:
