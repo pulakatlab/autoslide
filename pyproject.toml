@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autoslide"
+version = "0.1.0"
+description = "AI-Powered Histological Analysis"
+readme = "README.md"
+authors = [
+    {name = "AutoSlide Team"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "slideio>=1.0.0",
+    "torch>=1.9.0",
+    "torchvision>=0.10.0",
+    "numpy>=1.20.0",
+    "pandas>=1.3.0",
+    "matplotlib>=3.4.0",
+    "opencv-python>=4.5.0",
+    "scikit-image>=0.18.0",
+    "scikit-learn>=1.0.0",
+    "tqdm>=4.60.0",
+    "pillow>=8.2.0",
+    "scipy>=1.7.0",
+    "dvc>=2.0.0",
+    "dvc-s3>=2.0.0",
+    "jupyter>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/autoslide"
+"Bug Tracker" = "https://github.com/yourusername/autoslide/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 88
