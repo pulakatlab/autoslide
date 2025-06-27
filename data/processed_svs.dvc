@@ -1,6 +1,0 @@
-outs:
-- md5: 293daa1a3e5069b7c617360d3d8c5b10.dir
-  size: 27374413151
-  nfiles: 16
-  hash: md5
-  path: processed_svs
