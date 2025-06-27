@@ -8,11 +8,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import shutil
 
-# Add parent directory to path to import utils
-autoslide_dir = str(Path(__file__).parent.parent.parent)
-sys.path.append(os.path.join(autoslide_dir, 'src/pipeline/model'))
-
-from training_utils import (
+from autoslide.pipeline.model.training_utils import (
     setup_directories, create_transforms, initialize_model,
     get_mask_outline, RandomRotation90, generate_negative_samples,
     generate_artificial_vessels
