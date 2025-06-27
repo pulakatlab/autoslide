@@ -27,17 +27,9 @@ from skimage.color import label2rgb
 from skimage.filters.rank import gradient
 from scipy.ndimage import binary_fill_holes
 
-# Define project directory
-auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide'
 
 # Import utilities directly
-from src.pipeline.utils import get_threshold_mask
-
-# Create a utils namespace for backward compatibility
-class Utils:
-    get_threshold_mask = get_threshold_mask
-
-utils = Utils()
+from auto_slide.src.pipeline.utils import get_threshold_mask
 
 ############################################################
 # PARAMS
@@ -50,6 +42,9 @@ area_threshold = 10000
 
 # data_dir = '/media/bigdata/projects/pulakat_lab/auto_slide/data/'
 # data_dir = '/media/fastdata/9_month_wistar_zdf_female'
+# Define project directory
+auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide'
+
 data_dir = os.path.join(auto_slide_dir, 'data')
 glob_pattern = 'TRI*.svs'
 file_list = glob(os.path.join(data_dir, glob_pattern))
@@ -68,7 +63,7 @@ for data_path in tqdm(file_list):
 
     ############################################################
 
-    threshold_mask = utils.get_threshold_mask(scene, down_sample = down_sample)
+    threshold_mask = get_threshold_mask(scene, down_sample = down_sample)
 
     dilation_kern = np.ones((dilation_kern_size, dilation_kern_size))
     dilated_mask = dilation(threshold_mask, footprint = dilation_kern) 
