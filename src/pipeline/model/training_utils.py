@@ -14,16 +14,21 @@ import torchvision
 # Directory and Data Management Functions
 #############################################################################
 
-def setup_directories(autoslide_dir):
+def setup_directories(autoslide_dir=None):
     """
     Set up necessary directories for saving artifacts and plots.
     
     Args:
-        autoslide_dir (str): Root directory of the AutoSlide project
+        autoslide_dir (str, optional): Root directory of the AutoSlide project
         
     Returns:
         tuple: (plot_dir, artifacts_dir) - Paths to the plot and artifacts directories
     """
+    if autoslide_dir is None:
+        # Try to determine autoslide_dir from current file location
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        autoslide_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    
     plot_dir = os.path.join(autoslide_dir, 'plots') 
     artifacts_dir = os.path.join(autoslide_dir, 'artifacts')
     
@@ -32,7 +37,7 @@ def setup_directories(autoslide_dir):
     
     return plot_dir, artifacts_dir
 
-def load_data(autoslide_dir):
+def load_data(autoslide_dir=None):
     """
     Load original image and mask data from the labelled_images directory.
     
