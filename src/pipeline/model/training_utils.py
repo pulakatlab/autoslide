@@ -11,8 +11,20 @@ from tqdm import tqdm, trange
 import torchvision
 from utils import augment_dataset, generate_negative_samples, generate_artificial_vessels
 
+#############################################################################
+# Directory and Data Management Functions
+#############################################################################
+
 def setup_directories(autoslide_dir):
-    """Set up necessary directories for saving artifacts and plots"""
+    """
+    Set up necessary directories for saving artifacts and plots.
+    
+    Args:
+        autoslide_dir (str): Root directory of the AutoSlide project
+        
+    Returns:
+        tuple: (plot_dir, artifacts_dir) - Paths to the plot and artifacts directories
+    """
     plot_dir = os.path.join(autoslide_dir, 'plots') 
     artifacts_dir = os.path.join(autoslide_dir, 'artifacts')
     
@@ -22,7 +34,16 @@ def setup_directories(autoslide_dir):
     return plot_dir, artifacts_dir
 
 def load_data(autoslide_dir):
-    """Load original image and mask data"""
+    """
+    Load original image and mask data from the labelled_images directory.
+    
+    Args:
+        autoslide_dir (str): Root directory of the AutoSlide project
+        
+    Returns:
+        tuple: (labelled_data_dir, img_dir, mask_dir, image_names, mask_names) - 
+               Directories and lists of image and mask filenames
+    """
     labelled_data_dir = os.path.join(autoslide_dir, 'data/labelled_images')
     img_dir = os.path.join(labelled_data_dir, 'images/') 
     mask_dir = os.path.join(labelled_data_dir, 'masks/') 
@@ -36,18 +57,52 @@ def load_data(autoslide_dir):
     return labelled_data_dir, img_dir, mask_dir, image_names, mask_names
 
 def get_mask_outline(mask):
-    """Extract the outline of a mask for visualization"""
+    """
+    Extract the outline of a mask for visualization purposes.
+    
+    Args:
+        mask (numpy.ndarray): Binary mask image
+        
+    Returns:
+        numpy.ndarray: Outline of the mask as a binary image
+    """
     mask = mask.astype(np.uint8)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     mask_outline = np.zeros_like(mask)
     mask_outline = cv2.drawContours(mask_outline, contours, -1, 255, 1)
     return mask_outline
 
+#############################################################################
+# Data Augmentation and Transformation Functions
+#############################################################################
+
 class RandomRotation90():
+    """
+    Randomly rotate images by 90 or 270 degrees with probability p.
+    
+    This transformation is applied to both the image and its corresponding mask.
+    """
+    
     def __init__(self, p=0.5):
+        """
+        Initialize the random rotation transform.
+        
+        Args:
+            p (float): Probability of applying the rotation
+        """
         self.p = p
 
     def __call__(self, img, mask):
+        """
+        Apply random rotation to image and mask.
+        
+        Args:
+            img (PIL.Image): Input image
+            mask (PIL.Image): Corresponding mask
+            
+        Returns:
+            tuple: (rotated_img, rotated_mask)
+        """
         if np.random.rand() < self.p:
             angle = np.random.choice([90, 270])
             img = img.rotate(angle)
@@ -55,7 +110,15 @@ class RandomRotation90():
         return img, mask
 
 def create_transforms():
-    """Create image transformations for data augmentation"""
+    """
+    Create image transformations for data augmentation.
+    
+    Creates a composition of transforms including horizontal/vertical flips,
+    90-degree rotations, and color jitter, followed by conversion to tensor.
+    
+    Returns:
+        torchvision.transforms.Compose: Composed transformation pipeline
+    """
     transform = T.Compose([
                 T.RandomHorizontalFlip(0.5),
                 T.RandomVerticalFlip(0.5),
@@ -66,7 +129,21 @@ def create_transforms():
     return transform
 
 def test_transformations(img_dir, mask_dir, image_names, mask_names, transform):
-    """Test the transformations on a sample image"""
+    """
+    Test the transformations on a sample image and visualize the results.
+    
+    This function tests and visualizes:
+    1. Basic transformations (flips, rotations, color jitter)
+    2. Negative sample generation
+    3. Artificial vessel generation
+    
+    Args:
+        img_dir (str): Directory containing original images
+        mask_dir (str): Directory containing original masks
+        image_names (list): List of image filenames
+        mask_names (list): List of mask filenames
+        transform (callable): Transformation function to test
+    """
     idx = 4
     img = Image.open(img_dir + image_names[idx]).convert("RGB")
     mask = Image.open(mask_dir + mask_names[idx])
@@ -101,8 +178,17 @@ def test_transformations(img_dir, mask_dir, image_names, mask_names, transform):
     axis[1, 0].scatter(*np.where(art_mask_outline)[::-1], c='y', s=1)
     plt.show()
 
+#############################################################################
+# Dataset Classes
+#############################################################################
+
 class CustDat(torch.utils.data.Dataset):
-    """Dataset class for the original dataset"""
+    """
+    Dataset class for the original dataset without augmentations.
+    
+    This class handles loading images and masks, applying transformations,
+    and preparing the data in the format required by Mask R-CNN.
+    """
     def __init__(self, image_names, mask_names, img_dir, mask_dir, transform=None):
         self.image_names = image_names
         self.mask_names = mask_names
@@ -165,8 +251,20 @@ class CustDat(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.image_names)
 
+#############################################################################
+# Model Initialization and Setup Functions
+#############################################################################
+
 def initialize_model():
-    """Initialize and configure the Mask R-CNN model"""
+    """
+    Initialize and configure the Mask R-CNN model.
+    
+    Creates a Mask R-CNN model with ResNet-50 backbone and FPN,
+    and configures it for binary segmentation (background and vessel).
+    
+    Returns:
+        torchvision.models.detection.MaskRCNN: Configured Mask R-CNN model
+    """
     model = torchvision.models.detection.maskrcnn_resnet50_fpn()
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 2)
@@ -176,11 +274,39 @@ def initialize_model():
     return model
 
 def custom_collate(data):
-    """Custom collate function for DataLoader"""
+    """
+    Custom collate function for DataLoader.
+    
+    This function is used to handle variable-sized images and masks
+    in the batch without padding or resizing.
+    
+    Args:
+        data: Batch of data from the dataset
+        
+    Returns:
+        The same data without modification
+    """
     return data
 
+#############################################################################
+# Dataset Preparation Functions
+#############################################################################
+
 def split_train_val(image_names, mask_names):
-    """Split the dataset into training and validation sets"""
+    """
+    Split the dataset into training and validation sets.
+    
+    Randomly selects 90% of the data for training and 10% for validation,
+    ensuring that the training set has an even number of samples.
+    
+    Args:
+        image_names (list): List of image filenames
+        mask_names (list): List of mask filenames
+        
+    Returns:
+        tuple: (train_imgs, train_masks, val_imgs, val_masks) - 
+               Lists of filenames for training and validation
+    """
     num = int(0.9 * len(image_names))
     num = num if num % 2 == 0 else num + 1
     train_imgs_inds = np.random.choice(range(len(image_names)), num, replace=False)
@@ -192,7 +318,26 @@ def split_train_val(image_names, mask_names):
     return train_imgs, train_masks, val_imgs, val_masks
 
 def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks):
-    """Load existing augmented data or create new augmented dataset"""
+    """
+    Load existing augmented data or create a new augmented dataset.
+    
+    If augmented data already exists, it loads the filenames.
+    Otherwise, it creates a new augmented dataset by:
+    1. Loading a subset of training images
+    2. Applying augmentations (negative samples, artificial vessels)
+    3. Saving the augmented images and masks to disk
+    
+    Args:
+        labelled_data_dir (str): Directory containing labelled data
+        img_dir (str): Directory containing original images
+        mask_dir (str): Directory containing original masks
+        train_imgs (list): List of training image filenames
+        train_masks (list): List of training mask filenames
+        
+    Returns:
+        tuple: (aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names) -
+               Directories and lists of augmented image and mask filenames
+    """
     aug_img_dir = os.path.join(labelled_data_dir, 'augmented_images/')
     aug_mask_dir = os.path.join(labelled_data_dir, 'augmented_masks/')
     
@@ -241,7 +386,19 @@ def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_im
     return aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names
 
 def load_negative_images(labelled_data_dir):
-    """Load negative images (images without vessels)"""
+    """
+    Load negative images (images without vessels).
+    
+    Negative images are used to help the model learn to distinguish
+    between regions with and without vessels.
+    
+    Args:
+        labelled_data_dir (str): Directory containing labelled data
+        
+    Returns:
+        tuple: (neg_image_dir, neg_mask_dir, neg_img_names, neg_mask_names) -
+               Directories and lists of negative image and mask filenames
+    """
     neg_image_dir = os.path.join(labelled_data_dir, 'negative_images/')
     neg_mask_dir = os.path.join(labelled_data_dir, 'negative_masks/')
     neg_img_names = sorted(os.listdir(neg_image_dir))
@@ -251,8 +408,24 @@ def load_negative_images(labelled_data_dir):
     
     return neg_image_dir, neg_mask_dir, neg_img_names, neg_mask_names
 
+#############################################################################
+# Visualization Functions
+#############################################################################
+
 def plot_augmented_samples(aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names, plot_dir):
-    """Plot a grid of randomly selected augmented images"""
+    """
+    Plot a grid of randomly selected augmented images with their masks.
+    
+    Creates a visualization of augmented samples to verify the quality
+    and variety of the augmented dataset.
+    
+    Args:
+        aug_img_dir (str): Directory containing augmented images
+        aug_mask_dir (str): Directory containing augmented masks
+        aug_img_names (list): List of augmented image filenames
+        aug_mask_names (list): List of augmented mask filenames
+        plot_dir (str): Directory to save the visualization
+    """
     n_plot = 25
     fig, ax = plt.subplots(
             np.ceil(np.sqrt(n_plot)).astype(int), 
@@ -278,7 +451,26 @@ def plot_augmented_samples(aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_na
 
 def combine_datasets(train_imgs, train_masks, val_imgs, val_masks, 
                     aug_img_names, aug_mask_names, neg_img_names, neg_mask_names):
-    """Combine original, augmented, and negative datasets"""
+    """
+    Combine original, augmented, and negative datasets.
+    
+    Merges the original dataset with augmented and negative samples,
+    maintaining the train/validation split for all data types.
+    
+    Args:
+        train_imgs (list): List of original training image filenames
+        train_masks (list): List of original training mask filenames
+        val_imgs (list): List of original validation image filenames
+        val_masks (list): List of original validation mask filenames
+        aug_img_names (list): List of augmented image filenames
+        aug_mask_names (list): List of augmented mask filenames
+        neg_img_names (list): List of negative image filenames
+        neg_mask_names (list): List of negative mask filenames
+        
+    Returns:
+        tuple: (train_imgs, train_masks, val_imgs, val_masks) -
+               Lists of combined filenames for training and validation
+    """
     n_aug_train = int(0.9 * len(aug_img_names))
     n_neg_train = int(0.9 * len(neg_img_names))
     
@@ -299,7 +491,25 @@ def combine_datasets(train_imgs, train_masks, val_imgs, val_masks,
 def create_sample_plots(train_imgs, train_masks, val_imgs, val_masks, 
                        img_dir, mask_dir, aug_img_dir, aug_mask_dir, 
                        neg_image_dir, neg_mask_dir, plot_dir):
-    """Create sample plots of training and validation images"""
+    """
+    Create sample plots of training and validation images with their masks.
+    
+    Randomly selects samples from the training and validation sets and
+    creates visualizations to verify the data distribution.
+    
+    Args:
+        train_imgs (list): List of training image filenames
+        train_masks (list): List of training mask filenames
+        val_imgs (list): List of validation image filenames
+        val_masks (list): List of validation mask filenames
+        img_dir (str): Directory containing original images
+        mask_dir (str): Directory containing original masks
+        aug_img_dir (str): Directory containing augmented images
+        aug_mask_dir (str): Directory containing augmented masks
+        neg_image_dir (str): Directory containing negative images
+        neg_mask_dir (str): Directory containing negative masks
+        plot_dir (str): Directory to save the visualizations
+    """
     test_plot_dir = os.path.join(plot_dir, 'train_val_split')
     os.makedirs(test_plot_dir, exist_ok=True)
 
@@ -342,7 +552,13 @@ def create_sample_plots(train_imgs, train_masks, val_imgs, val_masks,
         plt.close(fig)
 
 class AugmentedCustDat(torch.utils.data.Dataset):
-    """Dataset class that can handle original, augmented, and negative images"""
+    """
+    Dataset class that can handle original, augmented, and negative images.
+    
+    This extended dataset class supports loading images from multiple directories
+    (original, augmented, and negative) and applies appropriate transformations.
+    It also handles the conversion of masks to the format required by Mask R-CNN.
+    """
     def __init__(self, image_names, mask_names, img_dir, mask_dir, 
                  aug_img_dir, aug_mask_dir, neg_image_dir, neg_mask_dir, transform=None):
         self.image_names = image_names
@@ -429,7 +645,28 @@ class AugmentedCustDat(torch.utils.data.Dataset):
 def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks, 
                       img_dir, mask_dir, aug_img_dir, aug_mask_dir, 
                       neg_image_dir, neg_mask_dir, transform):
-    """Create DataLoader objects for training and validation"""
+    """
+    Create DataLoader objects for training and validation.
+    
+    Sets up PyTorch DataLoaders with appropriate batch size, shuffling,
+    and other parameters for efficient training and validation.
+    
+    Args:
+        train_imgs (list): List of training image filenames
+        train_masks (list): List of training mask filenames
+        val_imgs (list): List of validation image filenames
+        val_masks (list): List of validation mask filenames
+        img_dir (str): Directory containing original images
+        mask_dir (str): Directory containing original masks
+        aug_img_dir (str): Directory containing augmented images
+        aug_mask_dir (str): Directory containing augmented masks
+        neg_image_dir (str): Directory containing negative images
+        neg_mask_dir (str): Directory containing negative masks
+        transform (callable): Transformation function to apply to the data
+        
+    Returns:
+        tuple: (train_dl, val_dl) - DataLoader objects for training and validation
+    """
     train_dl = torch.utils.data.DataLoader(
         AugmentedCustDat(
             train_imgs, train_masks, 
@@ -464,8 +701,24 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
     
     return train_dl, val_dl
 
+#############################################################################
+# Training and Evaluation Functions
+#############################################################################
+
 def setup_training(model, device):
-    """Set up optimizer and other training parameters"""
+    """
+    Set up optimizer and other training parameters.
+    
+    Moves the model to the appropriate device (CPU/GPU) and
+    configures the optimizer with appropriate learning rate and momentum.
+    
+    Args:
+        model (torch.nn.Module): The Mask R-CNN model
+        device (torch.device): Device to run the model on (CPU or GPU)
+        
+    Returns:
+        torch.optim.Optimizer: Configured optimizer for training
+    """
     model.to(device)
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
@@ -473,7 +726,30 @@ def setup_training(model, device):
     return optimizer
 
 def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir, n_epochs=90):
-    """Train the model and evaluate on validation set"""
+    """
+    Train the model and evaluate on validation set.
+    
+    Performs the full training loop:
+    1. Trains the model for the specified number of epochs
+    2. Evaluates on the validation set after each epoch
+    3. Tracks and saves the best model based on validation loss
+    4. Plots training and validation losses
+    5. Saves model checkpoints and loss histories
+    
+    Args:
+        model (torch.nn.Module): The Mask R-CNN model
+        train_dl (torch.utils.data.DataLoader): DataLoader for training data
+        val_dl (torch.utils.data.DataLoader): DataLoader for validation data
+        optimizer (torch.optim.Optimizer): Optimizer for training
+        device (torch.device): Device to run the model on (CPU or GPU)
+        plot_dir (str): Directory to save plots
+        artifacts_dir (str): Directory to save model checkpoints
+        n_epochs (int): Number of epochs to train for
+        
+    Returns:
+        tuple: (model, all_train_losses, all_val_losses, best_val_loss) -
+               Trained model, training losses, validation losses, and best validation loss
+    """
     run_test_plot_dir = os.path.join(plot_dir, 'run_test_plot')
     os.makedirs(run_test_plot_dir, exist_ok=True)
     
@@ -559,7 +835,18 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
     return model, all_train_losses, all_val_losses, best_val_loss
 
 def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
-    """Plot training and validation losses"""
+    """
+    Plot training and validation losses.
+    
+    Creates a visualization of training and validation loss curves
+    with the best validation loss highlighted.
+    
+    Args:
+        all_train_losses (list): List of training losses for each epoch
+        all_val_losses (list): List of validation losses for each epoch
+        plot_dir (str): Directory to save the plot
+        best_val_loss (float): Best validation loss achieved during training
+    """
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     ax[0].plot(all_train_losses)
     ax[1].plot(all_val_losses)
@@ -572,7 +859,27 @@ def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
 def evaluate_model(model, val_imgs, val_masks, neg_img_names, neg_mask_names,
                   img_dir, mask_dir, aug_img_dir, aug_mask_dir, 
                   neg_image_dir, neg_mask_dir, device, plot_dir):
-    """Evaluate the model on validation data and generate prediction visualizations"""
+    """
+    Evaluate the model on validation data and generate prediction visualizations.
+    
+    Runs the model on validation and negative samples and creates visualizations
+    of the predictions compared to ground truth masks.
+    
+    Args:
+        model (torch.nn.Module): The trained Mask R-CNN model
+        val_imgs (list): List of validation image filenames
+        val_masks (list): List of validation mask filenames
+        neg_img_names (list): List of negative image filenames
+        neg_mask_names (list): List of negative mask filenames
+        img_dir (str): Directory containing original images
+        mask_dir (str): Directory containing original masks
+        aug_img_dir (str): Directory containing augmented images
+        aug_mask_dir (str): Directory containing augmented masks
+        neg_image_dir (str): Directory containing negative images
+        neg_mask_dir (str): Directory containing negative masks
+        device (torch.device): Device to run the model on (CPU or GPU)
+        plot_dir (str): Directory to save the visualizations
+    """
     model.eval()
     
     pred_out_path = os.path.join(plot_dir, 'pred_plots')
@@ -676,6 +983,16 @@ def evaluate_model(model, val_imgs, val_masks, neg_img_names, neg_mask_names,
             print('No predicted mask')
 
 def load_model(model, path, device):
-    """Load a saved model from disk"""
+    """
+    Load a saved model from disk.
+    
+    Args:
+        model (torch.nn.Module): The Mask R-CNN model structure
+        path (str): Path to the saved model weights
+        device (torch.device): Device to load the model on (CPU or GPU)
+        
+    Returns:
+        torch.nn.Module: Loaded model with weights from disk
+    """
     model.load_state_dict(torch.load(path, map_location=device))
     return model
