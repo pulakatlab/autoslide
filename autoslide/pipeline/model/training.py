@@ -23,8 +23,11 @@ from torchvision.transforms import v2 as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
-# Define autoslide directory
-autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
+# Import config
+from autoslide import config
+
+# Get autoslide directory from config
+autoslide_dir = config['auto_slide_dir']
 
 # Import utilities directly
 from autoslide.pipeline.model.training_utils import (

@@ -14,8 +14,10 @@ from pprint import pprint as pp
 import autoslide
 from autoslide.pipeline.utils import get_threshold_mask
 
-# data_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data'
-data_dir = autoslide.__path__.replace('autoslide', 'data') 
+from autoslide import config
+
+# Get data directory from config
+data_dir = config['data_dir']
 
 img_dir = os.path.join(data_dir, 'images') 
 img_list = sorted(glob(os.path.join(img_dir, '*')))

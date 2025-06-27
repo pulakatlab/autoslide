@@ -5,9 +5,10 @@ from glob import glob
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 import numpy as np
+from autoslide import config
 
-# Define project directory and paths
-autoslide_dir = '/home/abuzarmahmood/projects/auto_slide' 
+# Get directories from config
+autoslide_dir = config['auto_slide_dir']
 export_json_path = os.path.join(autoslide_dir, 'data/labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
 
 export_df = pd.read_json(export_json_path, lines=True)
@@ -43,7 +44,7 @@ polygon_df = pd.DataFrame(
             }
         )
 
-data_dir = os.path.join(autoslide_dir, 'data')
+data_dir = config['data_dir']
 
 # Find filepaths and plot overlays
 filenames = polygon_df['filename'].unique()
