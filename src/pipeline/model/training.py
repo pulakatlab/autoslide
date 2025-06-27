@@ -20,6 +20,15 @@ import cv2
 
 import torch
 import torchvision
+from torchvision.transforms import v2 as T
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+
+# Add parent directory to path to import utils
+autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
+training_src_dir = os.path.join(autoslide_dir, 'src/pipeline/model')
+# autoslide_dir = '/home/exouser/project/auto_slide'
+sys.path.append(training_src_dir)
 from training_utils import (
     setup_directories, load_data, get_mask_outline, RandomRotation90,
     create_transforms, test_transformations, CustDat, initialize_model,
@@ -28,13 +37,6 @@ from training_utils import (
     create_sample_plots, AugmentedCustDat, create_dataloaders,
     setup_training, train_model, plot_losses, evaluate_model, load_model
 )
-from torchvision.transforms import v2 as T
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-
-# Add parent directory to path to import utils
-# autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
-autoslide_dir = '/home/exouser/project/auto_slide'
 
 if "__file__" not in globals():
     __file__ = os.path.join(autoslide_dir, 'src/pipeline/model/training.py')
