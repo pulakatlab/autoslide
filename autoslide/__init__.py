@@ -8,9 +8,9 @@ def load_config():
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
             path_dict = json.load(f)
-            data_dir = path_dict.get('data_dir', os.path.join(os.path.dirname(__file__), 'data'))
+            data_dir = path_dict.get('data_dir', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data'))
     else:
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data'),
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 
     return {
         'data_dir': data_dir,

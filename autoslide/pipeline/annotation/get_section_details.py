@@ -16,8 +16,8 @@ from glob import glob
 from autoslide import config
 
 # Get directories from config
-auto_slide_dir = config['auto_slide_dir']
-plot_dir = config['plot_dir']
+data_dir = config['data_dir']
+plot_dir = config['plot_dirs']
 
 # Import utilities directly
 from autoslide.pipeline.utils import visualize_sections, get_section
@@ -29,6 +29,7 @@ class Utils:
 
 utils = Utils()
 
+# Get directories from config
 data_dir = config['data_dir']
 mask_dir = os.path.join(data_dir, 'final_annotation') 
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 

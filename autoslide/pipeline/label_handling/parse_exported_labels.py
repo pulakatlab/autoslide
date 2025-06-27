@@ -8,8 +8,8 @@ import numpy as np
 from autoslide import config
 
 # Get directories from config
-autoslide_dir = config['auto_slide_dir']
-export_json_path = os.path.join(autoslide_dir, 'data/labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
+data_dir = config['data_dir']
+export_json_path = os.path.join(data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
 
 export_df = pd.read_json(export_json_path, lines=True)
 # export_df = pd.DataFrame(export_df['data_row'].values.tolist())
@@ -65,7 +65,6 @@ polygon_df['filepath'] = polygon_df['filename'].map(path_map)
 polygon_df = polygon_df.dropna()
 
 # Copy all images to a directory 
-# copy_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/images'
 copy_dir = os.path.join(data_dir, 'labelled_images', 'images')
 os.makedirs(copy_dir, exist_ok=True)
 for this_name, this_path in path_map.items():
@@ -84,7 +83,6 @@ for this_name, this_path in path_map.items():
 # plt.show()
 
 # Create mask and save to dir
-# mask_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/masks'
 mask_dir = os.path.join(data_dir, 'labelled_images', 'masks')
 test_plot_dir = os.path.join(data_dir, 'labelled_images', 'test_plots')
 os.makedirs(mask_dir, exist_ok=True)

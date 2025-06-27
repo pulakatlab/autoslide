@@ -47,7 +47,7 @@ def parse_args():
 def run_initial_annotation(data_dir=None):
     """Run the initial annotation step"""
     logger.info("Starting initial annotation...")
-    from src.pipeline.annotation.initial_annotation import main as initial_annotation_main
+    from autoslide.pipeline.annotation.initial_annotation import main as initial_annotation_main
     
     if data_dir:
         # Set data directory if provided
@@ -64,7 +64,7 @@ def run_initial_annotation(data_dir=None):
 def run_final_annotation(data_dir=None):
     """Run the final annotation step"""
     logger.info("Starting final annotation...")
-    from src.pipeline.annotation.final_annotation import main as final_annotation_main
+    from autoslide.pipeline.annotation.final_annotation import main as final_annotation_main
     
     try:
         final_annotation_main()
@@ -77,7 +77,7 @@ def run_final_annotation(data_dir=None):
 def run_region_suggestion(data_dir=None):
     """Run the region suggestion step"""
     logger.info("Starting region suggestion...")
-    from src.pipeline.suggest_regions import main as suggest_regions_main
+    from autoslide.pipeline.suggest_regions import main as suggest_regions_main
     
     try:
         suggest_regions_main()
@@ -92,7 +92,7 @@ def run_model_training(data_dir=None, use_augmentation=True):
     logger.info("Starting model training...")
     if use_augmentation:
         logger.info("Using dataset augmentation with negative samples and artificial vessels")
-    from src.pipeline.model.training import main as training_main
+    from autoslide.pipeline.model.training import main as training_main
     
     try:
         # Note: The training.py script now handles augmentation internally
@@ -106,7 +106,7 @@ def run_model_training(data_dir=None, use_augmentation=True):
 def run_prediction(data_dir=None):
     """Run the prediction step"""
     logger.info("Starting prediction...")
-    from src.pipeline.model.prediction import main as prediction_main
+    from autoslide.pipeline.model.prediction import main as prediction_main
     
     try:
         prediction_main()
