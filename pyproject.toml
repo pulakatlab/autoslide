@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "AI-Powered Histological Analysis"
 readme = "README.md"
 authors = [
-    {name = "AutoSlide Team"}
+    {name = "Abuzar Mahmood",
+    email = "abuzarmahmood@gmail.com"}
 ]
 license = {text = "MIT"}
 classifiers = [
@@ -44,8 +45,8 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/yourusername/autoslide"
-"Bug Tracker" = "https://github.com/yourusername/autoslide/issues"
+"Homepage" = "https://github.com/abuzarmahmood/autoslide"
+"Bug Tracker" = "https://github.com/abuzarmahmood/autoslide/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
