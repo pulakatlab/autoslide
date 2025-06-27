@@ -21,6 +21,13 @@ plot_dir = os.path.join(auto_slide_dir, 'plots')
 # Import utilities directly
 from src.pipeline.utils import visualize_sections, get_section
 
+# Create a utils namespace for backward compatibility
+class Utils:
+    visualize_sections = visualize_sections
+    get_section = get_section
+
+utils = Utils()
+
 data_dir = '/media/storage/svs_tri_files'
 mask_dir = os.path.join(data_dir, 'final_annotation') 
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 

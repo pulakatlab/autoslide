@@ -78,7 +78,7 @@ plt.show()
 
 # Perform k-means with k = 3
 # clust = KMeans(3)
-# clust = GaussianMixture(3)
+clust = GaussianMixture(3)
 clust.fit(img_long[::100])
 labels = clust.predict(img_long)
 labels_square = np.reshape(labels, img.shape[:2])
