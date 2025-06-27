@@ -71,9 +71,9 @@ def get_mask_outline(mask):
         numpy.ndarray: Outline of the mask as a binary image
     """
     mask = mask.astype(np.uint8)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     mask_outline = np.zeros_like(mask)
-    mask_outline = cv2.drawContours(mask_outline, contours, -1, 255, 1)
+    mask_outline = cv.drawContours(mask_outline, contours, -1, 255, 1)
     return mask_outline
 
 #############################################################################
