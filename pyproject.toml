@@ -8,8 +8,7 @@ version = "0.1.0"
 description = "AI-Powered Histological Analysis"
 readme = "README.md"
 authors = [
-    {name = "Abuzar Mahmood",
-    email = "abuzarmahmood@gmail.com"}
+    {name = "Abuzar Mahmood", email = "abuzarmahmood@gmail.com"}
 ]
 license = {text = "MIT"}
 classifiers = [
@@ -49,10 +48,10 @@ dev = [
 "Bug Tracker" = "https://github.com/abuzarmahmood/autoslide/issues"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"" = "autoslide"}
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["autoslide"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
