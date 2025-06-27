@@ -7,7 +7,9 @@ import cv2
 from torchvision.transforms import v2 as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-from tqdm import tqdm
+from tqdm import tqdm, trange
+import torchvision
+from utils import augment_dataset, generate_negative_samples, generate_artificial_vessels
 
 def setup_directories(autoslide_dir):
     """Set up necessary directories for saving artifacts and plots"""
