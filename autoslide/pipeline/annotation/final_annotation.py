@@ -6,6 +6,7 @@ Merge marked tissues and label appropriately with tissue type
 import pylab as plt
 import numpy as np 
 import os
+import json
 from pprint import pprint
 from glob import glob
 import pandas as pd

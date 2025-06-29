@@ -28,7 +28,8 @@ from skimage.color import label2rgb
 from skimage.filters.rank import gradient
 from scipy.ndimage import binary_fill_holes
 
-
+# Import config
+from autoslide import config
 # Import utilities directly
 from autoslide.pipeline.utils import get_threshold_mask
 
@@ -40,10 +41,6 @@ area_threshold = 10000
 
 ############################################################
 
-
-# Import config
-from autoslide import config
-
 # Get directories from config
 data_dir = config['data_dir']
 glob_pattern = 'TRI*.svs'
@@ -53,7 +50,7 @@ annot_dir = os.path.join(data_dir, 'initial_annotation')
 if not os.path.exists(annot_dir):
     os.makedirs(annot_dir)
 
-tracking_dir = os.path.join(data_dir, '.tracking')
+tracking_dir = os.path.join(data_dir, 'tracking')
 if not os.path.exists(tracking_dir):
     os.makedirs(tracking_dir)
 
@@ -106,10 +103,10 @@ for data_path in tqdm(file_list):
     wanted_regions_frame['tissue_type'] = np.nan
     wanted_regions_frame['tissue_num'] = np.nan
 
-    wanted_regions_frame.to_csv(
-            os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
-            index = False
-            )
+    # wanted_regions_frame.to_csv(
+    #         os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
+    #         index = False
+    #         )
 
     # Drop regions that are not wanted
     fin_label_image = label_image.copy()
