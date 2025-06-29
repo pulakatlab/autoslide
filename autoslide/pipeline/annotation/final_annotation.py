@@ -6,6 +6,7 @@ Merge marked tissues and label appropriately with tissue type
 import pylab as plt
 import numpy as np 
 import os
+import json
 from pprint import pprint
 from glob import glob
 import pandas as pd
@@ -15,7 +16,6 @@ from ast import literal_eval
 from autoslide import config
 
 # Get directories from config
-auto_slide_dir = config['auto_slide_dir']
 data_dir = config['data_dir']
 init_annot_dir = os.path.join(data_dir, 'initial_annotation')
 file_list = os.listdir(init_annot_dir)
@@ -23,6 +23,10 @@ file_list = os.listdir(init_annot_dir)
 fin_annotation_dir = os.path.join(data_dir, 'final_annotation')
 if not os.path.exists(fin_annotation_dir):
     os.makedirs(fin_annotation_dir)
+
+tracking_dir = os.path.join(data_dir, 'tracking')
+if not os.path.exists(tracking_dir):
+    os.makedirs(tracking_dir)
 
 # basenames = [os.path.basename(x).split('.')[0] for x in file_list] 
 # unique_basenames = np.unique(basenames)

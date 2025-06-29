@@ -22,13 +22,6 @@ plot_dir = config['plot_dirs']
 # Import utilities directly
 from autoslide.pipeline.utils import visualize_sections, get_section
 
-# Create a utils namespace for backward compatibility
-class Utils:
-    visualize_sections = visualize_sections
-    get_section = get_section
-
-utils = Utils()
-
 # Get directories from config
 data_dir = config['data_dir']
 mask_dir = os.path.join(data_dir, 'final_annotation') 
@@ -93,7 +86,7 @@ wanted_section = eval(sec_metadata.section_bounds.values[0])
 #     scene, 
 #     [wanted_section], 
 #     )
-img = utils.get_section(scene, wanted_section, down_sample=10)
+img = get_section(scene, wanted_section, down_sample=10)
 
 og_img = plt.imread(og_image_path)
 fig, ax = plt.subplots(1,2, figsize=(10,5))

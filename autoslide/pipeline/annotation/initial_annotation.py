@@ -12,6 +12,8 @@ Steps:
 6. Separately, user is asked to input tissue type
 """
 
+import os
+import json
 import slideio
 import pylab as plt
 import cv2 as cv
@@ -26,7 +28,8 @@ from skimage.color import label2rgb
 from skimage.filters.rank import gradient
 from scipy.ndimage import binary_fill_holes
 
-
+# Import config
+from autoslide import config
 # Import utilities directly
 from autoslide.pipeline.utils import get_threshold_mask
 
@@ -38,10 +41,6 @@ area_threshold = 10000
 
 ############################################################
 
-
-# Import config
-from autoslide import config
-
 # Get directories from config
 data_dir = config['data_dir']
 glob_pattern = 'TRI*.svs'
@@ -51,7 +50,7 @@ annot_dir = os.path.join(data_dir, 'initial_annotation')
 if not os.path.exists(annot_dir):
     os.makedirs(annot_dir)
 
-tracking_dir = os.path.join(data_dir, '.tracking')
+tracking_dir = os.path.join(data_dir, 'tracking')
 if not os.path.exists(tracking_dir):
     os.makedirs(tracking_dir)
 
