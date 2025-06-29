@@ -5,10 +5,11 @@ from glob import glob
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 import numpy as np
+from autoslide import config
 
-# Define project directory and paths
-autoslide_dir = '/home/abuzarmahmood/projects/auto_slide' 
-export_json_path = os.path.join(autoslide_dir, 'data/labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
+# Get directories from config
+data_dir = config['data_dir']
+export_json_path = os.path.join(data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
 
 export_df = pd.read_json(export_json_path, lines=True)
 # export_df = pd.DataFrame(export_df['data_row'].values.tolist())
@@ -43,8 +44,6 @@ polygon_df = pd.DataFrame(
             }
         )
 
-data_dir = os.path.join(autoslide_dir, 'data')
-
 # Find filepaths and plot overlays
 filenames = polygon_df['filename'].unique()
 path_list = []
@@ -64,7 +63,6 @@ polygon_df['filepath'] = polygon_df['filename'].map(path_map)
 polygon_df = polygon_df.dropna()
 
 # Copy all images to a directory 
-# copy_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/images'
 copy_dir = os.path.join(data_dir, 'labelled_images', 'images')
 os.makedirs(copy_dir, exist_ok=True)
 for this_name, this_path in path_map.items():
@@ -83,7 +81,6 @@ for this_name, this_path in path_map.items():
 # plt.show()
 
 # Create mask and save to dir
-# mask_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/masks'
 mask_dir = os.path.join(data_dir, 'labelled_images', 'masks')
 test_plot_dir = os.path.join(data_dir, 'labelled_images', 'test_plots')
 os.makedirs(mask_dir, exist_ok=True)

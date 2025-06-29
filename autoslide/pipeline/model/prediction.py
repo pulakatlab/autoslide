@@ -19,13 +19,15 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 from PIL import Image
 from importlib import reload
+from autoslide import config
 
-# Define project directory
-auto_slide_dir = '/media/bigdata/projects/auto_slide'
-plot_dir = os.path.join(auto_slide_dir, 'plots')
+# Get directories from config
+data_dir = config['data_dir']
+artifacts_dir = config['artifacts_dir']
+plot_dir = config['plot_dirs']
 
 # Import utilities directly
-from src.pipeline.utils import visualize_sections, get_section, gen_step_windows
+from autoslide.pipeline.utils import visualize_sections, get_section, gen_step_windows
 
 # Create a utils namespace for backward compatibility
 class Utils:
@@ -36,7 +38,6 @@ class Utils:
 utils = Utils()
 
 ##############################
-data_dir = os.path.join(auto_slide_dir, 'data') 
 mask_dir = os.path.join(data_dir, 'final_annotation') 
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 
 section_dir = os.path.join(data_dir, 'suggested_regions')
@@ -192,8 +193,7 @@ plt.close(fig)
 
 ##############################
 # Load model
-artifacts_dir = os.path.join(auto_slide_dir, 'artifacts') 
-model_save_path = artifacts_dir + '/mask_rcnn_model.pth'
+model_save_path = os.path.join(artifacts_dir, 'mask_rcnn_model.pth')
 
 # Recrate base model
 model = torchvision.models.detection.maskrcnn_resnet50_fpn()
