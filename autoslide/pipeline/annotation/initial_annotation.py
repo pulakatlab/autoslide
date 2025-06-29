@@ -13,6 +13,7 @@ Steps:
 """
 
 import os
+import json
 import slideio
 import pylab as plt
 import cv2 as cv
