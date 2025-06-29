@@ -50,6 +50,7 @@ def remove_mask_edge(
     return eroded_mask
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 def str_to_hash(s):
     """
     Convert a string to a hash value.
@@ -69,6 +70,8 @@ data_dir = os.path.join(auto_slide_dir, 'data')
 tracking_dir = os.path.join(data_dir, '.tracking')
 
 =======
+=======
+>>>>>>> b3fc73043f2a8f003788ae84ba58f713f35f9fd6
 # Get directories from config
 data_dir = config['data_dir']
 mask_dir = os.path.join(data_dir, 'final_annotation') 
@@ -77,12 +80,15 @@ metadata_dir = os.path.join(data_dir, 'initial_annotation')
 output_base_dir = os.path.join(data_dir, 'suggested_regions')
 if not os.path.exists(output_base_dir):
     os.makedirs(output_base_dir, exist_ok=True)
+<<<<<<< HEAD
 
 # mask_dir = os.path.join(data_dir, 'final_annotation') 
 # metadata_dir = os.path.join(data_dir, 'initial_annotation') 
 file_list = os.listdir(tracking_dir)
 json_path_list = glob(os.path.join(tracking_dir, '*.json'))
 json_list = [json.load(open(x, 'r')) for x in json_path_list]
+=======
+>>>>>>> b3fc73043f2a8f003788ae84ba58f713f35f9fd6
 
 ############################################################
 # data_path_list = glob(os.path.join(data_dir, '*TRI*.svs'))
