@@ -49,8 +49,6 @@ def remove_mask_edge(
 
     return eroded_mask
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 def str_to_hash(s):
     """
     Convert a string to a hash value.
@@ -63,37 +61,24 @@ def str_to_hash(s):
     """
     return hashlib.sha256(s.encode()).hexdigest()[:16]  # Shorten to 16 characters
 
-# data_dir = '/media/storage/svs_tri_files'
-# data_dir = '/media/fastdata/9_month_wistar_zdf_female/'
-# data_dir = os.path.join(auto_slide_dir, 'data')
 data_dir = os.path.join(auto_slide_dir, 'data')
 tracking_dir = os.path.join(data_dir, '.tracking')
 
-=======
-=======
->>>>>>> b3fc73043f2a8f003788ae84ba58f713f35f9fd6
 # Get directories from config
 data_dir = config['data_dir']
 mask_dir = os.path.join(data_dir, 'final_annotation') 
 metadata_dir = os.path.join(data_dir, 'initial_annotation') 
->>>>>>> 22a2d9a (feat: Implement configuration system using config.json for dynamic directory management)
 output_base_dir = os.path.join(data_dir, 'suggested_regions')
 if not os.path.exists(output_base_dir):
     os.makedirs(output_base_dir, exist_ok=True)
-<<<<<<< HEAD
 
 # mask_dir = os.path.join(data_dir, 'final_annotation') 
 # metadata_dir = os.path.join(data_dir, 'initial_annotation') 
 file_list = os.listdir(tracking_dir)
 json_path_list = glob(os.path.join(tracking_dir, '*.json'))
 json_list = [json.load(open(x, 'r')) for x in json_path_list]
-=======
->>>>>>> b3fc73043f2a8f003788ae84ba58f713f35f9fd6
 
 ############################################################
-# data_path_list = glob(os.path.join(data_dir, '*TRI*.svs'))
-
-# data_path = os.path.join(data_dir, 'TRI 142B-155 146A-159 38717.svs')
 
 # for data_path in data_path_list:
 for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)): 
@@ -108,9 +93,6 @@ for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_
         if not os.path.exists(this_output_dir):
             os.mkdir(this_output_dir)
 
-        # file_basename = os.path.basename(data_path).split('.')[0]
-        # file_basename_proc = file_basename.replace(' ', '_')
-        # label_mask_path = os.path.join(mask_dir, file_basename + '.npy')
         label_mask_path = this_json['fin_mask_path']
         label_mask = np.load(label_mask_path)
         # metadata_path = os.path.join(metadata_dir, file_basename + '.csv')
@@ -175,7 +157,6 @@ for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_
         fig.savefig(
                 os.path.join(
                     this_output_dir, 
-                    # file_basename_proc + '_' + 'selected_section_visualization.png'),
                     data_basename_proc + '_' + 'selected_section_visualization.png'),
                 dpi = 300,
                 bbox_inches = 'tight',
