@@ -15,20 +15,6 @@ from ast import literal_eval
 from autoslide import config
 from autoslide.pipeline import utils
 
-# def get_auto_slide_dir():
-#     """Get the auto_slide directory path based on the environment."""
-#     # Check for different possible paths
-#     if os.path.exists('/media/bigdata/projects/auto_slide'):
-#         return '/media/bigdata/projects/auto_slide'
-#     elif os.path.exists('/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'):
-#         return '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
-#     else:
-#         raise FileNotFoundError("Could not find auto_slide directory")
-
-# def setup_environment():
-#     """Setup the environment by adding the src directory to the path."""
-#     return auto_slide_dir, utils
-
 def get_section_from_hash(hash_value, df):
     """
     Get the section from the dataframe corresponding to the hash value.

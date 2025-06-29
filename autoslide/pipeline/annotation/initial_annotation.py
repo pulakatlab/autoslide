@@ -103,10 +103,10 @@ for data_path in tqdm(file_list):
     wanted_regions_frame['tissue_type'] = np.nan
     wanted_regions_frame['tissue_num'] = np.nan
 
-    # wanted_regions_frame.to_csv(
-    #         os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
-    #         index = False
-    #         )
+    wanted_regions_frame.to_csv(
+            os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
+            index = False
+            )
 
     # Drop regions that are not wanted
     fin_label_image = label_image.copy()
