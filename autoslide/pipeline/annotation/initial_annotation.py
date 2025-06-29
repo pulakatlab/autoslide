@@ -12,6 +12,7 @@ Steps:
 6. Separately, user is asked to input tissue type
 """
 
+import os
 import slideio
 import pylab as plt
 import cv2 as cv
