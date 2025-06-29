@@ -72,14 +72,12 @@ output_base_dir = os.path.join(data_dir, 'suggested_regions')
 if not os.path.exists(output_base_dir):
     os.makedirs(output_base_dir, exist_ok=True)
 tracking_dir = os.path.join(data_dir, 'tracking')
+
 file_list = os.listdir(tracking_dir)
 json_path_list = glob(os.path.join(tracking_dir, '*.json'))
 json_list = [json.load(open(x, 'r')) for x in json_path_list]
 
 ############################################################
-# data_path_list = glob(os.path.join(data_dir, '*TRI*.svs'))
-
-# data_path = os.path.join(data_dir, 'TRI 142B-155 146A-159 38717.svs')
 
 # for data_path in data_path_list:
 for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)): 
@@ -94,9 +92,6 @@ for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_
         if not os.path.exists(this_output_dir):
             os.mkdir(this_output_dir)
 
-        # file_basename = os.path.basename(data_path).split('.')[0]
-        # file_basename_proc = file_basename.replace(' ', '_')
-        # label_mask_path = os.path.join(mask_dir, file_basename + '.npy')
         label_mask_path = this_json['fin_mask_path']
         label_mask = np.load(label_mask_path)
         # metadata_path = os.path.join(metadata_dir, file_basename + '.csv')
@@ -161,7 +156,6 @@ for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_
         fig.savefig(
                 os.path.join(
                     this_output_dir, 
-                    # file_basename_proc + '_' + 'selected_section_visualization.png'),
                     data_basename_proc + '_' + 'selected_section_visualization.png'),
                 dpi = 300,
                 bbox_inches = 'tight',

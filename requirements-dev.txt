@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 labelbox[data]
 dvc>=2.0.0
 dvc-s3>=2.0.0
-=======
->>>>>>> b3fc73043f2a8f003788ae84ba58f713f35f9fd6
 pytest
