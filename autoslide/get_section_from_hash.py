@@ -12,23 +12,22 @@ from glob import glob
 import json
 from tqdm import tqdm
 from ast import literal_eval
+from autoslide import config
+from autoslide.pipeline import utils
 
-def get_auto_slide_dir():
-    """Get the auto_slide directory path based on the environment."""
-    # Check for different possible paths
-    if os.path.exists('/media/bigdata/projects/auto_slide'):
-        return '/media/bigdata/projects/auto_slide'
-    elif os.path.exists('/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'):
-        return '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
-    else:
-        raise FileNotFoundError("Could not find auto_slide directory")
+# def get_auto_slide_dir():
+#     """Get the auto_slide directory path based on the environment."""
+#     # Check for different possible paths
+#     if os.path.exists('/media/bigdata/projects/auto_slide'):
+#         return '/media/bigdata/projects/auto_slide'
+#     elif os.path.exists('/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'):
+#         return '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
+#     else:
+#         raise FileNotFoundError("Could not find auto_slide directory")
 
-def setup_environment():
-    """Setup the environment by adding the src directory to the path."""
-    auto_slide_dir = get_auto_slide_dir()
-    sys.path.append(os.path.join(auto_slide_dir, 'src'))
-    from pipeline import utils
-    return auto_slide_dir, utils
+# def setup_environment():
+#     """Setup the environment by adding the src directory to the path."""
+#     return auto_slide_dir, utils
 
 def get_section_from_hash(hash_value, df):
     """
@@ -137,11 +136,12 @@ def visualize_section(section, utils):
 def main():
     """Main function to run the script."""
     # Setup environment
-    auto_slide_dir, utils = setup_environment()
+    # auto_slide_dir, utils = setup_environment()
     
     # Define paths
-    data_dir = os.path.join(auto_slide_dir, 'data')
-    tracking_dir = os.path.join(data_dir, '.tracking')
+    # data_dir = os.path.join(auto_slide_dir, 'data')
+    data_dir = config['data_dir'] 
+    tracking_dir = os.path.join(data_dir, 'tracking')
     
     # Load tracking data
     suggested_regions_paths, basename_list, data_path_list = load_tracking_data(tracking_dir)
@@ -156,7 +156,7 @@ def main():
     if section is not None:
         # Visualize the section
         fig, ax = visualize_section(section, utils)
-        fig.suptitle(f"Section: {section['basename']}, Hash: {section['section_hash']}" +\
+        fig.suptitle(f"Section from SVS\nSection: {section['basename']}, Hash: {section['section_hash']}" +\
                 f"\nData Path: {section['data_path']},\nSection Bounds: {section['section_bounds']}")
         plt.tight_layout()
         plt.show()
