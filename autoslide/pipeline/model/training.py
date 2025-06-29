@@ -15,7 +15,6 @@ import os
 from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm, trange
-import sys
 import cv2
 
 import torch
@@ -24,24 +23,19 @@ from torchvision.transforms import v2 as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
-# Add parent directory to path to import utils
+# Define autoslide directory
 autoslide_dir = '/home/abuzarmahmood/projects/auto_slide'
-training_src_dir = os.path.join(autoslide_dir, 'src/pipeline/model')
-# autoslide_dir = '/home/exouser/project/auto_slide'
-sys.path.append(training_src_dir)
-from training_utils import (
+
+# Import utilities directly
+from autoslide.pipeline.model.training_utils import (
     setup_directories, load_data, get_mask_outline, RandomRotation90,
     create_transforms, test_transformations, CustDat, initialize_model,
     custom_collate, split_train_val, load_or_create_augmented_data,
     load_negative_images, plot_augmented_samples, combine_datasets,
     create_sample_plots, AugmentedCustDat, create_dataloaders,
-    setup_training, train_model, plot_losses, evaluate_model, load_model
+    setup_training, train_model, plot_losses, evaluate_model, load_model,
+    generate_negative_samples, generate_artificial_vessels, augment_dataset
 )
-
-if "__file__" not in globals():
-    __file__ = os.path.join(autoslide_dir, 'src/pipeline/model/training.py')
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import augment_dataset, generate_negative_samples, generate_artificial_vessels
 
 ##############################
 ##############################
@@ -54,10 +48,10 @@ retrain_bool = False
 def main():
     """Main function to run the training pipeline"""
     # Setup directories
-    plot_dir, artifacts_dir = setup_directories()
+    plot_dir, artifacts_dir = setup_directories(autoslide_dir)
     
     # Load data
-    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data()
+    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(autoslide_dir)
     
     # Create transforms
     transform = create_transforms()

@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 import numpy as np
 
-autoslide_dir = '/media/bigdata/projects/auto_slide'
-export_json_path = '/media/bigdata/projects/auto_slide/data/labelled_images/ndjson/Export_catalog_query_3_10_2025.ndjson'
-# export_json_path = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/data/labelled_images/Export_catalog_query_3_10_2025_1_img.ndjson'
+# Define project directory and paths
+autoslide_dir = '/home/abuzarmahmood/projects/auto_slide' 
+export_json_path = os.path.join(autoslide_dir, 'data/labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
 
 export_df = pd.read_json(export_json_path, lines=True)
 # export_df = pd.DataFrame(export_df['data_row'].values.tolist())
@@ -50,7 +50,8 @@ filenames = polygon_df['filename'].unique()
 path_list = []
 for this_name in filenames:
     # Search for this_name in data_dir 
-    glob_str = os.path.join(data_dir, '**', this_name)
+    basename = os.path.basename(this_name)
+    glob_str = os.path.join(data_dir, '**', basename)
     filepaths = glob(glob_str, recursive=True)
     if len(filepaths) == 0:
         path_list.append(None)
@@ -92,7 +93,7 @@ polygon_groups = polygon_df.groupby('filename')
 for ind, this_group in tqdm(polygon_groups):
     # this_row = polygon_df.iloc[ind]
     this_filepath = this_group.iloc[0]['filepath'] 
-    this_filename = this_group.iloc[0]['filename']
+    this_filename = os.path.basename(this_group.iloc[0]['filename'])
     filename_stem = os.path.splitext(this_filename)[0]
     img_list = []
     for this_row in this_group.iterrows(): 

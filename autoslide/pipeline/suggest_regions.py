@@ -3,15 +3,9 @@ Iterate through image given window size and stride, and return a list of
 regions to be used for classification.
 """
 
-auto_slide_dir = '/media/bigdata/projects/auto_slide'
-# auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
-
 import os
 import sys
 import uuid
-sys.path.append(os.path.join(auto_slide_dir, 'src'))
-from pipeline import utils
-
 import slideio
 from matplotlib import pyplot as plt
 import cv2 as cv
@@ -24,6 +18,13 @@ from glob import glob
 import json
 from tqdm import tqdm
 import hashlib
+
+# Define project directory
+# auto_slide_dir = '/media/bigdata/projects/pulakat_lab/auto_slide'
+# auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
+
+# Import utilities directly
+from autoslide.pipeline import utils
 
 def remove_mask_edge(
         mask,

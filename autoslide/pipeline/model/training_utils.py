@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
-import cv2
+import cv2 as cv  # Alias cv2 as cv for consistency
 from torchvision.transforms import v2 as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
@@ -14,16 +14,21 @@ import torchvision
 # Directory and Data Management Functions
 #############################################################################
 
-def setup_directories(autoslide_dir):
+def setup_directories(autoslide_dir=None):
     """
     Set up necessary directories for saving artifacts and plots.
     
     Args:
-        autoslide_dir (str): Root directory of the AutoSlide project
+        autoslide_dir (str, optional): Root directory of the AutoSlide project
         
     Returns:
         tuple: (plot_dir, artifacts_dir) - Paths to the plot and artifacts directories
     """
+    if autoslide_dir is None:
+        # Try to determine autoslide_dir from current file location
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        autoslide_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    
     plot_dir = os.path.join(autoslide_dir, 'plots') 
     artifacts_dir = os.path.join(autoslide_dir, 'artifacts')
     
@@ -32,7 +37,7 @@ def setup_directories(autoslide_dir):
     
     return plot_dir, artifacts_dir
 
-def load_data(autoslide_dir):
+def load_data(autoslide_dir=None):
     """
     Load original image and mask data from the labelled_images directory.
     
@@ -66,9 +71,9 @@ def get_mask_outline(mask):
         numpy.ndarray: Outline of the mask as a binary image
     """
     mask = mask.astype(np.uint8)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
     mask_outline = np.zeros_like(mask)
-    mask_outline = cv2.drawContours(mask_outline, contours, -1, 255, 1)
+    mask_outline = cv.drawContours(mask_outline, contours, -1, 255, 1)
     return mask_outline
 
 #############################################################################

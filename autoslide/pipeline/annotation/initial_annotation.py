@@ -11,13 +11,6 @@ Steps:
 5. Image is convex hull'd and regions segmented
 6. Separately, user is asked to input tissue type
 """
-# auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide/'
-auto_slide_dir = '/media/bigdata/projects/auto_slide'
-
-import os
-import sys
-sys.path.append(os.path.join(auto_slide_dir, 'src'))
-from pipeline import utils
 
 import slideio
 import pylab as plt
@@ -27,13 +20,15 @@ from pprint import pprint
 from glob import glob
 import pandas as pd
 from tqdm import tqdm
-import json
-
 from skimage.morphology import binary_dilation as dilation
 from skimage.measure import label, regionprops
 from skimage.color import label2rgb
 from skimage.filters.rank import gradient
 from scipy.ndimage import binary_fill_holes
+
+
+# Import utilities directly
+from auto_slide.src.pipeline.utils import get_threshold_mask
 
 ############################################################
 # PARAMS
@@ -46,6 +41,9 @@ area_threshold = 10000
 
 # data_dir = '/media/bigdata/projects/pulakat_lab/auto_slide/data/'
 # data_dir = '/media/fastdata/9_month_wistar_zdf_female'
+# Define project directory
+auto_slide_dir = '/home/abuzarmahmood/projects/pulakat_lab/auto_slide'
+
 data_dir = os.path.join(auto_slide_dir, 'data')
 glob_pattern = 'TRI*.svs'
 file_list = glob(os.path.join(data_dir, '**', glob_pattern), recursive = True)
@@ -69,7 +67,7 @@ for data_path in tqdm(file_list):
 
     ############################################################
 
-    threshold_mask = utils.get_threshold_mask(scene, down_sample = down_sample)
+    threshold_mask = get_threshold_mask(scene, down_sample = down_sample)
 
     dilation_kern = np.ones((dilation_kern_size, dilation_kern_size))
     dilated_mask = dilation(threshold_mask, footprint = dilation_kern) 
