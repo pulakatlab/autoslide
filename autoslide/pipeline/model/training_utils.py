@@ -1097,11 +1097,13 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
                 flag = True
             losses = sum([l for l in loss.values()])
             train_epoch_loss += losses.cpu().detach().numpy()
+            if np.isnan(train_epoch_loss):
+                # raise Exception('Loss is Nan')
+                print('Loss is NaN, skipping batch')
+                continue
             optimizer.zero_grad()
             losses.backward()
             optimizer.step()
-            if np.isnan(train_epoch_loss):
-                raise Exception('Loss is Nan')
 
         all_train_losses.append(train_epoch_loss)
 
