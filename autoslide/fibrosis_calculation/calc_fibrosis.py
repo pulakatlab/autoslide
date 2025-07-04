@@ -98,25 +98,21 @@ if __name__ == "__main__":
 
     # Test with a specific hash
     test_hash = '0cb8cf88e2d3c22d'
-    section = get_section_from_hash(test_hash, final_df)
 
-    section_bounds = literal_eval(section['section_bounds'])
-    slide = slideio.open_slide(section['data_path'], 'SVS')
-    scene = slide.get_scene(0)
+    section, section_details = get_section_from_hash(
+        test_hash, final_df)
 
-    section = utils.get_section(scene, section_bounds, 1)
-
-    if section is not None:
-        # Visualize the section
-        # fig, ax = visualize_section(section, utils)
-        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-        ax.imshow(section)
-        fig.suptitle(f"Section from SVS\nSection: {section['basename']}, Hash: {section['section_hash']}" +
-                     f"\nData Path: {section['data_path']},\nSection Bounds: {section['section_bounds']}")
-        plt.tight_layout()
-        plt.show()
-    else:
-        print(f"No section found with hash {test_hash}")
+    # if section is not None:
+    #     # Visualize the section
+    #     # fig, ax = visualize_section(section, utils)
+    #     fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    #     ax.imshow(section)
+    #     fig.suptitle(f"Section from SVS\nSection: {section['basename']}, Hash: {section['section_hash']}" +
+    #                  f"\nData Path: {section['data_path']},\nSection Bounds: {section['section_bounds']}")
+    #     plt.tight_layout()
+    #     plt.show()
+    # else:
+    #     print(f"No section found with hash {test_hash}")
 
     # Example usage of fibrosis quantification
     fibrosis_config = dict(
