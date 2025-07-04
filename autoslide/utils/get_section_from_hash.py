@@ -16,7 +16,7 @@ from autoslide import config
 from autoslide.pipeline import utils
 
 
-def get_section_from_hash(hash_value, df):
+def get_section_details_from_hash(hash_value, df):
     """
     Get the section from the dataframe corresponding to the hash value.
 
@@ -32,6 +32,29 @@ def get_section_from_hash(hash_value, df):
         return section.iloc[0]
     else:
         return None
+
+
+def get_section_from_hash(hash_value, df, down_sample=1):
+    """
+    Get the section from the dataframe corresponding to the hash value.
+
+    Args:
+        hash_value: str, the hash value to search for.
+        df: pd.DataFrame, the dataframe containing the suggested regions.
+
+    Returns:
+        section: pd.Series or None, the section corresponding to the hash value.
+    """
+    section_details = get_section_details_from_hash(hash_value, df)
+
+    section_bounds = literal_eval(section_details['section_bounds'])
+    slide = slideio.open_slide(section_details['data_path'], 'SVS')
+    scene = slide.get_scene(0)
+
+    section = utils.get_section(scene, section_bounds,
+                                down_sample=down_sample)
+
+    return section, section_details
 
 
 def load_tracking_data(tracking_dir):
@@ -144,7 +167,7 @@ def main():
 
     # Test with a specific hash
     test_hash = '0cb8cf88e2d3c22d'
-    section = get_section_from_hash(test_hash, final_df)
+    section = get_section_details_from_hash(test_hash, final_df)
 
     if section is not None:
         # Visualize the section
