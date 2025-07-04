@@ -25,12 +25,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm, trange
 import cv2
-
 import torch
-import torchvision
-from torchvision.transforms import v2 as T
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 # Import config
 from autoslide import config
@@ -74,9 +69,9 @@ def main():
         labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks
     )
 
-    # Load negative images
-    neg_image_dir, neg_mask_dir, neg_img_names, neg_mask_names = load_negative_images(
-        labelled_data_dir)
+    # # Load negative images
+    # neg_image_dir, neg_mask_dir, neg_img_names, neg_mask_names = load_negative_images(
+    #     labelled_data_dir)
 
     # Plot augmented samples
     plot_augmented_samples(aug_img_dir, aug_mask_dir,
@@ -85,21 +80,23 @@ def main():
     # Combine datasets
     train_imgs, train_masks, val_imgs, val_masks = combine_datasets(
         train_imgs, train_masks, val_imgs, val_masks,
-        aug_img_names, aug_mask_names, neg_img_names, neg_mask_names
+        aug_img_names, aug_mask_names,  # neg_img_names, neg_mask_names
     )
 
     # Create sample plots
     create_sample_plots(
         train_imgs, train_masks, val_imgs, val_masks,
         img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-        neg_image_dir, neg_mask_dir, plot_dir
+        # neg_image_dir, neg_mask_dir,
+        plot_dir
     )
 
     # Create dataloaders
     train_dl, val_dl = create_dataloaders(
         train_imgs, train_masks, val_imgs, val_masks,
         img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-        neg_image_dir, neg_mask_dir, transform
+        # neg_image_dir, neg_mask_dir,
+        transform
     )
 
     # Initialize model
@@ -128,9 +125,11 @@ def main():
 
     # Evaluate model
     evaluate_model(
-        model, val_imgs, val_masks, neg_img_names, neg_mask_names,
+        model, val_imgs, val_masks,
+        # neg_img_names, neg_mask_names,
         img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-        neg_image_dir, neg_mask_dir, device, plot_dir
+        # neg_image_dir, neg_mask_dir,
+        device, plot_dir
     )
 
 

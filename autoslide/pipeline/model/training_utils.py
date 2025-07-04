@@ -66,7 +66,7 @@ def load_data(data_dir=None):
     for img_path, mask_path in zip(image_names, mask_names):
         assert img_path.split(".")[0] in mask_path
 
-    print(f'Found {len(image_names)} images and {len(mask_names)} masks') 
+    print(f'Found {len(image_names)} images and {len(mask_names)} masks')
     print(f'Image directory: {img_dir}')
     print(f'Mask directory: {mask_dir}')
 
@@ -214,7 +214,8 @@ def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
         aug_images: List of augmented images
         aug_masks: List of augmented masks
     """
-    print(f'Starting dataset augmentation with {len(images)} original images...')
+    print(
+        f'Starting dataset augmentation with {len(images)} original images...')
     aug_images = images.copy()
     aug_masks = masks.copy()
 
@@ -222,7 +223,8 @@ def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
     num_neg = int(num_orig * neg_ratio)
     num_art = int(num_orig * art_ratio)
 
-    print(f'Will generate {num_neg} negative samples and {num_art} artificial vessel samples')
+    print(
+        f'Will generate {num_neg} negative samples and {num_art} artificial vessel samples')
 
     # Generate negative samples
     print('Generating negative samples...')
@@ -238,20 +240,21 @@ def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
         aug_images.append(art_imgs)
         aug_masks.append(art_msks)
 
-    print(f'Dataset augmentation complete. Total images: {len(aug_images)} (original: {num_orig}, negative: {num_neg}, artificial: {num_art})')
+    print(
+        f'Dataset augmentation complete. Total images: {len(aug_images)} (original: {num_orig}, negative: {num_neg}, artificial: {num_art})')
     return aug_images, aug_masks
 
 
-def gen_negative_masks(neg_dir, output_dir):
-    neg_image_names = os.listdir(neg_dir)
-    out_mask_names = [
-        f'{name.split(".")[0]}_mask.png' for name in neg_image_names]
-    for img_name, mask_name in zip(neg_image_names, out_mask_names):
-        img_path = os.path.join(neg_dir, img_name)
-        mask_path = os.path.join(output_dir, mask_name)
-        img = plt.imread(img_path)
-        mask = np.zeros_like(img)
-        plt.imsave(mask_path, mask)
+# def gen_negative_masks(neg_dir, output_dir):
+#     neg_image_names = os.listdir(neg_dir)
+#     out_mask_names = [
+#         f'{name.split(".")[0]}_mask.png' for name in neg_image_names]
+#     for img_name, mask_name in zip(neg_image_names, out_mask_names):
+#         img_path = os.path.join(neg_dir, img_name)
+#         mask_path = os.path.join(output_dir, mask_name)
+#         img = plt.imread(img_path)
+#         mask = np.zeros_like(img)
+#         plt.imsave(mask_path, mask)
 
 
 def generate_negative_samples(img, mask):
@@ -481,21 +484,22 @@ def initialize_model():
     """
     print('Initializing Mask R-CNN model...')
     model = torchvision.models.detection.maskrcnn_resnet50_fpn()
-    
+
     # Configure for binary classification (background + vessel)
     num_classes = 2
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    
+
     in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
     hidden_layer = 256
     model.roi_heads.mask_predictor = MaskRCNNPredictor(
         in_features_mask, hidden_layer, num_classes)
-    
+
     print(f'Model configured for {num_classes} classes (background + vessel)')
     print(f'Box predictor input features: {in_features}')
-    print(f'Mask predictor input features: {in_features_mask}, hidden layer: {hidden_layer}')
-    
+    print(
+        f'Mask predictor input features: {in_features_mask}, hidden layer: {hidden_layer}')
+
     return model
 
 
@@ -534,11 +538,13 @@ def split_train_val(image_names, mask_names, train_ratio=0.9):
         tuple: (train_imgs, train_masks, val_imgs, val_masks) -
                Lists of filenames for training and validation
     """
-    print(f'Splitting dataset: {len(image_names)} total images with {train_ratio:.1%} for training')
+    print(
+        f'Splitting dataset: {len(image_names)} total images with {train_ratio:.1%} for training')
     num = int(train_ratio * len(image_names))
     num = num if num % 2 == 0 else num + 1
-    print(f'Adjusted training set size to {num} (even number for batch processing)')
-    
+    print(
+        f'Adjusted training set size to {num} (even number for batch processing)')
+
     train_imgs_inds = np.random.choice(
         range(len(image_names)), num, replace=False)
     val_imgs_inds = np.setdiff1d(range(len(image_names)), train_imgs_inds)
@@ -546,14 +552,20 @@ def split_train_val(image_names, mask_names, train_ratio=0.9):
     val_imgs = np.array(image_names)[val_imgs_inds]
     train_masks = np.array(mask_names)[train_imgs_inds]
     val_masks = np.array(mask_names)[val_imgs_inds]
-    
+
     print(f'Training images: {len(train_imgs)}')
     print(f'Validation images: {len(val_imgs)}')
 
     return train_imgs, train_masks, val_imgs, val_masks
 
 
-def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks):
+def load_or_create_augmented_data(
+        labelled_data_dir,
+        img_dir,
+        mask_dir,
+        train_imgs,
+        train_masks,
+):
     """
     Load existing augmented data or create a new augmented dataset.
 
@@ -588,8 +600,9 @@ def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_im
         # Create augmented dataset paths
         print("Creating augmented dataset...")
         n_augmented = len(train_imgs) * 10
-        print(f'Will create {n_augmented} augmented samples from {len(train_imgs)} training images')
-        
+        print(
+            f'Will create {n_augmented} augmented samples from {len(train_imgs)} training images')
+
         # Load a few images to augment
         print('Loading base images for augmentation...')
         aug_img_list = []
@@ -622,8 +635,9 @@ def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_im
 
             aug_img_names.append(img_name)
             aug_mask_names.append(mask_name)
-        
-        print(f'Successfully created and saved {len(aug_img_names)} augmented images')
+
+        print(
+            f'Successfully created and saved {len(aug_img_names)} augmented images')
 
     # Validate augmented images
     print('Validating augmented image-mask pairs...')
@@ -634,28 +648,28 @@ def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_im
     return aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names
 
 
-def load_negative_images(labelled_data_dir):
-    """
-    Load negative images (images without vessels).
-
-    Negative images are used to help the model learn to distinguish
-    between regions with and without vessels.
-
-    Args:
-        labelled_data_dir (str): Directory containing labelled data
-
-    Returns:
-        tuple: (neg_image_dir, neg_mask_dir, neg_img_names, neg_mask_names) -
-               Directories and lists of negative image and mask filenames
-    """
-    neg_image_dir = os.path.join(labelled_data_dir, 'negative_images/')
-    neg_mask_dir = os.path.join(labelled_data_dir, 'negative_masks/')
-    neg_img_names = sorted(os.listdir(neg_image_dir))
-    neg_mask_names = sorted(os.listdir(neg_mask_dir))
-
-    print(f'Negative images: {len(np.unique(neg_img_names))}')
-
-    return neg_image_dir, neg_mask_dir, neg_img_names, neg_mask_names
+# def load_negative_images(labelled_data_dir):
+#     """
+#     Load negative images (images without vessels).
+#
+#     Negative images are used to help the model learn to distinguish
+#     between regions with and without vessels.
+#
+#     Args:
+#         labelled_data_dir (str): Directory containing labelled data
+#
+#     Returns:
+#         tuple: (neg_image_dir, neg_mask_dir, neg_img_names, neg_mask_names) -
+#                Directories and lists of negative image and mask filenames
+#     """
+#     neg_image_dir = os.path.join(labelled_data_dir, 'negative_images/')
+#     neg_mask_dir = os.path.join(labelled_data_dir, 'negative_masks/')
+#     neg_img_names = sorted(os.listdir(neg_image_dir))
+#     neg_mask_names = sorted(os.listdir(neg_mask_dir))
+#
+#     print(f'Negative images: {len(np.unique(neg_img_names))}')
+#
+#     return neg_image_dir, neg_mask_dir, neg_img_names, neg_mask_names
 
 #############################################################################
 # Visualization Functions
@@ -699,10 +713,23 @@ def plot_augmented_samples(aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_na
     fig.savefig(plot_dir + '/augmented_images.png')
     plt.close(fig)
 
+    print(
+        f'Plotted {n_plot} augmented samples to {plot_dir}/augmented_images.png')
 
-def combine_datasets(train_imgs, train_masks, val_imgs, val_masks,
-                     aug_img_names, aug_mask_names, neg_img_names, neg_mask_names):
+
+def combine_datasets(
+        train_imgs,
+        train_masks,
+        val_imgs,
+        val_masks,
+        aug_img_names,
+        aug_mask_names,
+        # neg_img_names,
+        # neg_mask_names,
+):
     """
+
+    print(f'Plotted {n_plot} augmented samples to {plot_dir}/augmented_images.png')
     Combine original, augmented, and negative datasets.
 
     Merges the original dataset with augmented and negative samples,
@@ -724,25 +751,47 @@ def combine_datasets(train_imgs, train_masks, val_imgs, val_masks,
     """
     print('Combining datasets...')
     print(f'Original - Train: {len(train_imgs)}, Val: {len(val_imgs)}')
-    print(f'Augmented: {len(aug_img_names)}, Negative: {len(neg_img_names)}')
-    
+    # , Negative: {len(neg_img_names)}')
+    print(f'Augmented: {len(aug_img_names)}')
+
     n_aug_train = int(0.9 * len(aug_img_names))
-    n_neg_train = int(0.9 * len(neg_img_names))
-    
-    print(f'Splitting augmented data - Train: {n_aug_train}, Val: {len(aug_img_names) - n_aug_train}')
-    print(f'Splitting negative data - Train: {n_neg_train}, Val: {len(neg_img_names) - n_neg_train}')
+    # n_neg_train = int(0.9 * len(neg_img_names))
+
+    print(
+        f'Splitting augmented data - Train: {n_aug_train}, Val: {len(aug_img_names) - n_aug_train}')
+    # print(f'Splitting negative data - Train: {n_neg_train}, Val: {len(neg_img_names) - n_neg_train}')
 
     # Combine datasets
     train_imgs = np.concatenate(
-        [train_imgs, aug_img_names[:n_aug_train], neg_img_names[:n_neg_train]])
+        [train_imgs,
+         aug_img_names[:n_aug_train],
+         # neg_img_names[:n_neg_train],
+         ]
+    )
     train_masks = np.concatenate(
-        [train_masks, aug_mask_names[:n_aug_train], neg_mask_names[:n_neg_train]])
+        [
+            train_masks,
+            aug_mask_names[:n_aug_train],
+            # neg_mask_names[:n_neg_train]
+        ]
+    )
     val_imgs = np.concatenate(
-        [val_imgs, aug_img_names[n_aug_train:], neg_img_names[n_neg_train:]])
+        [
+            val_imgs,
+            aug_img_names[n_aug_train:],
+            # neg_img_names[n_neg_train:]
+        ]
+    )
     val_masks = np.concatenate(
-        [val_masks, aug_mask_names[n_aug_train:], neg_mask_names[n_neg_train:]])
+        [
+            val_masks,
+            aug_mask_names[n_aug_train:],
+            # neg_mask_names[n_neg_train:],
+        ]
+    )
 
-    print(f'Final combined dataset - Train: {len(train_imgs)}, Val: {len(val_imgs)}')
+    print(
+        f'Final combined dataset - Train: {len(train_imgs)}, Val: {len(val_imgs)}')
 
     # Check that all images have corresponding masks
     print('Validating combined dataset image-mask pairs...')
@@ -757,7 +806,8 @@ def combine_datasets(train_imgs, train_masks, val_imgs, val_masks,
 
 def create_sample_plots(train_imgs, train_masks, val_imgs, val_masks,
                         img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-                        neg_image_dir, neg_mask_dir, plot_dir):
+                        # neg_image_dir, neg_mask_dir,
+                        plot_dir):
     """
     Create sample plots of training and validation images with their masks.
 
@@ -789,9 +839,9 @@ def create_sample_plots(train_imgs, train_masks, val_imgs, val_masks,
         if 'aug_' in img_name:
             img = Image.open(aug_img_dir + img_name).convert("RGB")
             mask = Image.open(aug_mask_dir + mask_name)
-        elif 'neg_' in img_name:
-            img = Image.open(neg_image_dir + img_name).convert("RGB")
-            mask = Image.open(neg_mask_dir + mask_name)
+        # elif 'neg_' in img_name:
+        #     img = Image.open(neg_image_dir + img_name).convert("RGB")
+        #     mask = Image.open(neg_mask_dir + mask_name)
         else:
             img = Image.open(img_dir + img_name).convert("RGB")
             mask = Image.open(mask_dir + mask_name)
@@ -807,9 +857,9 @@ def create_sample_plots(train_imgs, train_masks, val_imgs, val_masks,
         if 'aug_' in img_name:
             img = Image.open(aug_img_dir + img_name).convert("RGB")
             mask = Image.open(aug_mask_dir + mask_name)
-        elif 'neg_' in img_name:
-            img = Image.open(neg_image_dir + img_name).convert("RGB")
-            mask = Image.open(neg_mask_dir + mask_name)
+        # elif 'neg_' in img_name:
+        #     img = Image.open(neg_image_dir + img_name).convert("RGB")
+        #     mask = Image.open(neg_mask_dir + mask_name)
         else:
             img = Image.open(img_dir + img_name).convert("RGB")
             mask = Image.open(mask_dir + mask_name)
@@ -817,6 +867,9 @@ def create_sample_plots(train_imgs, train_masks, val_imgs, val_masks,
         ax[1].imshow(mask)
         fig.savefig(test_plot_dir + f'/{img_name.split(".")[0]}val.png')
         plt.close(fig)
+
+    print(
+        f'Created sample plots for training and validation datasets in {test_plot_dir}')
 
 
 class AugmentedCustDat(torch.utils.data.Dataset):
@@ -829,15 +882,17 @@ class AugmentedCustDat(torch.utils.data.Dataset):
     """
 
     def __init__(self, image_names, mask_names, img_dir, mask_dir,
-                 aug_img_dir, aug_mask_dir, neg_image_dir, neg_mask_dir, transform=None):
+                 aug_img_dir, aug_mask_dir,
+                 # neg_image_dir, neg_mask_dir,
+                 transform=None):
         self.image_names = image_names
         self.mask_names = mask_names
         self.img_dir = img_dir
         self.mask_dir = mask_dir
         self.aug_img_dir = aug_img_dir
         self.aug_mask_dir = aug_mask_dir
-        self.neg_image_dir = neg_image_dir
-        self.neg_mask_dir = neg_mask_dir
+        # self.neg_image_dir = neg_image_dir
+        # self.neg_mask_dir = neg_mask_dir
         self.base_transform = T.ToTensor()
         if transform is not None:
             self.transform = transform
@@ -853,10 +908,10 @@ class AugmentedCustDat(torch.utils.data.Dataset):
             img = Image.open(os.path.join(
                 self.aug_img_dir, img_name)).convert("RGB")
             mask = Image.open(os.path.join(self.aug_mask_dir, mask_name))
-        elif 'neg_' in img_name:
-            img = Image.open(os.path.join(
-                self.neg_image_dir, img_name)).convert("RGB")
-            mask = Image.open(os.path.join(self.neg_mask_dir, mask_name))
+        # elif 'neg_' in img_name:
+        #     img = Image.open(os.path.join(
+        #         self.neg_image_dir, img_name)).convert("RGB")
+        #     mask = Image.open(os.path.join(self.neg_mask_dir, mask_name))
         else:
             img = Image.open(self.img_dir + img_name).convert("RGB")
             mask = Image.open(self.mask_dir + mask_name)
@@ -917,7 +972,8 @@ class AugmentedCustDat(torch.utils.data.Dataset):
 
 def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
                        img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-                       neg_image_dir, neg_mask_dir, transform):
+                       # neg_image_dir, neg_mask_dir,
+                       transform):
     """
     Create DataLoader objects for training and validation.
 
@@ -944,19 +1000,19 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
     batch_size = 2
     num_workers = 1
     use_cuda = torch.cuda.is_available()
-    
+
     print(f'DataLoader configuration:')
     print(f'  Batch size: {batch_size}')
     print(f'  Num workers: {num_workers}')
     print(f'  CUDA available: {use_cuda}')
     print(f'  Pin memory: {use_cuda}')
-    
+
     train_dl = torch.utils.data.DataLoader(
         AugmentedCustDat(
             train_imgs, train_masks,
             img_dir, mask_dir,
             aug_img_dir, aug_mask_dir,
-            neg_image_dir, neg_mask_dir,
+            # neg_image_dir, neg_mask_dir,
             transform
         ),
         batch_size=batch_size,
@@ -972,7 +1028,7 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
             val_imgs, val_masks,
             img_dir, mask_dir,
             aug_img_dir, aug_mask_dir,
-            neg_image_dir, neg_mask_dir,
+            # neg_image_dir, neg_mask_dir,
             transform
         ),
         batch_size=batch_size,
@@ -983,7 +1039,8 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
         drop_last=True
     )
 
-    print(f'DataLoaders created - Train batches: {len(train_dl)}, Val batches: {len(val_dl)}')
+    print(
+        f'DataLoaders created - Train batches: {len(train_dl)}, Val batches: {len(val_dl)}')
     return train_dl, val_dl
 
 #############################################################################
@@ -1007,25 +1064,26 @@ def setup_training(model, device):
     """
     print(f'Setting up training on device: {device}')
     model.to(device)
-    
+
     params = [p for p in model.parameters() if p.requires_grad]
     print(f'Number of trainable parameters: {len(params)}')
-    
+
     # Count total parameters
     total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    trainable_params = sum(p.numel()
+                           for p in model.parameters() if p.requires_grad)
     print(f'Total parameters: {total_params:,}')
     print(f'Trainable parameters: {trainable_params:,}')
-    
+
     lr = 0.005
     momentum = 0.9
     weight_decay = 0.0005
-    
+
     print(f'Optimizer configuration:')
     print(f'  Learning rate: {lr}')
     print(f'  Momentum: {momentum}')
     print(f'  Weight decay: {weight_decay}')
-    
+
     optimizer = torch.optim.SGD(
         params, lr=lr, momentum=momentum, weight_decay=weight_decay)
 
@@ -1170,9 +1228,11 @@ def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
     plt.close(fig)
 
 
-def evaluate_model(model, val_imgs, val_masks, neg_img_names, neg_mask_names,
+def evaluate_model(model, val_imgs, val_masks,
+                   # neg_img_names, neg_mask_names,
                    img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-                   neg_image_dir, neg_mask_dir, device, plot_dir):
+                   # neg_image_dir, neg_mask_dir,
+                   device, plot_dir):
     """
     Evaluate the model on validation data and generate prediction visualizations.
 
@@ -1207,14 +1267,14 @@ def evaluate_model(model, val_imgs, val_masks, neg_img_names, neg_mask_names,
     print(f'Evaluating on {len(val_imgs)} validation images...')
     predictions_with_masks = 0
     predictions_without_masks = 0
-    
+
     for img_name, mask_name in tqdm(zip(val_imgs, val_masks), total=len(val_imgs), desc='Validation evaluation'):
         if 'aug_' in img_name:
             img = Image.open(aug_img_dir + img_name).convert("RGB")
             mask = Image.open(aug_mask_dir + mask_name)
-        elif 'neg_' in img_name:
-            img = Image.open(neg_image_dir + img_name).convert("RGB")
-            mask = Image.open(neg_mask_dir + mask_name)
+        # elif 'neg_' in img_name:
+        #     img = Image.open(neg_image_dir + img_name).convert("RGB")
+        #     mask = Image.open(neg_mask_dir + mask_name)
         else:
             img = Image.open(img_dir + img_name).convert("RGB")
             mask = Image.open(mask_dir + mask_name)
@@ -1263,65 +1323,65 @@ def evaluate_model(model, val_imgs, val_masks, neg_img_names, neg_mask_names,
     print(f'  Images with predicted masks: {predictions_with_masks}')
     print(f'  Images without predicted masks: {predictions_without_masks}')
 
-    # Evaluate on negative examples
-    print(f'Evaluating on {len(neg_img_names)} negative images...')
-    neg_predictions_with_masks = 0
-    neg_predictions_without_masks = 0
-    
-    for i, (img_name, mask_name) in enumerate(tqdm(zip(neg_img_names, neg_mask_names), total=len(neg_img_names), desc='Negative evaluation')):
-        if 'aug_' in img_name:
-            img = Image.open(aug_img_dir + img_name).convert("RGB")
-            mask = Image.open(aug_mask_dir + mask_name)
-        elif 'neg_' in img_name:
-            img = Image.open(neg_image_dir + img_name).convert("RGB")
-            mask = Image.open(neg_mask_dir + mask_name)
-        else:
-            img = Image.open(img_dir + img_name).convert("RGB")
-            mask = Image.open(mask_dir + mask_name)
-
-        # Use the base transform for prediction to match training
-        ig = transform(img)
-        with torch.no_grad():
-            pred = model([ig.to(device)])
-
-        n_preds = len(pred[0]["masks"])
-        if n_preds > 0:
-            fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds, 5))
-            ax[0].imshow(img)
-            for i in range(n_preds):
-                ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy()
-                               * 255).astype("uint8").squeeze())
-            fig.savefig(pred_out_path +
-                        f'/{img_name.split(".")[0]}_{i}_example_masks.png')
-            plt.close(fig)
-
-            all_preds = np.stack(
-                [
-                    (pred[0]["masks"][i].cpu().detach().numpy()
-                     * 255).astype("uint8").squeeze()
-                    for i in range(n_preds)
-                ]
-            )
-
-            fig, ax = plt.subplots(1, 3, figsize=(10, 5))
-            ax[0].imshow(img)
-            ax[1].imshow(all_preds.mean(axis=0))
-            ax[2].imshow(np.array(mask))
-            plt.savefig(pred_out_path +
-                        f'/{img_name.split(".")[0]}_mean_example_mask.png')
-            plt.close()
-        else:
-            fig, ax = plt.subplots(1, 1, figsize=(10, 5))
-            ax.imshow(img)
-            ax.set_title('No predicted mask')
-            plt.savefig(pred_out_path +
-                        f'/{img_name.split(".")[0]}_mean_example_mask.png')
-            plt.close()
-            neg_predictions_without_masks += 1
-    
-    print(f'Negative evaluation complete:')
-    print(f'  Negative images with predicted masks: {neg_predictions_with_masks}')
-    print(f'  Negative images without predicted masks: {neg_predictions_without_masks}')
+    # # Evaluate on negative examples
+    # print(f'Evaluating on {len(neg_img_names)} negative images...')
+    # neg_predictions_with_masks = 0
+    # neg_predictions_without_masks = 0
+    #
+    # for i, (img_name, mask_name) in enumerate(tqdm(zip(neg_img_names, neg_mask_names), total=len(neg_img_names), desc='Negative evaluation')):
+    #     if 'aug_' in img_name:
+    #         img = Image.open(aug_img_dir + img_name).convert("RGB")
+    #         mask = Image.open(aug_mask_dir + mask_name)
+    #     elif 'neg_' in img_name:
+    #         img = Image.open(neg_image_dir + img_name).convert("RGB")
+    #         mask = Image.open(neg_mask_dir + mask_name)
+    #     else:
+    #         img = Image.open(img_dir + img_name).convert("RGB")
+    #         mask = Image.open(mask_dir + mask_name)
+    #
+    #     # Use the base transform for prediction to match training
+    #     ig = transform(img)
+    #     with torch.no_grad():
+    #         pred = model([ig.to(device)])
+    #
+    #     n_preds = len(pred[0]["masks"])
+    #     if n_preds > 0:
+    #         fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds, 5))
+    #         ax[0].imshow(img)
+    #         for i in range(n_preds):
+    #             ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy()
+    #                            * 255).astype("uint8").squeeze())
+    #         fig.savefig(pred_out_path +
+    #                     f'/{img_name.split(".")[0]}_{i}_example_masks.png')
+    #         plt.close(fig)
+    #
+    #         all_preds = np.stack(
+    #             [
+    #                 (pred[0]["masks"][i].cpu().detach().numpy()
+    #                  * 255).astype("uint8").squeeze()
+    #                 for i in range(n_preds)
+    #             ]
+    #         )
+    #
+    #         fig, ax = plt.subplots(1, 3, figsize=(10, 5))
+    #         ax[0].imshow(img)
+    #         ax[1].imshow(all_preds.mean(axis=0))
+    #         ax[2].imshow(np.array(mask))
+    #         plt.savefig(pred_out_path +
+    #                     f'/{img_name.split(".")[0]}_mean_example_mask.png')
+    #         plt.close()
+    #     else:
+    #         fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    #         ax.imshow(img)
+    #         ax.set_title('No predicted mask')
+    #         plt.savefig(pred_out_path +
+    #                     f'/{img_name.split(".")[0]}_mean_example_mask.png')
+    #         plt.close()
+    #         neg_predictions_without_masks += 1
+    #
+    # print(f'Negative evaluation complete:')
+    # print(f'  Negative images with predicted masks: {neg_predictions_with_masks}')
+    # print(f'  Negative images without predicted masks: {neg_predictions_without_masks}')
     print(f'Model evaluation finished. All plots saved to {pred_out_path}')
 
 
