@@ -11,13 +11,11 @@ Resources
 
 
 from autoslide.pipeline.model.training_utils import (
-    setup_directories, load_data, get_mask_outline, RandomRotation90,
-    create_transforms, test_transformations, CustDat, initialize_model,
-    custom_collate, split_train_val, load_or_create_augmented_data,
-    plot_augmented_samples, combine_datasets,
-    create_sample_plots, AugmentedCustDat, create_dataloaders,
-    setup_training, train_model, plot_losses, evaluate_model, load_model,
-    generate_artificial_vessels, augment_dataset
+    setup_directories, initialize_model,
+    setup_training, train_model, plot_losses, evaluate_model, load_model
+)
+from autoslide.pipeline.model.data_preprocessing import (
+    prepare_data, plot_augmented_samples, create_sample_plots
 )
 import numpy as np
 import os
@@ -50,47 +48,32 @@ def main():
     # Setup directories
     plot_dir, artifacts_dir = setup_directories(data_dir)
 
-    # Load data
-    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(
-        data_dir)
+    # Prepare all data using the preprocessing pipeline
+    data_components = prepare_data(data_dir, use_augmentation=True)
+    
+    # Extract components
+    train_dl = data_components['train_dl']
+    val_dl = data_components['val_dl']
+    train_imgs = data_components['train_imgs']
+    train_masks = data_components['train_masks']
+    val_imgs = data_components['val_imgs']
+    val_masks = data_components['val_masks']
+    img_dir = data_components['img_dir']
+    mask_dir = data_components['mask_dir']
+    aug_img_dir = data_components['aug_img_dir']
+    aug_mask_dir = data_components['aug_mask_dir']
+    aug_img_names = data_components['aug_img_names']
+    aug_mask_names = data_components['aug_mask_names']
 
-    # Create transforms
-    transform = create_transforms()
+    # Create visualization plots
+    if len(aug_img_names) > 0:
+        plot_augmented_samples(aug_img_dir, aug_mask_dir,
+                               aug_img_names, aug_mask_names, plot_dir)
 
-    # Optional: Test transformations
-    # test_transformations(img_dir, mask_dir, image_names, mask_names, transform)
-
-    # Split data into train and validation sets
-    train_imgs, train_masks, val_imgs, val_masks = split_train_val(
-        image_names, mask_names)
-
-    # Load or create augmented data
-    aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names = load_or_create_augmented_data(
-        labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks
-    )
-
-    # Plot augmented samples
-    plot_augmented_samples(aug_img_dir, aug_mask_dir,
-                           aug_img_names, aug_mask_names, plot_dir)
-
-    # Combine datasets
-    train_imgs, train_masks, val_imgs, val_masks = combine_datasets(
-        train_imgs, train_masks, val_imgs, val_masks,
-        aug_img_names, aug_mask_names,
-    )
-
-    # Create sample plots
     create_sample_plots(
         train_imgs, train_masks, val_imgs, val_masks,
         img_dir, mask_dir, aug_img_dir, aug_mask_dir,
         plot_dir
-    )
-
-    # Create dataloaders
-    train_dl, val_dl = create_dataloaders(
-        train_imgs, train_masks, val_imgs, val_masks,
-        img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-        transform
     )
 
     # Initialize model
