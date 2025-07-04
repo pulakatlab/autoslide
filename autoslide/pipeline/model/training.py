@@ -76,6 +76,7 @@ def main():
     # Combine datasets
     train_imgs, train_masks, val_imgs, val_masks = combine_datasets(
         train_imgs, train_masks, val_imgs, val_masks,
+        aug_img_names, aug_mask_names,
     )
 
     # Create sample plots
