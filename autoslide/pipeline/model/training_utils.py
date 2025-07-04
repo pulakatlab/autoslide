@@ -33,6 +33,10 @@ def setup_directories(data_dir=None):
     os.makedirs(plot_dir, exist_ok=True)
     os.makedirs(artifacts_dir, exist_ok=True)
 
+    print('Creating directories for plots and artifacts...')
+    print(f'Plot directory: {plot_dir}')
+    print(f'Artifacts directory: {artifacts_dir}')
+
     return plot_dir, artifacts_dir
 
 
@@ -61,6 +65,10 @@ def load_data(data_dir=None):
     # Validate that masks correspond to images
     for img_path, mask_path in zip(image_names, mask_names):
         assert img_path.split(".")[0] in mask_path
+
+    print(f'Found {len(image_names)} images and {len(mask_names)} masks') 
+    print(f'Image directory: {img_dir}')
+    print(f'Mask directory: {mask_dir}')
 
     return labelled_data_dir, img_dir, mask_dir, image_names, mask_names
 
@@ -497,7 +505,7 @@ def custom_collate(data):
 #############################################################################
 
 
-def split_train_val(image_names, mask_names):
+def split_train_val(image_names, mask_names, train_ratio=0.9):
     """
     Split the dataset into training and validation sets.
 
@@ -512,7 +520,7 @@ def split_train_val(image_names, mask_names):
         tuple: (train_imgs, train_masks, val_imgs, val_masks) -
                Lists of filenames for training and validation
     """
-    num = int(0.9 * len(image_names))
+    num = int(train_ratio * len(image_names))
     num = num if num % 2 == 0 else num + 1
     train_imgs_inds = np.random.choice(
         range(len(image_names)), num, replace=False)
@@ -521,6 +529,10 @@ def split_train_val(image_names, mask_names):
     val_imgs = np.array(image_names)[val_imgs_inds]
     train_masks = np.array(mask_names)[train_imgs_inds]
     val_masks = np.array(mask_names)[val_imgs_inds]
+    
+    print(f'Training images: {len(train_imgs)}')
+    print(f'Validation images: {len(val_imgs)}')
+
     return train_imgs, train_masks, val_imgs, val_masks
 
 
