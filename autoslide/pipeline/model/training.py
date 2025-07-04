@@ -14,10 +14,10 @@ from autoslide.pipeline.model.training_utils import (
     setup_directories, load_data, get_mask_outline, RandomRotation90,
     create_transforms, test_transformations, CustDat, initialize_model,
     custom_collate, split_train_val, load_or_create_augmented_data,
-    load_negative_images, plot_augmented_samples, combine_datasets,
+    plot_augmented_samples, combine_datasets,
     create_sample_plots, AugmentedCustDat, create_dataloaders,
     setup_training, train_model, plot_losses, evaluate_model, load_model,
-    generate_negative_samples, generate_artificial_vessels, augment_dataset
+    generate_artificial_vessels, augment_dataset
 )
 import numpy as np
 import os
@@ -69,10 +69,6 @@ def main():
         labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks
     )
 
-    # # Load negative images
-    # neg_image_dir, neg_mask_dir, neg_img_names, neg_mask_names = load_negative_images(
-    #     labelled_data_dir)
-
     # Plot augmented samples
     plot_augmented_samples(aug_img_dir, aug_mask_dir,
                            aug_img_names, aug_mask_names, plot_dir)
@@ -80,14 +76,12 @@ def main():
     # Combine datasets
     train_imgs, train_masks, val_imgs, val_masks = combine_datasets(
         train_imgs, train_masks, val_imgs, val_masks,
-        aug_img_names, aug_mask_names,  # neg_img_names, neg_mask_names
     )
 
     # Create sample plots
     create_sample_plots(
         train_imgs, train_masks, val_imgs, val_masks,
         img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-        # neg_image_dir, neg_mask_dir,
         plot_dir
     )
 
@@ -95,7 +89,6 @@ def main():
     train_dl, val_dl = create_dataloaders(
         train_imgs, train_masks, val_imgs, val_masks,
         img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-        # neg_image_dir, neg_mask_dir,
         transform
     )
 
@@ -126,9 +119,7 @@ def main():
     # Evaluate model
     evaluate_model(
         model, val_imgs, val_masks,
-        # neg_img_names, neg_mask_names,
         img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-        # neg_image_dir, neg_mask_dir,
         device, plot_dir
     )
 
