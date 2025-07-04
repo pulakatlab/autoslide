@@ -4,7 +4,7 @@ Merge marked tissues and label appropriately with tissue type
 """
 
 import pylab as plt
-import numpy as np 
+import numpy as np
 import os
 import json
 from pprint import pprint
@@ -28,7 +28,7 @@ tracking_dir = os.path.join(data_dir, 'tracking')
 if not os.path.exists(tracking_dir):
     os.makedirs(tracking_dir)
 
-# basenames = [os.path.basename(x).split('.')[0] for x in file_list] 
+# basenames = [os.path.basename(x).split('.')[0] for x in file_list]
 # unique_basenames = np.unique(basenames)
 
 json_path_list = glob(os.path.join(tracking_dir, '*.json'))
@@ -38,7 +38,7 @@ json_list = [json.load(open(x, 'r')) for x in json_path_list]
 ############################################################
 
 # for this_basename in tqdm(unique_basenames):
-for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)): 
+for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)):
     # this_basename = unique_basenames[0]
     this_basename = this_json['file_basename'].split('.')[0]
 
@@ -58,26 +58,27 @@ for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_
         label_map[row['label']] = row['tissue_num']
 
     # Also get string to label each tissue
-    metadata['tissue_str'] = metadata['tissue_num'].astype(str) + '_' + metadata['tissue_type']
+    metadata['tissue_str'] = metadata['tissue_num'].astype(
+        str) + '_' + metadata['tissue_type']
 
     # Map values in mask according to label_map
     for key, value in label_map.items():
         mask[mask == key] = value
 
     # Plot mask and also write to file
-    image_label_overlay = label2rgb(mask, 
-                                    image=mask>0, 
+    image_label_overlay = label2rgb(mask,
+                                    image=mask > 0,
                                     bg_label=0)
 
-    fig, ax = plt.subplots(figsize = (5, 10))
-    ax.imshow(image_label_overlay, cmap = 'tab10')
+    fig, ax = plt.subplots(figsize=(5, 10))
+    ax.imshow(image_label_overlay, cmap='tab10')
     ax.set_title(this_basename)
     # Label with tissue type
     for i, row in metadata.iterrows():
         centroid = literal_eval(row['centroid'])
         ax.text(centroid[1], centroid[0],
-                row['tissue_str'], color = 'red',
-                fontsize = 25, weight = 'bold')
+                row['tissue_str'], color='red',
+                fontsize=25, weight='bold')
     fig.savefig(os.path.join(fin_annotation_dir, this_basename + '.png'))
     plt.close(fig)
 
