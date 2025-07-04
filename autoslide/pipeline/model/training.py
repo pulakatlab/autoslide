@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm, trange
 import cv2
 import torch
+import argparse
 
 # Import config
 from autoslide import config
@@ -37,14 +38,21 @@ plot_dir = config['plot_dirs']
 
 ##############################
 ##############################
-retrain_bool = False
 
-##############################
-##############################
+
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Train Mask R-CNN model for vessel detection')
+    parser.add_argument('--retrain', action='store_true', 
+                       help='Force retraining even if a saved model exists')
+    return parser.parse_args()
 
 
 def main():
     """Main function to run the training pipeline"""
+    # Parse command line arguments
+    args = parse_args()
+    
     # Setup directories
     plot_dir, artifacts_dir = setup_directories(data_dir)
 
@@ -91,7 +99,7 @@ def main():
         artifacts_dir, 'best_val_mask_rcnn_model.pth')
 
     # Load existing model or train new one
-    if os.path.exists(best_model_path) and not retrain_bool:
+    if os.path.exists(best_model_path) and not args.retrain:
         print('Loading model from savefile')
         model = load_model(model, best_model_path, device)
     else:
