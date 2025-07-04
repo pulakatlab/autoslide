@@ -16,7 +16,7 @@ assets = []
 for file_path, hash_value in zip(file_paths, hash_list):
     asset = {
         "row_data": file_path,
-        "global_key": hash_value, 
+        "global_key": hash_value,
         "media_type": "IMAGE",
     }
     assets.append(asset)

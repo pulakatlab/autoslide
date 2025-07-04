@@ -1,13 +1,14 @@
 """
-Given a section id, this script will return the details of the section from 
+Given a section id, this script will return the details of the section from
 the original data file.
 """
 
+from autoslide.pipeline.utils import visualize_sections, get_section
 import os
 import slideio
 from matplotlib import pyplot as plt
 import cv2 as cv
-import numpy as np 
+import numpy as np
 from pprint import pprint
 import pandas as pd
 from skimage import morphology as morph
@@ -20,36 +21,37 @@ data_dir = config['data_dir']
 plot_dir = config['plot_dirs']
 
 # Import utilities directly
-from autoslide.pipeline.utils import visualize_sections, get_section
 
 # Get directories from config
 data_dir = config['data_dir']
-mask_dir = os.path.join(data_dir, 'final_annotation') 
-metadata_dir = os.path.join(data_dir, 'initial_annotation') 
+mask_dir = os.path.join(data_dir, 'final_annotation')
+metadata_dir = os.path.join(data_dir, 'initial_annotation')
 section_dir = os.path.join(data_dir, 'suggested_regions')
 data_path_list = glob(os.path.join(data_dir, '*TRI*.svs'))
 
 # Get paths to all metadata files
-metadata_path_list = glob(os.path.join(section_dir, '**','*TRI*.csv'), recursive=True)
+metadata_path_list = glob(os.path.join(
+    section_dir, '**', '*TRI*.csv'), recursive=True)
 # mask_path_list = glob(os.path.join(mask_dir, '*TRI*.png'))
-basenames = [os.path.basename(os.path.dirname(path)) for path in metadata_path_list]
+basenames = [os.path.basename(os.path.dirname(path))
+             for path in metadata_path_list]
 
 basenames = sorted(basenames)
 metadata_path_list = sorted(metadata_path_list)
 # mask_path_list = sorted(mask_path_list)
 
 matched_data_paths = [
-        [x for x in data_path_list if basename in x.replace('-','_')][0] \
-                for basename in basenames]
+    [x for x in data_path_list if basename in x.replace('-', '_')][0]
+    for basename in basenames]
 
 metadata_df = pd.DataFrame(
-        data = {
-            'basename': basenames,
-            'metadata_path': metadata_path_list,
-            'data_path': matched_data_paths,
-            # 'mask_path': mask_path_list
-        }
-    )
+    data={
+        'basename': basenames,
+        'metadata_path': metadata_path_list,
+        'data_path': matched_data_paths,
+        # 'mask_path': mask_path_list
+    }
+)
 
 # Assert that each basename is in both metadata and mask paths
 check_bool = []
@@ -68,7 +70,7 @@ for i, row in metadata_df.iterrows():
     metadata_list.append(metadata)
 
 fin_metadata_df = pd.concat(metadata_list)
-fin_metadata_df = fin_metadata_df.drop_duplicates(subset = 'section_hash')
+fin_metadata_df = fin_metadata_df.drop_duplicates(subset='section_hash')
 
 ##############################
 og_image_path = '/media/storage/svs_tri_files/suggested_regions/TRI_130_163A_40490/images/4_heart_6988590045.png'
@@ -83,13 +85,13 @@ scene = slide.get_scene(0)
 
 wanted_section = eval(sec_metadata.section_bounds.values[0])
 # utils.visualize_sections(
-#     scene, 
-#     [wanted_section], 
+#     scene,
+#     [wanted_section],
 #     )
 img = get_section(scene, wanted_section, down_sample=10)
 
 og_img = plt.imread(og_image_path)
-fig, ax = plt.subplots(1,2, figsize=(10,5))
+fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 ax[0].imshow(og_img)
 ax[1].imshow(img)
 ax[0].set_title('Original Image')
