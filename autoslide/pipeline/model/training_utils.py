@@ -214,12 +214,15 @@ def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
         aug_images: List of augmented images
         aug_masks: List of augmented masks
     """
+    print(f'Starting dataset augmentation with {len(images)} original images...')
     aug_images = images.copy()
     aug_masks = masks.copy()
 
     num_orig = len(images)
     num_neg = int(num_orig * neg_ratio)
     num_art = int(num_orig * art_ratio)
+
+    print(f'Will generate {num_neg} negative samples and {num_art} artificial vessel samples')
 
     # Generate negative samples
     print('Generating negative samples...')
@@ -235,6 +238,7 @@ def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
         aug_images.append(art_imgs)
         aug_masks.append(art_msks)
 
+    print(f'Dataset augmentation complete. Total images: {len(aug_images)} (original: {num_orig}, negative: {num_neg}, artificial: {num_art})')
     return aug_images, aug_masks
 
 
@@ -475,13 +479,23 @@ def initialize_model():
     Returns:
         torchvision.models.detection.MaskRCNN: Configured Mask R-CNN model
     """
+    print('Initializing Mask R-CNN model...')
     model = torchvision.models.detection.maskrcnn_resnet50_fpn()
+    
+    # Configure for binary classification (background + vessel)
+    num_classes = 2
     in_features = model.roi_heads.box_predictor.cls_score.in_features
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 2)
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    
     in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
     hidden_layer = 256
     model.roi_heads.mask_predictor = MaskRCNNPredictor(
-        in_features_mask, hidden_layer, 2)
+        in_features_mask, hidden_layer, num_classes)
+    
+    print(f'Model configured for {num_classes} classes (background + vessel)')
+    print(f'Box predictor input features: {in_features}')
+    print(f'Mask predictor input features: {in_features_mask}, hidden layer: {hidden_layer}')
+    
     return model
 
 
@@ -520,8 +534,11 @@ def split_train_val(image_names, mask_names, train_ratio=0.9):
         tuple: (train_imgs, train_masks, val_imgs, val_masks) -
                Lists of filenames for training and validation
     """
+    print(f'Splitting dataset: {len(image_names)} total images with {train_ratio:.1%} for training')
     num = int(train_ratio * len(image_names))
     num = num if num % 2 == 0 else num + 1
+    print(f'Adjusted training set size to {num} (even number for batch processing)')
+    
     train_imgs_inds = np.random.choice(
         range(len(image_names)), num, replace=False)
     val_imgs_inds = np.setdiff1d(range(len(image_names)), train_imgs_inds)
@@ -557,6 +574,7 @@ def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_im
         tuple: (aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names) -
                Directories and lists of augmented image and mask filenames
     """
+    print('Checking for existing augmented data...')
     aug_img_dir = os.path.join(labelled_data_dir, 'augmented_images/')
     aug_mask_dir = os.path.join(labelled_data_dir, 'augmented_masks/')
 
@@ -565,11 +583,15 @@ def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_im
         print("Augmented images already exist. Skipping augmentation...")
         aug_img_names = sorted(os.listdir(aug_img_dir))
         aug_mask_names = sorted(os.listdir(aug_mask_dir))
+        print(f'Loaded {len(aug_img_names)} existing augmented images')
     else:
         # Create augmented dataset paths
         print("Creating augmented dataset...")
         n_augmented = len(train_imgs) * 10
+        print(f'Will create {n_augmented} augmented samples from {len(train_imgs)} training images')
+        
         # Load a few images to augment
+        print('Loading base images for augmentation...')
         aug_img_list = []
         aug_mask_list = []
         for i in np.random.choice(range(len(train_imgs)), n_augmented, replace=True):
@@ -583,12 +605,13 @@ def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_im
             aug_img_list, aug_mask_list, neg_ratio=0.3, art_ratio=0.5)
 
         # Save augmented images and masks
+        print('Saving augmented images to disk...')
         os.makedirs(aug_img_dir, exist_ok=True)
         os.makedirs(aug_mask_dir, exist_ok=True)
 
         aug_img_names = []
         aug_mask_names = []
-        for i, (img, mask) in enumerate(tqdm(zip(aug_images, aug_masks))):
+        for i, (img, mask) in enumerate(tqdm(zip(aug_images, aug_masks), desc='Saving augmented data')):
             img_name = f'aug_{i:03}.png'
             mask_name = f'aug_{i:03}_mask.png'
 
@@ -599,10 +622,14 @@ def load_or_create_augmented_data(labelled_data_dir, img_dir, mask_dir, train_im
 
             aug_img_names.append(img_name)
             aug_mask_names.append(mask_name)
+        
+        print(f'Successfully created and saved {len(aug_img_names)} augmented images')
 
     # Validate augmented images
+    print('Validating augmented image-mask pairs...')
     for img_name, mask_name in zip(aug_img_names, aug_mask_names):
         assert img_name.split(".")[0] in mask_name
+    print('Validation complete - all image-mask pairs match')
 
     return aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names
 
@@ -695,8 +722,15 @@ def combine_datasets(train_imgs, train_masks, val_imgs, val_masks,
         tuple: (train_imgs, train_masks, val_imgs, val_masks) -
                Lists of combined filenames for training and validation
     """
+    print('Combining datasets...')
+    print(f'Original - Train: {len(train_imgs)}, Val: {len(val_imgs)}')
+    print(f'Augmented: {len(aug_img_names)}, Negative: {len(neg_img_names)}')
+    
     n_aug_train = int(0.9 * len(aug_img_names))
     n_neg_train = int(0.9 * len(neg_img_names))
+    
+    print(f'Splitting augmented data - Train: {n_aug_train}, Val: {len(aug_img_names) - n_aug_train}')
+    print(f'Splitting negative data - Train: {n_neg_train}, Val: {len(neg_img_names) - n_neg_train}')
 
     # Combine datasets
     train_imgs = np.concatenate(
@@ -708,11 +742,15 @@ def combine_datasets(train_imgs, train_masks, val_imgs, val_masks,
     val_masks = np.concatenate(
         [val_masks, aug_mask_names[n_aug_train:], neg_mask_names[n_neg_train:]])
 
+    print(f'Final combined dataset - Train: {len(train_imgs)}, Val: {len(val_imgs)}')
+
     # Check that all images have corresponding masks
+    print('Validating combined dataset image-mask pairs...')
     for img_name, mask_name in zip(train_imgs, train_masks):
         assert img_name.split(".")[0] in mask_name
     for img_name, mask_name in zip(val_imgs, val_masks):
         assert img_name.split(".")[0] in mask_name
+    print('Dataset combination and validation complete')
 
     return train_imgs, train_masks, val_imgs, val_masks
 
@@ -902,6 +940,17 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
     Returns:
         tuple: (train_dl, val_dl) - DataLoader objects for training and validation
     """
+    print('Creating DataLoaders...')
+    batch_size = 2
+    num_workers = 1
+    use_cuda = torch.cuda.is_available()
+    
+    print(f'DataLoader configuration:')
+    print(f'  Batch size: {batch_size}')
+    print(f'  Num workers: {num_workers}')
+    print(f'  CUDA available: {use_cuda}')
+    print(f'  Pin memory: {use_cuda}')
+    
     train_dl = torch.utils.data.DataLoader(
         AugmentedCustDat(
             train_imgs, train_masks,
@@ -910,11 +959,11 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
             neg_image_dir, neg_mask_dir,
             transform
         ),
-        batch_size=2,
+        batch_size=batch_size,
         shuffle=True,  # Changed to True for better training
         collate_fn=custom_collate,
-        num_workers=1,
-        pin_memory=True if torch.cuda.is_available() else False,
+        num_workers=num_workers,
+        pin_memory=use_cuda,
         drop_last=True
     )
 
@@ -926,14 +975,15 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
             neg_image_dir, neg_mask_dir,
             transform
         ),
-        batch_size=2,
+        batch_size=batch_size,
         shuffle=False,
         collate_fn=custom_collate,
-        num_workers=1,
-        pin_memory=True if torch.cuda.is_available() else False,
+        num_workers=num_workers,
+        pin_memory=use_cuda,
         drop_last=True
     )
 
+    print(f'DataLoaders created - Train batches: {len(train_dl)}, Val batches: {len(val_dl)}')
     return train_dl, val_dl
 
 #############################################################################
@@ -955,10 +1005,29 @@ def setup_training(model, device):
     Returns:
         torch.optim.Optimizer: Configured optimizer for training
     """
+    print(f'Setting up training on device: {device}')
     model.to(device)
+    
     params = [p for p in model.parameters() if p.requires_grad]
+    print(f'Number of trainable parameters: {len(params)}')
+    
+    # Count total parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f'Total parameters: {total_params:,}')
+    print(f'Trainable parameters: {trainable_params:,}')
+    
+    lr = 0.005
+    momentum = 0.9
+    weight_decay = 0.0005
+    
+    print(f'Optimizer configuration:')
+    print(f'  Learning rate: {lr}')
+    print(f'  Momentum: {momentum}')
+    print(f'  Weight decay: {weight_decay}')
+    
     optimizer = torch.optim.SGD(
-        params, lr=0.005, momentum=0.9, weight_decay=0.0005)
+        params, lr=lr, momentum=momentum, weight_decay=weight_decay)
 
     return optimizer
 
@@ -1125,15 +1194,21 @@ def evaluate_model(model, val_imgs, val_masks, neg_img_names, neg_mask_names,
         device (torch.device): Device to run the model on (CPU or GPU)
         plot_dir (str): Directory to save the visualizations
     """
+    print('Starting model evaluation...')
     model.eval()
 
     pred_out_path = os.path.join(plot_dir, 'pred_plots')
     os.makedirs(pred_out_path, exist_ok=True)
+    print(f'Prediction plots will be saved to: {pred_out_path}')
 
     transform = T.ToTensor()
 
     # Evaluate on validation set
-    for img_name, mask_name in tqdm(zip(val_imgs, val_masks), total=len(val_imgs)):
+    print(f'Evaluating on {len(val_imgs)} validation images...')
+    predictions_with_masks = 0
+    predictions_without_masks = 0
+    
+    for img_name, mask_name in tqdm(zip(val_imgs, val_masks), total=len(val_imgs), desc='Validation evaluation'):
         if 'aug_' in img_name:
             img = Image.open(aug_img_dir + img_name).convert("RGB")
             mask = Image.open(aug_mask_dir + mask_name)
@@ -1182,11 +1257,18 @@ def evaluate_model(model, val_imgs, val_masks, neg_img_names, neg_mask_names,
             plt.savefig(pred_out_path +
                         f'/{img_name.split(".")[0]}_mean_example_mask.png')
             plt.close()
-            print('No predicted mask')
+            predictions_without_masks += 1
+
+    print(f'Validation evaluation complete:')
+    print(f'  Images with predicted masks: {predictions_with_masks}')
+    print(f'  Images without predicted masks: {predictions_without_masks}')
 
     # Evaluate on negative examples
-    for i, (img_name, mask_name) in enumerate(tqdm(zip(neg_img_names, neg_mask_names), total=len(neg_img_names))):
-        print(img_name)
+    print(f'Evaluating on {len(neg_img_names)} negative images...')
+    neg_predictions_with_masks = 0
+    neg_predictions_without_masks = 0
+    
+    for i, (img_name, mask_name) in enumerate(tqdm(zip(neg_img_names, neg_mask_names), total=len(neg_img_names), desc='Negative evaluation')):
         if 'aug_' in img_name:
             img = Image.open(aug_img_dir + img_name).convert("RGB")
             mask = Image.open(aug_mask_dir + mask_name)
@@ -1235,7 +1317,12 @@ def evaluate_model(model, val_imgs, val_masks, neg_img_names, neg_mask_names,
             plt.savefig(pred_out_path +
                         f'/{img_name.split(".")[0]}_mean_example_mask.png')
             plt.close()
-            print('No predicted mask')
+            neg_predictions_without_masks += 1
+    
+    print(f'Negative evaluation complete:')
+    print(f'  Negative images with predicted masks: {neg_predictions_with_masks}')
+    print(f'  Negative images without predicted masks: {neg_predictions_without_masks}')
+    print(f'Model evaluation finished. All plots saved to {pred_out_path}')
 
 
 def load_model(model, path, device):
