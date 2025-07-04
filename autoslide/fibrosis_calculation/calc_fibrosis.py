@@ -23,6 +23,7 @@ import cv2
 def gen_fibrosis_mask(
         image,
         config,
+        vessel_mask=None,
 ):
     """
     Generate a mask for fibrosis in the image based on the provided configuration.
@@ -30,10 +31,17 @@ def gen_fibrosis_mask(
     Parameters:
     - image: The input image to analyze.
     - config: Configuration dictionary containing parameters for fibrosis detection.
+    - vessel_mask: Optional mask for blood vessels, not used in this example.
 
     Returns:
     - mask: A binary mask where fibrosis is detected.
     """
+
+    # Not implemented error for vessel_mask
+    if vessel_mask is not None:
+        raise NotImplementedError(
+            "Vessel mask functionality is not implemented yet.")
+
     # Convert image to HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
 
@@ -61,12 +69,28 @@ def quantify_fibrosis(
         image,
         mask=None,
         config=None,
+        vessel_mask=None,
 ):
     """
     Quantify fibrosis in an image using a mask if provided.
+
+    Parameters:
+        - image: The input image to analyze.
+        - mask: Optional binary mask where fibrosis is detected.
+        - config: Configuration dictionary containing parameters for fibrosis detection.
+        - vessel_mask: Optional mask for blood vessels, not used in this example.
+
+    Returns:
+        - A dictionary containing the fibrosis area, total area, and fibrosis percentage.
+
     """
+    # Not implemented error for vessel_mask
+    if vessel_mask is not None:
+        raise NotImplementedError(
+            "Vessel mask functionality is not implemented yet.")
+
     if mask is None:
-        mask = gen_fibrosis_mask(image, config)
+        mask = gen_fibrosis_mask(image, config,)  # vessel_mask=vessel_mask)
 
     # Placeholder for actual fibrosis quantification logic
     fibrosis_area = np.sum(mask)  # Example: count pixels in the mask
