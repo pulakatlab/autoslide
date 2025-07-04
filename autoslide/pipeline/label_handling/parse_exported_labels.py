@@ -9,7 +9,8 @@ from autoslide import config
 
 # Get directories from config
 data_dir = config['data_dir']
-export_json_path = os.path.join(data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
+export_json_path = os.path.join(
+    data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
 
 export_df = pd.read_json(export_json_path, lines=True)
 # export_df = pd.DataFrame(export_df['data_row'].values.tolist())
@@ -37,18 +38,18 @@ for row_ind in trange(len(export_df)):
                 object_num_list.append(i)
 
 polygon_df = pd.DataFrame(
-        {
-            'filename':filename_list, 
-            'polygon':polygon_list,
-            'object_num':object_num_list
-            }
-        )
+    {
+        'filename': filename_list,
+        'polygon': polygon_list,
+        'object_num': object_num_list
+    }
+)
 
 # Find filepaths and plot overlays
 filenames = polygon_df['filename'].unique()
 path_list = []
 for this_name in filenames:
-    # Search for this_name in data_dir 
+    # Search for this_name in data_dir
     basename = os.path.basename(this_name)
     glob_str = os.path.join(data_dir, '**', basename)
     filepaths = glob(glob_str, recursive=True)
@@ -62,7 +63,7 @@ polygon_df['filepath'] = polygon_df['filename'].map(path_map)
 
 polygon_df = polygon_df.dropna()
 
-# Copy all images to a directory 
+# Copy all images to a directory
 copy_dir = os.path.join(data_dir, 'labelled_images', 'images')
 os.makedirs(copy_dir, exist_ok=True)
 for this_name, this_path in path_map.items():
@@ -89,12 +90,12 @@ os.makedirs(test_plot_dir, exist_ok=True)
 polygon_groups = polygon_df.groupby('filename')
 for ind, this_group in tqdm(polygon_groups):
     # this_row = polygon_df.iloc[ind]
-    this_filepath = this_group.iloc[0]['filepath'] 
+    this_filepath = this_group.iloc[0]['filepath']
     this_filename = os.path.basename(this_group.iloc[0]['filename'])
     filename_stem = os.path.splitext(this_filename)[0]
     img_list = []
-    for this_row in this_group.iterrows(): 
-        this_polygon = this_row[1]['polygon'] 
+    for this_row in this_group.iterrows():
+        this_polygon = this_row[1]['polygon']
         this_obj_num = this_row[1]['object_num']
         # this_polygon = this_row['polygon']
         this_img = plt.imread(this_filepath)
@@ -106,23 +107,25 @@ for ind, this_group in tqdm(polygon_groups):
         # height = ?
         width = this_img.shape[1]
         height = this_img.shape[0]
-        polygon = [(x,y) for x,y in zip(poly_x, poly_y)]
+        polygon = [(x, y) for x, y in zip(poly_x, poly_y)]
         img = Image.new('L', (width, height), 0)
-        ImageDraw.Draw(img).polygon(polygon, outline= this_obj_num+1, fill=this_obj_num+1)
+        ImageDraw.Draw(img).polygon(
+            polygon, outline=this_obj_num+1, fill=this_obj_num+1)
         img_list.append(img)
     summed_img = np.sum(np.array(img_list), axis=0)
     summed_img = summed_img / np.max(summed_img)
     mask = np.array(summed_img)*255
     mask = mask.astype(np.uint8)
 
-    fig, ax = plt.subplots(1,2, figsize=(10,5))
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     ax[0].imshow(this_img)
     ax[1].imshow(summed_img)
     # plt.show()
     fig.savefig(os.path.join(test_plot_dir, filename_stem + '.png'))
     plt.close(fig)
 
-    mask_filename = os.path.basename(this_filepath).replace('.png', '_mask.png')
+    mask_filename = os.path.basename(
+        this_filepath).replace('.png', '_mask.png')
     mask_filepath = os.path.join(mask_dir, mask_filename)
     Image.fromarray(mask).save(mask_filepath)
 
@@ -143,7 +146,7 @@ del_mask_count = 0
 for this_mask_path in mask_paths:
     this_mask_name = os.path.basename(this_mask_path)
     if this_mask_name not in wanted_mask_names:
-        os.remove(this_mask_path) 
+        os.remove(this_mask_path)
         print(f'Deleted {this_mask_path}')
         del_mask_count += 1
 
@@ -151,6 +154,6 @@ del_img_count = 0
 for this_img_path in img_paths:
     this_img_name = os.path.basename(this_img_path)
     if this_img_name not in val_basenames:
-        os.remove(this_img_path) 
+        os.remove(this_img_path)
         print(f'Deleted {this_img_path}')
         del_img_count += 1

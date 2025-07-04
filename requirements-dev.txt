@@ -2,3 +2,4 @@ labelbox[data]
 dvc>=2.0.0
 dvc-s3>=2.0.0
 pytest
+pre-commit
