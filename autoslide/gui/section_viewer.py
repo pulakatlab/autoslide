@@ -268,6 +268,18 @@ class SectionViewer:
                        variable=self.include_image_var,
                        command=self.on_property_change).pack(anchor=tk.W, pady=2)
         
+        # Downsampling control
+        downsample_frame = ttk.Frame(controls_frame)
+        downsample_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Label(downsample_frame, text="Downsample Factor:").pack(anchor=tk.W)
+        self.downsample_var = tk.IntVar(value=4)
+        downsample_spinbox = ttk.Spinbox(downsample_frame, from_=1, to=20, 
+                                        textvariable=self.downsample_var, width=10,
+                                        command=self.on_downsample_change)
+        downsample_spinbox.pack(anchor=tk.W, pady=2)
+        downsample_spinbox.bind('<Return>', lambda e: self.on_downsample_change())
+        
         # Action buttons
         button_frame = ttk.Frame(controls_frame)
         button_frame.pack(fill=tk.X, padx=5, pady=10)
@@ -357,16 +369,24 @@ class SectionViewer:
             return
             
         try:
-            # Get section image
+            # Get section image with downsampling
             section_hash = self.current_section['section_hash']
-            section, section_details = get_section_from_hash(section_hash, self.sections_df, down_sample=1)
+            downsample_factor = self.downsample_var.get()
+            section, section_details = get_section_from_hash(section_hash, self.sections_df, down_sample=downsample_factor)
             
             self.section_image = section
             
             # Look for prediction mask
             mask_path = self.find_prediction_mask(section_hash)
             if mask_path and os.path.exists(mask_path):
-                self.section_mask = np.array(Image.open(mask_path))
+                mask = np.array(Image.open(mask_path))
+                # Downsample mask to match section image if needed
+                if downsample_factor > 1:
+                    new_height = mask.shape[0] // downsample_factor
+                    new_width = mask.shape[1] // downsample_factor
+                    self.section_mask = cv2.resize(mask, (new_width, new_height), interpolation=cv2.INTER_NEAREST)
+                else:
+                    self.section_mask = mask
             else:
                 self.section_mask = None
             
@@ -596,6 +616,11 @@ class SectionViewer:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save changes: {str(e)}")
     
+    def on_downsample_change(self):
+        """Handle changes to downsample factor"""
+        if self.current_section is not None:
+            self.load_section_image()
+    
     def refresh_images(self):
         """Refresh the current images"""
         if self.current_section is not None:
@@ -653,20 +678,30 @@ class SectionViewer:
         h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # Display full-size image
-        if isinstance(self.section_image, np.ndarray):
-            if self.section_image.dtype != np.uint8:
-                img_normalized = ((self.section_image - self.section_image.min()) / 
-                                (self.section_image.max() - self.section_image.min()) * 255).astype(np.uint8)
+        # Load full-size image (without downsampling)
+        try:
+            section_hash = self.current_section['section_hash']
+            full_section, _ = get_section_from_hash(section_hash, self.sections_df, down_sample=1)
+            
+            if isinstance(full_section, np.ndarray):
+                if full_section.dtype != np.uint8:
+                    img_normalized = ((full_section - full_section.min()) / 
+                                    (full_section.max() - full_section.min()) * 255).astype(np.uint8)
+                else:
+                    img_normalized = full_section
+                pil_image = Image.fromarray(img_normalized)
             else:
-                img_normalized = self.section_image
-            pil_image = Image.fromarray(img_normalized)
-        else:
-            pil_image = self.section_image
-        
-        # Add overlay if available
-        if self.section_mask is not None:
-            pil_image = self.add_prediction_overlay(pil_image, self.section_mask)
+                pil_image = full_section
+            
+            # Load full-size mask if available
+            mask_path = self.find_prediction_mask(section_hash)
+            if mask_path and os.path.exists(mask_path):
+                full_mask = np.array(Image.open(mask_path))
+                pil_image = self.add_prediction_overlay(pil_image, full_mask)
+                
+        except Exception as e:
+            print(f"Error loading full-size image: {e}")
+            return
         
         photo = ImageTk.PhotoImage(pil_image)
         canvas.create_image(0, 0, image=photo, anchor=tk.NW)
