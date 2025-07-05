@@ -152,7 +152,7 @@ if __name__ == "__main__":
 
     fib_img = section.copy()
     # Apply the mask to the original image
-    fib_img[~mask] = 255  # Set non-fibrosis areas to black
+    fib_img[fibrosis_mask == 0] = 255  # Set non-fibrosis areas to black
 
     fig, ax = plt.subplots(1, 3, figsize=(10, 5),
                            sharex=True, sharey=True, dpi=100)
