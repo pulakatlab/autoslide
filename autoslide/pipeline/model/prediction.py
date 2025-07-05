@@ -2,7 +2,7 @@
 For prediction on every section, perform prediction on a radius larger than the image
 and aggregate the predictions.
 """
-from autoslide.pipeline.utils import visualize_sections, get_section, gen_step_windows
+from autoslide.pipeline import utils
 import os
 import slideio
 from matplotlib import pyplot as plt
@@ -26,19 +26,6 @@ from autoslide import config
 data_dir = config['data_dir']
 artifacts_dir = config['artifacts_dir']
 plot_dir = config['plot_dirs']
-
-# Import utilities directly
-
-# Create a utils namespace for backward compatibility
-
-
-class Utils:
-    visualize_sections = visualize_sections
-    get_section = get_section
-    gen_step_windows = gen_step_windows
-
-
-utils = Utils()
 
 ##############################
 mask_dir = os.path.join(data_dir, 'final_annotation')
