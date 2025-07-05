@@ -348,8 +348,8 @@ class SectionViewer:
         self.section_info_text.insert(1.0, info_text)
         
         # Update toggle states
-        self.mask_validated_var.set(self.current_section.get('mask_validated', False))
-        self.include_image_var.set(self.current_section.get('include_image', True))
+        self.mask_validated_var.set(bool(self.current_section.get('mask_validated', False)))
+        self.include_image_var.set(bool(self.current_section.get('include_image', True)))
     
     def load_section_image(self):
         """Load and display the section image with prediction overlay"""
