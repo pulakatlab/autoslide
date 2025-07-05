@@ -591,6 +591,46 @@ class SectionViewer:
         
         # Update the dataframe widget
         self.dataframe_widget.update_data(self.sections_df)
+        
+        # Immediately write changes back to the section frame CSV
+        self.save_section_changes(self.current_section)
+    
+    def save_section_changes(self, section):
+        """Save changes for a specific section back to its CSV file"""
+        try:
+            basename = section['basename']
+            
+            # Find the corresponding CSV file
+            csv_files = glob(os.path.join(config['data_dir'], 'suggested_regions', 
+                                        f"*{basename}*", f"*{basename}*_section_frame.csv"))
+            
+            if csv_files:
+                csv_path = csv_files[0]
+                
+                # Load the original CSV
+                original_df = pd.read_csv(csv_path)
+                
+                # Get all sections for this basename from our current dataframe
+                basename_sections = self.sections_df[self.sections_df['basename'] == basename]
+                
+                # Update the original dataframe with our changes
+                for _, updated_section in basename_sections.iterrows():
+                    section_hash = updated_section['section_hash']
+                    mask = original_df['section_hash'] == section_hash
+                    
+                    if mask.any():
+                        # Update existing columns
+                        for col in ['mask_validated', 'include_image']:
+                            if col in updated_section:
+                                if col not in original_df.columns:
+                                    original_df[col] = False  # Initialize column if it doesn't exist
+                                original_df.loc[mask, col] = updated_section[col]
+                
+                # Save back to CSV
+                original_df.to_csv(csv_path, index=False)
+                
+        except Exception as e:
+            print(f"Error saving section changes: {e}")
     
     def save_changes(self):
         """Save changes back to the CSV files"""
