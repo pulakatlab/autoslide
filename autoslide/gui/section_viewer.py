@@ -507,19 +507,19 @@ class SectionViewer:
                     # Scale bounds to match downsampled image
                     scaled_bounds = [b // down_sample for b in bounds]
                     
-                    # Choose color based on whether this is the current section
+                    # Choose color and style based on whether this is the current section
                     if section['section_hash'] == current_hash:
-                        color = (255, 0, 0)  # Red for current section
-                        width = 3
+                        # Fill current section with red and add red outline
+                        draw.rectangle(
+                            [scaled_bounds[1], scaled_bounds[0], scaled_bounds[3], scaled_bounds[2]], 
+                            fill=(255, 0, 0, 128), outline=(255, 0, 0), width=3
+                        )
                     else:
-                        color = (0, 255, 0)  # Green for other sections
-                        width = 2
-                    
-                    # Draw rectangle
-                    draw.rectangle(
-                        [scaled_bounds[1], scaled_bounds[0], scaled_bounds[3], scaled_bounds[2]], 
-                        outline=color, width=width
-                    )
+                        # Just outline for other sections
+                        draw.rectangle(
+                            [scaled_bounds[1], scaled_bounds[0], scaled_bounds[3], scaled_bounds[2]], 
+                            outline=(0, 255, 0), width=2
+                        )
                     
                 except Exception as e:
                     print(f"Error drawing section {section['section_hash']}: {e}")
