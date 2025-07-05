@@ -128,6 +128,73 @@ def calculate_pixel_accuracy(pred_mask, true_mask, threshold=0.5):
     return correct_pixels / total_pixels
 
 
+def calculate_confidence_metrics(pred_mask, true_mask):
+    """
+    Calculate prediction confidence inside and outside labeled bounds.
+
+    Args:
+        pred_mask (numpy.ndarray): Predicted mask (0-1 or 0-255)
+        true_mask (numpy.ndarray): Ground truth mask (0-1 or 0-255)
+
+    Returns:
+        dict: Dictionary containing confidence metrics
+    """
+    # Normalize prediction mask to 0-1 range
+    if pred_mask.max() > 1:
+        pred_mask_norm = pred_mask / 255.0
+    else:
+        pred_mask_norm = pred_mask.copy()
+
+    # Normalize true mask to 0-1 range
+    if true_mask.max() > 1:
+        true_mask_norm = true_mask / 255.0
+    else:
+        true_mask_norm = true_mask.copy()
+
+    # Create binary masks for labeled regions
+    vessel_regions = (true_mask_norm > 0.5).astype(bool)
+    background_regions = (true_mask_norm <= 0.5).astype(bool)
+
+    # Calculate confidence metrics
+    results = {}
+    
+    # Confidence inside vessel regions (should be high)
+    if np.any(vessel_regions):
+        vessel_confidences = pred_mask_norm[vessel_regions]
+        results['mean_confidence_in_vessels'] = np.mean(vessel_confidences)
+        results['std_confidence_in_vessels'] = np.std(vessel_confidences)
+        results['median_confidence_in_vessels'] = np.median(vessel_confidences)
+        results['num_vessel_pixels'] = len(vessel_confidences)
+    else:
+        results['mean_confidence_in_vessels'] = 0.0
+        results['std_confidence_in_vessels'] = 0.0
+        results['median_confidence_in_vessels'] = 0.0
+        results['num_vessel_pixels'] = 0
+
+    # Confidence outside vessel regions (should be low)
+    if np.any(background_regions):
+        background_confidences = pred_mask_norm[background_regions]
+        results['mean_confidence_in_background'] = np.mean(background_confidences)
+        results['std_confidence_in_background'] = np.std(background_confidences)
+        results['median_confidence_in_background'] = np.median(background_confidences)
+        results['num_background_pixels'] = len(background_confidences)
+    else:
+        results['mean_confidence_in_background'] = 0.0
+        results['std_confidence_in_background'] = 0.0
+        results['median_confidence_in_background'] = 0.0
+        results['num_background_pixels'] = 0
+
+    # Calculate confidence separation (higher is better)
+    if results['num_vessel_pixels'] > 0 and results['num_background_pixels'] > 0:
+        results['confidence_separation'] = (
+            results['mean_confidence_in_vessels'] - results['mean_confidence_in_background']
+        )
+    else:
+        results['confidence_separation'] = 0.0
+
+    return results
+
+
 #############################################################################
 # Model Prediction Functions
 #############################################################################
@@ -179,6 +246,12 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
     dice_scores = []
     pixel_accuracies = []
     prediction_times = []
+    
+    # Confidence metrics storage
+    confidence_in_vessels = []
+    confidence_in_background = []
+    confidence_separations = []
+    per_image_confidence_metrics = []
 
     # Evaluate each sample
     for img_name, mask_name in tqdm(zip(eval_imgs, eval_masks),
@@ -205,12 +278,27 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
             iou = calculate_iou(pred_mask, true_mask)
             dice = calculate_dice_coefficient(pred_mask, true_mask)
             pixel_acc = calculate_pixel_accuracy(pred_mask, true_mask)
+            
+            # Calculate confidence metrics
+            confidence_metrics = calculate_confidence_metrics(pred_mask, true_mask)
 
             # Store results
             iou_scores.append(iou)
             dice_scores.append(dice)
             pixel_accuracies.append(pixel_acc)
             prediction_times.append(pred_time)
+            
+            # Store confidence metrics
+            confidence_in_vessels.append(confidence_metrics['mean_confidence_in_vessels'])
+            confidence_in_background.append(confidence_metrics['mean_confidence_in_background'])
+            confidence_separations.append(confidence_metrics['confidence_separation'])
+            
+            # Store per-image confidence metrics with image name
+            per_image_metrics = confidence_metrics.copy()
+            per_image_metrics['image_name'] = img_name
+            per_image_metrics['iou'] = iou
+            per_image_metrics['dice'] = dice
+            per_image_confidence_metrics.append(per_image_metrics)
 
         except Exception as e:
             print(f'Error processing {img_name}: {e}')
@@ -235,7 +323,22 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
         'iou_scores': iou_scores,
         'dice_scores': dice_scores,
         'pixel_accuracies': pixel_accuracies,
-        'prediction_times': prediction_times
+        'prediction_times': prediction_times,
+        
+        # Confidence metrics
+        'mean_confidence_in_vessels': np.mean(confidence_in_vessels),
+        'std_confidence_in_vessels': np.std(confidence_in_vessels),
+        'median_confidence_in_vessels': np.median(confidence_in_vessels),
+        'mean_confidence_in_background': np.mean(confidence_in_background),
+        'std_confidence_in_background': np.std(confidence_in_background),
+        'median_confidence_in_background': np.median(confidence_in_background),
+        'mean_confidence_separation': np.mean(confidence_separations),
+        'std_confidence_separation': np.std(confidence_separations),
+        'median_confidence_separation': np.median(confidence_separations),
+        'confidence_in_vessels': confidence_in_vessels,
+        'confidence_in_background': confidence_in_background,
+        'confidence_separations': confidence_separations,
+        'per_image_confidence_metrics': per_image_confidence_metrics
     }
 
     return results
@@ -391,7 +494,62 @@ def plot_evaluation_results(accuracy_results, speed_results, plot_dir):
                 dpi=300, bbox_inches='tight')
     plt.close()
 
-    # Plot 2: Speed benchmark results
+    # Plot 2: Confidence metrics
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+
+    # Confidence in vessel regions
+    axes[0, 0].hist(accuracy_results['confidence_in_vessels'],
+                    bins=30, alpha=0.7, color='red')
+    axes[0, 0].axvline(accuracy_results['mean_confidence_in_vessels'], color='blue', linestyle='--',
+                       label=f'Mean: {accuracy_results["mean_confidence_in_vessels"]:.3f}')
+    axes[0, 0].axvline(accuracy_results['median_confidence_in_vessels'], color='green', linestyle='--',
+                       label=f'Median: {accuracy_results["median_confidence_in_vessels"]:.3f}')
+    axes[0, 0].set_xlabel('Confidence Score')
+    axes[0, 0].set_ylabel('Frequency')
+    axes[0, 0].set_title('Confidence in Vessel Regions')
+    axes[0, 0].legend()
+    axes[0, 0].grid(True, alpha=0.3)
+
+    # Confidence in background regions
+    axes[0, 1].hist(accuracy_results['confidence_in_background'],
+                    bins=30, alpha=0.7, color='blue')
+    axes[0, 1].axvline(accuracy_results['mean_confidence_in_background'], color='red', linestyle='--',
+                       label=f'Mean: {accuracy_results["mean_confidence_in_background"]:.3f}')
+    axes[0, 1].axvline(accuracy_results['median_confidence_in_background'], color='green', linestyle='--',
+                       label=f'Median: {accuracy_results["median_confidence_in_background"]:.3f}')
+    axes[0, 1].set_xlabel('Confidence Score')
+    axes[0, 1].set_ylabel('Frequency')
+    axes[0, 1].set_title('Confidence in Background Regions')
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
+
+    # Confidence separation
+    axes[1, 0].hist(accuracy_results['confidence_separations'],
+                    bins=30, alpha=0.7, color='purple')
+    axes[1, 0].axvline(accuracy_results['mean_confidence_separation'], color='red', linestyle='--',
+                       label=f'Mean: {accuracy_results["mean_confidence_separation"]:.3f}')
+    axes[1, 0].axvline(accuracy_results['median_confidence_separation'], color='green', linestyle='--',
+                       label=f'Median: {accuracy_results["median_confidence_separation"]:.3f}')
+    axes[1, 0].set_xlabel('Confidence Separation')
+    axes[1, 0].set_ylabel('Frequency')
+    axes[1, 0].set_title('Confidence Separation (Vessel - Background)')
+    axes[1, 0].legend()
+    axes[1, 0].grid(True, alpha=0.3)
+
+    # Scatter plot: Confidence separation vs IoU
+    axes[1, 1].scatter(accuracy_results['confidence_separations'], 
+                       accuracy_results['iou_scores'], alpha=0.6)
+    axes[1, 1].set_xlabel('Confidence Separation')
+    axes[1, 1].set_ylabel('IoU Score')
+    axes[1, 1].set_title('Confidence Separation vs IoU')
+    axes[1, 1].grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(eval_plot_dir, 'confidence_metrics.png'),
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # Plot 3: Speed benchmark results
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 
     # Speed distribution
@@ -563,6 +721,22 @@ def print_evaluation_summary(accuracy_results, speed_results):
         f"    Mean: {accuracy_results['mean_pixel_accuracy']:.4f} ± {accuracy_results['std_pixel_accuracy']:.4f}")
     print(f"    Median: {accuracy_results['median_pixel_accuracy']:.4f}")
 
+    print(f"\nCONFIDENCE METRICS:")
+    print(f"  Confidence in Vessel Regions:")
+    print(
+        f"    Mean: {accuracy_results['mean_confidence_in_vessels']:.4f} ± {accuracy_results['std_confidence_in_vessels']:.4f}")
+    print(f"    Median: {accuracy_results['median_confidence_in_vessels']:.4f}")
+
+    print(f"  Confidence in Background Regions:")
+    print(
+        f"    Mean: {accuracy_results['mean_confidence_in_background']:.4f} ± {accuracy_results['std_confidence_in_background']:.4f}")
+    print(f"    Median: {accuracy_results['median_confidence_in_background']:.4f}")
+
+    print(f"  Confidence Separation (Vessel - Background):")
+    print(
+        f"    Mean: {accuracy_results['mean_confidence_separation']:.4f} ± {accuracy_results['std_confidence_separation']:.4f}")
+    print(f"    Median: {accuracy_results['median_confidence_separation']:.4f}")
+
     print(f"\nSPEED METRICS (n={speed_results['num_samples']} samples):")
     print(f"  Prediction Time:")
     print(
@@ -668,6 +842,19 @@ def main():
                 accuracy_results['pixel_accuracies'])
         np.save(os.path.join(results_dir, 'prediction_times.npy'),
                 accuracy_results['prediction_times'])
+
+        # Save confidence results
+        np.save(os.path.join(results_dir, 'confidence_in_vessels.npy'),
+                accuracy_results['confidence_in_vessels'])
+        np.save(os.path.join(results_dir, 'confidence_in_background.npy'),
+                accuracy_results['confidence_in_background'])
+        np.save(os.path.join(results_dir, 'confidence_separations.npy'),
+                accuracy_results['confidence_separations'])
+
+        # Save per-image confidence metrics as a CSV-like format
+        import json
+        with open(os.path.join(results_dir, 'per_image_confidence_metrics.json'), 'w') as f:
+            json.dump(accuracy_results['per_image_confidence_metrics'], f, indent=2)
 
         # Save speed results
         np.save(os.path.join(results_dir, 'speed_benchmark_times.npy'),
