@@ -409,7 +409,10 @@ class SectionViewer:
         else:
             pil_image = self.section_image
         
-        # Add prediction overlay if available
+        # Store original size before any resizing
+        original_size = pil_image.size
+        
+        # Add prediction overlay if available (before resizing for display)
         if self.section_mask is not None:
             pil_image = self.add_prediction_overlay(pil_image, self.section_mask)
         
@@ -435,11 +438,19 @@ class SectionViewer:
         # Convert PIL to numpy for processing
         img_array = np.array(image)
         
-        # Create binary mask
-        if mask.max() > 1:
-            binary_mask = (mask > 127).astype(np.uint8)
+        # Ensure mask dimensions match image dimensions
+        if mask.shape[:2] != img_array.shape[:2]:
+            # Resize mask to match image dimensions
+            mask_resized = cv2.resize(mask, (img_array.shape[1], img_array.shape[0]), 
+                                    interpolation=cv2.INTER_NEAREST)
         else:
-            binary_mask = mask.astype(np.uint8)
+            mask_resized = mask
+        
+        # Create binary mask
+        if mask_resized.max() > 1:
+            binary_mask = (mask_resized > 127).astype(np.uint8)
+        else:
+            binary_mask = mask_resized.astype(np.uint8)
         
         # Find contours
         contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
