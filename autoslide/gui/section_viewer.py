@@ -507,19 +507,17 @@ class SectionViewer:
                     # Scale bounds to match downsampled image
                     scaled_bounds = [b // down_sample for b in bounds]
                     
+                    # bounds format is [row_min, col_min, row_max, col_max]
+                    # PIL rectangle expects [x1, y1, x2, y2] where x=col, y=row
+                    x1, y1, x2, y2 = scaled_bounds[1], scaled_bounds[0], scaled_bounds[3], scaled_bounds[2]
+                    
                     # Choose color and style based on whether this is the current section
                     if section['section_hash'] == current_hash:
                         # Fill current section with red and add red outline
-                        draw.rectangle(
-                            [scaled_bounds[1], scaled_bounds[0], scaled_bounds[3], scaled_bounds[2]], 
-                            fill=(255, 0, 0, 128), outline=(255, 0, 0), width=3
-                        )
+                        draw.rectangle([x1, y1, x2, y2], fill=(255, 0, 0, 128), outline=(255, 0, 0), width=3)
                     else:
                         # Just outline for other sections
-                        draw.rectangle(
-                            [scaled_bounds[1], scaled_bounds[0], scaled_bounds[3], scaled_bounds[2]], 
-                            outline=(0, 255, 0), width=2
-                        )
+                        draw.rectangle([x1, y1, x2, y2], outline=(0, 255, 0), width=2)
                     
                 except Exception as e:
                     print(f"Error drawing section {section['section_hash']}: {e}")
