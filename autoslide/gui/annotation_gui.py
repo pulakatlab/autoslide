@@ -250,9 +250,6 @@ class AnnotationGUI:
         # Tab 1: Annotation Editing
         self.setup_editing_tab()
         
-        # Tab 2: Final Annotation
-        self.setup_final_tab()
-        
         # Setup menu
         self.setup_menu()
         
@@ -277,7 +274,7 @@ class AnnotationGUI:
     def setup_editing_tab(self):
         """Setup the annotation editing tab"""
         editing_frame = ttk.Frame(self.notebook)
-        self.notebook.add(editing_frame, text="1. Edit Annotations")
+        self.notebook.add(editing_frame, text="Edit Annotations")
         
         # Top frame for file selection
         edit_file_frame = ttk.LabelFrame(editing_frame, text="Select Processed File")
@@ -317,36 +314,6 @@ class AnnotationGUI:
         self.edit_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.edit_ax.axis('off')
         
-    def setup_final_tab(self):
-        """Setup the final annotation tab"""
-        final_frame = ttk.Frame(self.notebook)
-        self.notebook.add(final_frame, text="2. Finalize Annotation")
-        
-        # File selection
-        final_file_frame = ttk.LabelFrame(final_frame, text="Select File to Finalize")
-        final_file_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        final_controls = ttk.Frame(final_file_frame)
-        final_controls.pack(fill=tk.X, padx=5, pady=5)
-        
-        self.final_files_var = tk.StringVar()
-        self.final_files_combo = ttk.Combobox(final_controls, textvariable=self.final_files_var,
-                                             width=50, state="readonly")
-        self.final_files_combo.pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(final_controls, text="Load for Finalization", 
-                  command=self.load_for_finalization).pack(side=tk.LEFT, padx=5)
-        ttk.Button(final_controls, text="Finalize Annotation", 
-                  command=self.finalize_annotation).pack(side=tk.LEFT, padx=5)
-        
-        # Preview area
-        final_preview_frame = ttk.LabelFrame(final_frame, text="Final Annotation Preview")
-        final_preview_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        self.final_fig, self.final_ax = plt.subplots(1, 1, figsize=(10, 8))
-        self.final_canvas = FigureCanvasTkAgg(self.final_fig, final_preview_frame)
-        self.final_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        self.final_ax.axis('off')
         
     def check_and_process_initial_annotations(self):
         """Check for missing initial annotations and process them automatically"""
@@ -550,6 +517,10 @@ class AnnotationGUI:
         """Handle changes to annotations"""
         self.current_metadata = self.dataframe_widget.get_data()
         self.update_edit_preview()
+        # Automatically save changes
+        self.save_current_annotations()
+        # Automatically finalize annotation
+        self.auto_finalize_annotation()
         
     def update_edit_preview(self):
         """Update the editing preview"""
@@ -592,92 +563,15 @@ class AnnotationGUI:
         
         self.current_metadata.to_csv(csv_path, index=False)
         
-    def load_for_finalization(self):
-        """Load a file for finalization"""
-        selected_file = self.final_files_var.get()
+    def auto_finalize_annotation(self):
+        """Automatically finalize the current annotation"""
+        selected_file = self.processed_files_var.get()
         if not selected_file:
-            messagebox.showwarning("No Selection", "Please select a file to finalize")
-            return
-            
-        try:
-            data_dir = config['data_dir']
-            annot_dir = os.path.join(data_dir, 'initial_annotation')
-            
-            # Load metadata and mask
-            csv_path = os.path.join(annot_dir, selected_file + '.csv')
-            mask_path = os.path.join(annot_dir, selected_file + '.npy')
-            
-            self.current_metadata = pd.read_csv(csv_path)
-            self.current_mask = np.load(mask_path)
-            
-            # Update preview
-            self.update_final_preview()
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load file: {str(e)}")
-            
-    def update_final_preview(self):
-        """Update the final annotation preview"""
-        if self.current_mask is None or self.current_metadata is None:
-            return
-            
-        self.final_ax.clear()
-        
-        # Create final mask with tissue assignments
-        final_mask = self.current_mask.copy()
-        
-        # Create label mapping
-        label_map = {}
-        for _, row in self.current_metadata.iterrows():
-            if not pd.isna(row['tissue_num']):
-                label_map[int(row['label'])] = int(row['tissue_num'])
-        
-        # Apply mapping
-        for old_label, new_label in label_map.items():
-            final_mask[final_mask == old_label] = new_label
-        
-        # Create visualization
-        image_label_overlay = label2rgb(final_mask, image=final_mask > 0, bg_label=0)
-        self.final_ax.imshow(image_label_overlay)
-        
-        # Add tissue labels
-        for _, row in self.current_metadata.iterrows():
-            if not pd.isna(row['tissue_type']) and not pd.isna(row['tissue_num']):
-                centroid = literal_eval(str(row['centroid']))
-                tissue_str = f"{int(row['tissue_num'])}_{row['tissue_type']}"
-                self.final_ax.text(centroid[1], centroid[0], tissue_str,
-                                 color='red', fontsize=12, weight='bold',
-                                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
-        
-        self.final_ax.set_title('Final Annotation')
-        self.final_ax.axis('off')
-        self.final_canvas.draw()
-        
-    def finalize_annotation(self):
-        """Finalize the current annotation"""
-        selected_file = self.final_files_var.get()
-        if not selected_file:
-            messagebox.showwarning("No Selection", "Please select a file to finalize")
             return
             
         if self.current_metadata is None or self.current_mask is None:
-            messagebox.showerror("Error", "No data loaded for finalization")
             return
             
-        # Check that all regions have tissue assignments
-        missing_assignments = self.current_metadata[
-            pd.isna(self.current_metadata['tissue_type']) | 
-            pd.isna(self.current_metadata['tissue_num'])
-        ]
-        
-        if not missing_assignments.empty:
-            response = messagebox.askyesno(
-                "Missing Assignments", 
-                f"{len(missing_assignments)} regions are missing tissue assignments. Continue anyway?"
-            )
-            if not response:
-                return
-        
         try:
             data_dir = config['data_dir']
             fin_annotation_dir = os.path.join(data_dir, 'final_annotation')
@@ -731,10 +625,9 @@ class AnnotationGUI:
                 with open(json_path, 'w') as f:
                     json.dump(json_data, f, indent=4)
             
-            messagebox.showinfo("Success", f"Annotation finalized for {selected_file}")
-            
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to finalize annotation: {str(e)}")
+            print(f"Error auto-finalizing annotation: {str(e)}")
+        
             
     def show_parameters_dialog(self):
         """Show dialog for editing annotation parameters"""
