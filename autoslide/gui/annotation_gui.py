@@ -596,8 +596,8 @@ class AnnotationGUI:
             
             mask_height, mask_width = mask.shape[:2]
             
-            # Determine if rotation is needed based on the image
-            needs_rotation = img_width > img_height
+            # Determine if rotation is needed based on the mask (since that's our reference)
+            needs_rotation = mask_width > mask_height
             
             if needs_rotation:
                 # Rotate both image and mask 90 degrees counterclockwise
@@ -655,17 +655,22 @@ class AnnotationGUI:
                 adjusted_centroid = centroid
             
             # Show initial label number in blue
+            # Note: matplotlib text uses (x, y) coordinates where x=column, y=row
             self.edit_axes[1].text(adjusted_centroid[1], adjusted_centroid[0], str(initial_label),
                                  color='blue', fontsize=12, weight='bold',
-                                 bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8))
+                                 bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8),
+                                 ha='center', va='center')
             
             # Add tissue annotations if they exist
             if not pd.isna(row['tissue_type']):
                 tissue_str = f"{int(row['tissue_num']) if not pd.isna(row['tissue_num']) else '?'}_{row['tissue_type']}"
                 # Offset the tissue annotation slightly to avoid overlap
-                self.edit_axes[1].text(adjusted_centroid[1] + 20, adjusted_centroid[0] + 20, tissue_str,
+                offset_x = 30 if not was_rotated else 30
+                offset_y = 30 if not was_rotated else 30
+                self.edit_axes[1].text(adjusted_centroid[1] + offset_x, adjusted_centroid[0] + offset_y, tissue_str,
                                      color='red', fontsize=10, weight='bold',
-                                     bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+                                     bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+                                     ha='center', va='center')
         
         self.edit_axes[1].set_title('Initial Annotation Mask\n(Blue: Initial Labels, Red: Tissue Annotations)', 
                                   fontsize=14, weight='bold')
@@ -742,6 +747,17 @@ class AnnotationGUI:
             for _, row in self.current_metadata.iterrows():
                 centroid = literal_eval(str(row['centroid']))
                 
+                # Check if the final mask was rotated by comparing dimensions
+                final_mask_rotated = final_mask.shape[1] > final_mask.shape[0] and self.current_mask.shape[0] > self.current_mask.shape[1]
+                
+                # Adjust centroid coordinates if final mask was rotated
+                if final_mask_rotated:
+                    # For 90-degree counterclockwise rotation: (row, col) -> (col, height - row)
+                    original_height = self.current_mask.shape[0]
+                    adjusted_centroid = (centroid[1], original_height - centroid[0])
+                else:
+                    adjusted_centroid = centroid
+                
                 if not pd.isna(row['tissue_type']) and not pd.isna(row['tissue_num']):
                     # Assigned tissue - show tissue number and type
                     tissue_str = f"{int(row['tissue_num'])}_{row['tissue_type']}"
@@ -753,9 +769,10 @@ class AnnotationGUI:
                     text_color = 'orange'
                     bbox_color = 'yellow'
                 
-                ax.text(centroid[1], centroid[0], tissue_str,
+                ax.text(adjusted_centroid[1], adjusted_centroid[0], tissue_str,
                        color=text_color, fontsize=12, weight='bold',
-                       bbox=dict(boxstyle="round,pad=0.3", facecolor=bbox_color, alpha=0.8))
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor=bbox_color, alpha=0.8),
+                       ha='center', va='center')
             
             ax.axis('off')
             
