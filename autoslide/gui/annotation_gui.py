@@ -253,6 +253,9 @@ class AnnotationGUI:
         # Setup menu
         self.setup_menu()
         
+        # Setup status bar
+        self.setup_status_bar()
+        
     def setup_menu(self):
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
@@ -269,6 +272,17 @@ class AnnotationGUI:
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Settings", menu=settings_menu)
         settings_menu.add_command(label="Annotation Parameters", command=self.show_parameters_dialog)
+    
+    def setup_status_bar(self):
+        """Setup the status bar at the bottom of the window"""
+        self.status_frame = ttk.Frame(self.root)
+        self.status_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        self.status_var = tk.StringVar()
+        self.status_var.set("Ready")
+        
+        self.status_label = ttk.Label(self.status_frame, textvariable=self.status_var, relief=tk.SUNKEN)
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2, pady=2)
         
         
     def setup_editing_tab(self):
