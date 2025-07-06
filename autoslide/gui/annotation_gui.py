@@ -53,13 +53,14 @@ class EditableDataFrame:
         tree_frame = ttk.Frame(self.frame)
         tree_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Create treeview
-        columns = list(self.data.columns)
-        self.tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
+        # Create treeview - only show specific columns
+        display_columns = ['label', 'tissue_type', 'tissue_num']
+        self.tree = ttk.Treeview(tree_frame, columns=display_columns, show='headings', height=15)
         
         # Configure columns
-        for col in columns:
-            self.tree.heading(col, text=col)
+        column_titles = {'label': 'Initial Label', 'tissue_type': 'Tissue Type', 'tissue_num': 'Tissue Number'}
+        for col in display_columns:
+            self.tree.heading(col, text=column_titles.get(col, col))
             width = 150 if col in self.editable_columns else 100
             self.tree.column(col, width=width, minwidth=50)
         
@@ -102,10 +103,11 @@ class EditableDataFrame:
         for item in self.tree.get_children():
             self.tree.delete(item)
             
-        # Add data
+        # Add data - only display specific columns
+        display_columns = ['label', 'tissue_type', 'tissue_num']
         for idx, row in self.data.iterrows():
             values = []
-            for col in self.data.columns:
+            for col in display_columns:
                 val = row[col]
                 if pd.isna(val):
                     values.append("")
@@ -125,11 +127,12 @@ class EditableDataFrame:
             return
             
         # Convert column identifier to column name
+        display_columns = ['label', 'tissue_type', 'tissue_num']
         col_index = int(column.replace('#', '')) - 1
-        if col_index < 0 or col_index >= len(self.data.columns):
+        if col_index < 0 or col_index >= len(display_columns):
             return
             
-        col_name = list(self.data.columns)[col_index]
+        col_name = display_columns[col_index]
         
         # Only allow editing of specified columns
         if col_name not in self.editable_columns:
