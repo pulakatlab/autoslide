@@ -708,36 +708,54 @@ class AnnotationGUI:
             tracking_dir = os.path.join(data_dir, 'tracking')
             os.makedirs(fin_annotation_dir, exist_ok=True)
             
-            # Create final mask
-            final_mask = self.current_mask.copy()
+            # Save a copy of the original annotation mask first
+            original_mask_path = os.path.join(fin_annotation_dir, selected_file + '_original.npy')
+            np.save(original_mask_path, self.current_mask)
             
-            # Apply label mapping
-            label_map = {}
+            # Create final mask with tissue number re-coloring
+            final_mask = np.zeros_like(self.current_mask)
+            
+            # Apply label mapping - re-color regions according to tissue numbers
             for _, row in self.current_metadata.iterrows():
+                original_label = int(row['label'])
                 if not pd.isna(row['tissue_num']):
-                    label_map[int(row['label'])] = int(row['tissue_num'])
-            
-            for old_label, new_label in label_map.items():
-                final_mask[final_mask == old_label] = new_label
+                    # Use tissue number as the new label value
+                    new_label = int(row['tissue_num'])
+                    final_mask[self.current_mask == original_label] = new_label
+                else:
+                    # If no tissue number assigned, keep original label but mark as unassigned
+                    # Use a high number to distinguish unassigned regions
+                    final_mask[self.current_mask == original_label] = original_label + 1000
             
             # Save final mask
             final_mask_path = os.path.join(fin_annotation_dir, selected_file + '.npy')
             np.save(final_mask_path, final_mask)
             
-            # Create final visualization
+            # Create final visualization showing tissue-number-colored regions
             image_label_overlay = label2rgb(final_mask, image=final_mask > 0, bg_label=0)
             
             fig, ax = plt.subplots(figsize=(10, 8))
             ax.imshow(image_label_overlay)
-            ax.set_title(selected_file)
+            ax.set_title(f'{selected_file} - Final Annotation (Colored by Tissue Number)')
             
-            # Add tissue labels
+            # Add tissue labels with tissue numbers as colors
             for _, row in self.current_metadata.iterrows():
+                centroid = literal_eval(str(row['centroid']))
+                
                 if not pd.isna(row['tissue_type']) and not pd.isna(row['tissue_num']):
-                    centroid = literal_eval(str(row['centroid']))
+                    # Assigned tissue - show tissue number and type
                     tissue_str = f"{int(row['tissue_num'])}_{row['tissue_type']}"
-                    ax.text(centroid[1], centroid[0], tissue_str,
-                           color='red', fontsize=12, weight='bold')
+                    text_color = 'red'
+                    bbox_color = 'white'
+                else:
+                    # Unassigned tissue - show original label
+                    tissue_str = f"Unassigned_{int(row['label'])}"
+                    text_color = 'orange'
+                    bbox_color = 'yellow'
+                
+                ax.text(centroid[1], centroid[0], tissue_str,
+                       color=text_color, fontsize=12, weight='bold',
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor=bbox_color, alpha=0.8))
             
             ax.axis('off')
             
@@ -752,6 +770,7 @@ class AnnotationGUI:
                 with open(json_path, 'r') as f:
                     json_data = json.load(f)
                 json_data['fin_mask_path'] = final_mask_path
+                json_data['original_mask_path'] = original_mask_path
                 with open(json_path, 'w') as f:
                     json.dump(json_data, f, indent=4)
             
