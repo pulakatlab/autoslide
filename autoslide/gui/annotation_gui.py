@@ -294,13 +294,27 @@ class AnnotationGUI:
         edit_file_frame = ttk.LabelFrame(editing_frame, text="Select Processed File")
         edit_file_frame.pack(fill=tk.X, padx=5, pady=5)
         
+        # File list frame with scrollable listbox
+        file_list_frame = ttk.Frame(edit_file_frame)
+        file_list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Listbox with scrollbar
+        list_container = ttk.Frame(file_list_frame)
+        list_container.pack(fill=tk.BOTH, expand=True)
+        
+        self.processed_files_listbox = tk.Listbox(list_container, height=8, selectmode=tk.SINGLE)
+        files_scrollbar = ttk.Scrollbar(list_container, orient=tk.VERTICAL, command=self.processed_files_listbox.yview)
+        self.processed_files_listbox.configure(yscrollcommand=files_scrollbar.set)
+        
+        self.processed_files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        files_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Bind double-click to load file
+        self.processed_files_listbox.bind('<Double-Button-1>', lambda e: self.load_for_editing())
+        
+        # Control buttons
         edit_controls = ttk.Frame(edit_file_frame)
         edit_controls.pack(fill=tk.X, padx=5, pady=5)
-        
-        self.processed_files_var = tk.StringVar()
-        self.processed_files_combo = ttk.Combobox(edit_controls, textvariable=self.processed_files_var,
-                                                 width=50, state="readonly")
-        self.processed_files_combo.pack(side=tk.LEFT, padx=5)
         
         ttk.Button(edit_controls, text="Load for Editing", 
                   command=self.load_for_editing).pack(side=tk.LEFT, padx=5)
@@ -383,14 +397,20 @@ class AnnotationGUI:
         data_dir = config['data_dir']
         annot_dir = os.path.join(data_dir, 'initial_annotation')
         
+        # Clear current list
+        self.processed_files_listbox.delete(0, tk.END)
+        
         if os.path.exists(annot_dir):
             csv_files = glob(os.path.join(annot_dir, '*.csv'))
             basenames = [os.path.basename(f).replace('.csv', '') for f in csv_files]
             
-            self.processed_files_combo['values'] = basenames
+            # Add files to listbox
+            for basename in sorted(basenames):
+                self.processed_files_listbox.insert(tk.END, basename)
             
-            if basenames and not self.processed_files_var.get():
-                self.processed_files_var.set(basenames[0])
+            # Select first item if available
+            if basenames:
+                self.processed_files_listbox.selection_set(0)
         
         
     def process_single_file(self, file_path, show_preview=True):
@@ -484,10 +504,12 @@ class AnnotationGUI:
         
     def load_for_editing(self):
         """Load a processed file for editing"""
-        selected_file = self.processed_files_var.get()
-        if not selected_file:
+        selection = self.processed_files_listbox.curselection()
+        if not selection:
             messagebox.showwarning("No Selection", "Please select a processed file")
             return
+            
+        selected_file = self.processed_files_listbox.get(selection[0])
             
         try:
             data_dir = config['data_dir']
@@ -565,9 +587,11 @@ class AnnotationGUI:
         if self.current_metadata is None:
             return
             
-        selected_file = self.processed_files_var.get()
-        if not selected_file:
+        selection = self.processed_files_listbox.curselection()
+        if not selection:
             return
+            
+        selected_file = self.processed_files_listbox.get(selection[0])
             
         data_dir = config['data_dir']
         annot_dir = os.path.join(data_dir, 'initial_annotation')
@@ -577,9 +601,11 @@ class AnnotationGUI:
         
     def auto_finalize_annotation(self):
         """Automatically finalize the current annotation"""
-        selected_file = self.processed_files_var.get()
-        if not selected_file:
+        selection = self.processed_files_listbox.curselection()
+        if not selection:
             return
+            
+        selected_file = self.processed_files_listbox.get(selection[0])
             
         if self.current_metadata is None or self.current_mask is None:
             return
