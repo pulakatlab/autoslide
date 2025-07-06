@@ -588,25 +588,46 @@ class AnnotationGUI:
             ax.clear()
             ax.axis('off')
         
-        # Helper function to ensure portrait orientation
-        def ensure_portrait(image):
-            """Rotate image to portrait orientation if it's in landscape"""
+        # Helper function to ensure portrait orientation consistently
+        def ensure_portrait_consistent(image, mask):
+            """Rotate both image and mask to portrait orientation in the same direction"""
             if len(image.shape) == 3:
-                height, width = image.shape[:2]
+                img_height, img_width = image.shape[:2]
             else:
-                height, width = image.shape
+                img_height, img_width = image.shape
             
-            if width > height:
-                # Image is in landscape, rotate 90 degrees counterclockwise
+            mask_height, mask_width = mask.shape[:2]
+            
+            # Determine if rotation is needed based on the image
+            needs_rotation = img_width > img_height
+            
+            if needs_rotation:
+                # Rotate both image and mask 90 degrees counterclockwise
                 if len(image.shape) == 3:
-                    return np.rot90(image, k=1)
+                    rotated_image = np.rot90(image, k=1)
                 else:
-                    return np.rot90(image, k=1)
-            return image
+                    rotated_image = np.rot90(image, k=1)
+                rotated_mask = np.rot90(mask, k=1)
+                return rotated_image, rotated_mask, True
+            else:
+                return image, mask, False
+        
+        # Process both images together to ensure consistent orientation
+        if self.current_raw_image is not None:
+            portrait_raw_image, portrait_mask, was_rotated = ensure_portrait_consistent(
+                self.current_raw_image, self.current_mask)
+        else:
+            # If no raw image, just handle mask
+            if self.current_mask.shape[1] > self.current_mask.shape[0]:
+                portrait_mask = np.rot90(self.current_mask, k=1)
+                was_rotated = True
+            else:
+                portrait_mask = self.current_mask
+                was_rotated = False
+            portrait_raw_image = None
         
         # Left panel: Raw slide image
-        if self.current_raw_image is not None:
-            portrait_raw_image = ensure_portrait(self.current_raw_image)
+        if portrait_raw_image is not None:
             self.edit_axes[0].imshow(portrait_raw_image)
             self.edit_axes[0].set_title('Raw Slide Image', fontsize=14, weight='bold')
         else:
@@ -616,9 +637,6 @@ class AnnotationGUI:
             self.edit_axes[0].set_title('Raw Slide Image (Not Available)', fontsize=14, weight='bold')
         
         # Right panel: Annotation mask with labels
-        # Ensure mask is also in portrait orientation
-        portrait_mask = ensure_portrait(self.current_mask)
-        
         # Create label overlay
         image_label_overlay = label2rgb(portrait_mask, 
                                       image=portrait_mask > 0, 
@@ -626,16 +644,13 @@ class AnnotationGUI:
         self.edit_axes[1].imshow(image_label_overlay)
         
         # Add initial label numbers for all regions
-        # Note: We need to adjust centroid coordinates if we rotated the mask
-        mask_was_rotated = portrait_mask.shape != self.current_mask.shape
-        
         for _, row in self.current_metadata.iterrows():
             centroid = literal_eval(str(row['centroid']))
             initial_label = int(row['label'])
             
-            # Adjust centroid coordinates if mask was rotated
-            if mask_was_rotated:
-                # For 90-degree counterclockwise rotation: (x, y) -> (y, height - x)
+            # Adjust centroid coordinates if images were rotated
+            if was_rotated:
+                # For 90-degree counterclockwise rotation: (row, col) -> (col, height - row)
                 original_height = self.current_mask.shape[0]
                 adjusted_centroid = (centroid[1], original_height - centroid[0])
             else:
