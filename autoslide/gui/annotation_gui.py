@@ -374,11 +374,9 @@ class AnnotationGUI:
             basenames = [os.path.basename(f).replace('.csv', '') for f in csv_files]
             
             self.processed_files_combo['values'] = basenames
-            self.final_files_combo['values'] = basenames
             
             if basenames and not self.processed_files_var.get():
                 self.processed_files_var.set(basenames[0])
-                self.final_files_var.set(basenames[0])
         
         
     def process_single_file(self, file_path, show_preview=True):
