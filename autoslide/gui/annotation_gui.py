@@ -240,20 +240,17 @@ class AnnotationGUI:
         self.area_threshold = 10000
         
         self.setup_ui()
-        self.load_slide_files()
+        self.check_and_process_initial_annotations()
         
     def setup_ui(self):
         # Create main notebook for tabs
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Tab 1: File Selection and Initial Annotation
-        self.setup_initial_tab()
-        
-        # Tab 2: Annotation Editing
+        # Tab 1: Annotation Editing
         self.setup_editing_tab()
         
-        # Tab 3: Final Annotation
+        # Tab 2: Final Annotation
         self.setup_final_tab()
         
         # Setup menu
@@ -266,7 +263,7 @@ class AnnotationGUI:
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Refresh Slide Files", command=self.load_slide_files)
+        file_menu.add_command(label="Process Missing Initial Annotations", command=self.process_missing_annotations)
         file_menu.add_command(label="Open Data Directory", command=self.open_data_directory)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
@@ -276,64 +273,11 @@ class AnnotationGUI:
         menubar.add_cascade(label="Settings", menu=settings_menu)
         settings_menu.add_command(label="Annotation Parameters", command=self.show_parameters_dialog)
         
-    def setup_initial_tab(self):
-        """Setup the initial annotation tab"""
-        initial_frame = ttk.Frame(self.notebook)
-        self.notebook.add(initial_frame, text="1. Initial Annotation")
-        
-        # Top frame for file selection
-        file_frame = ttk.LabelFrame(initial_frame, text="Slide File Selection")
-        file_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        # File listbox
-        list_frame = ttk.Frame(file_frame)
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        self.file_listbox = tk.Listbox(list_frame, height=8)
-        file_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.file_listbox.yview)
-        self.file_listbox.configure(yscrollcommand=file_scrollbar.set)
-        
-        self.file_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        file_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # File controls
-        file_controls = ttk.Frame(file_frame)
-        file_controls.pack(fill=tk.X, padx=5, pady=5)
-        
-        ttk.Button(file_controls, text="Process Selected File", 
-                  command=self.process_selected_file).pack(side=tk.LEFT, padx=5)
-        ttk.Button(file_controls, text="Process All Files", 
-                  command=self.process_all_files).pack(side=tk.LEFT, padx=5)
-        
-        # Progress bar
-        self.progress_var = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(file_controls, variable=self.progress_var, 
-                                          maximum=100, length=200)
-        self.progress_bar.pack(side=tk.RIGHT, padx=5)
-        
-        # Status label
-        self.status_var = tk.StringVar(value="Ready")
-        ttk.Label(file_controls, textvariable=self.status_var).pack(side=tk.RIGHT, padx=10)
-        
-        # Image display frame
-        image_frame = ttk.LabelFrame(initial_frame, text="Processing Preview")
-        image_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Create matplotlib figure for image display
-        self.initial_fig, self.initial_axes = plt.subplots(1, 5, figsize=(20, 4))
-        self.initial_canvas = FigureCanvasTkAgg(self.initial_fig, image_frame)
-        self.initial_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        
-        # Set axis titles
-        titles = ['Original', 'Threshold', 'Dilated', 'Labelled', 'Outline Overlay']
-        for ax, title in zip(self.initial_axes, titles):
-            ax.set_title(title)
-            ax.axis('off')
         
     def setup_editing_tab(self):
         """Setup the annotation editing tab"""
         editing_frame = ttk.Frame(self.notebook)
-        self.notebook.add(editing_frame, text="2. Edit Annotations")
+        self.notebook.add(editing_frame, text="1. Edit Annotations")
         
         # Top frame for file selection
         edit_file_frame = ttk.LabelFrame(editing_frame, text="Select Processed File")
@@ -376,7 +320,7 @@ class AnnotationGUI:
     def setup_final_tab(self):
         """Setup the final annotation tab"""
         final_frame = ttk.Frame(self.notebook)
-        self.notebook.add(final_frame, text="3. Finalize Annotation")
+        self.notebook.add(final_frame, text="2. Finalize Annotation")
         
         # File selection
         final_file_frame = ttk.LabelFrame(final_frame, text="Select File to Finalize")
@@ -404,22 +348,54 @@ class AnnotationGUI:
         self.final_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.final_ax.axis('off')
         
-    def load_slide_files(self):
-        """Load available slide files"""
+    def check_and_process_initial_annotations(self):
+        """Check for missing initial annotations and process them automatically"""
         data_dir = config['data_dir']
         glob_pattern = 'TRI*.svs'
-        self.slide_files = glob(os.path.join(data_dir, '**', glob_pattern), recursive=True)
+        slide_files = glob(os.path.join(data_dir, '**', glob_pattern), recursive=True)
         
-        # Update listbox
-        self.file_listbox.delete(0, tk.END)
-        for file_path in self.slide_files:
-            basename = os.path.basename(file_path)
-            self.file_listbox.insert(tk.END, basename)
+        annot_dir = os.path.join(data_dir, 'initial_annotation')
+        tracking_dir = os.path.join(data_dir, 'tracking')
         
-        self.status_var.set(f"Found {len(self.slide_files)} slide files")
+        missing_files = []
+        for file_path in slide_files:
+            file_basename = os.path.basename(file_path)
+            csv_path = os.path.join(annot_dir, file_basename.replace('.svs', '.csv'))
+            json_path = os.path.join(tracking_dir, file_basename.replace('.svs', '.json'))
+            
+            if not os.path.exists(csv_path) or not os.path.exists(json_path):
+                missing_files.append(file_path)
         
-        # Also refresh processed files
+        if missing_files:
+            response = messagebox.askyesno(
+                "Missing Initial Annotations",
+                f"Found {len(missing_files)} files without initial annotations. Process them now?"
+            )
+            if response:
+                self.process_files_automatically(missing_files)
+        
+        # Refresh processed files list
         self.refresh_processed_files()
+    
+    def process_missing_annotations(self):
+        """Menu command to process missing annotations"""
+        self.check_and_process_initial_annotations()
+    
+    def process_files_automatically(self, file_list):
+        """Process a list of files automatically"""
+        total_files = len(file_list)
+        
+        for i, file_path in enumerate(file_list):
+            try:
+                self.process_single_file(file_path, show_preview=False)
+                # Update progress if we had a progress bar
+                progress = ((i + 1) / total_files) * 100
+                self.root.update()
+            except Exception as e:
+                print(f"Error processing {file_path}: {e}")
+                continue
+        
+        messagebox.showinfo("Complete", f"Processed {len(file_list)} files")
         
     def refresh_processed_files(self):
         """Refresh the list of processed files"""
@@ -437,39 +413,6 @@ class AnnotationGUI:
                 self.processed_files_var.set(basenames[0])
                 self.final_files_var.set(basenames[0])
         
-    def process_selected_file(self):
-        """Process the selected slide file"""
-        selection = self.file_listbox.curselection()
-        if not selection:
-            messagebox.showwarning("No Selection", "Please select a slide file to process")
-            return
-            
-        file_index = selection[0]
-        file_path = self.slide_files[file_index]
-        
-        self.process_single_file(file_path)
-        
-    def process_all_files(self):
-        """Process all slide files"""
-        if not self.slide_files:
-            messagebox.showwarning("No Files", "No slide files found")
-            return
-            
-        total_files = len(self.slide_files)
-        
-        for i, file_path in enumerate(self.slide_files):
-            self.progress_var.set((i / total_files) * 100)
-            self.root.update()
-            
-            try:
-                self.process_single_file(file_path, show_preview=False)
-            except Exception as e:
-                print(f"Error processing {file_path}: {e}")
-                continue
-                
-        self.progress_var.set(100)
-        self.status_var.set("All files processed")
-        messagebox.showinfo("Complete", "All files have been processed")
         
     def process_single_file(self, file_path, show_preview=True):
         """Process a single slide file for initial annotation"""
@@ -553,61 +496,12 @@ class AnnotationGUI:
             with open(json_path, 'w') as f:
                 json.dump(json_data, f, indent=4)
             
-            # Update preview if requested
-            if show_preview:
-                self.update_initial_preview(image, threshold_mask, dilated_mask, 
-                                          fin_label_image, wanted_regions_frame)
-            
-            self.status_var.set(f"Completed {file_basename}")
+            print(f"Completed processing {file_basename}")
             
         except Exception as e:
             self.status_var.set(f"Error processing {os.path.basename(file_path)}")
             raise e
             
-    def update_initial_preview(self, image, threshold_mask, dilated_mask, 
-                             label_image, regions_frame):
-        """Update the initial annotation preview"""
-        # Clear previous plots
-        for ax in self.initial_axes:
-            ax.clear()
-            
-        # Original image
-        self.initial_axes[0].imshow(np.swapaxes(image, 0, 1))
-        self.initial_axes[0].set_title('Original')
-        
-        # Threshold mask
-        self.initial_axes[1].imshow(threshold_mask)
-        self.initial_axes[1].set_title('Threshold')
-        
-        # Dilated mask
-        self.initial_axes[2].imshow(dilated_mask)
-        self.initial_axes[2].set_title('Dilated')
-        
-        # Labeled regions
-        image_label_overlay = label2rgb(label_image, image=label_image > 0, bg_label=0)
-        self.initial_axes[3].imshow(image_label_overlay)
-        self.initial_axes[3].set_title('Labelled')
-        
-        # Add region labels
-        for _, row in regions_frame.iterrows():
-            centroid = row['centroid']
-            self.initial_axes[3].text(centroid[1], centroid[0], str(int(row['label'])), 
-                                    color='red', fontsize=8, weight='bold')
-        
-        # Outline overlay
-        filled_binary = binary_fill_holes(label_image > 0) * 1
-        gradient_image = gradient(filled_binary, np.ones((10, 10)))
-        grad_inds = np.where(gradient_image > 0)
-        
-        self.initial_axes[4].imshow(np.swapaxes(image, 0, 1))
-        self.initial_axes[4].scatter(grad_inds[1], grad_inds[0], s=1, color='orange', alpha=0.7)
-        self.initial_axes[4].set_title('Outline Overlay')
-        
-        # Remove axes
-        for ax in self.initial_axes:
-            ax.axis('off')
-            
-        self.initial_canvas.draw()
         
     def load_for_editing(self):
         """Load a processed file for editing"""
