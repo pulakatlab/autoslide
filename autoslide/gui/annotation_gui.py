@@ -313,15 +313,13 @@ class AnnotationGUI:
         self.processed_files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         files_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Bind double-click to load file
-        self.processed_files_listbox.bind('<Double-Button-1>', lambda e: self.load_for_editing())
+        # Bind single-click to load file automatically
+        self.processed_files_listbox.bind('<<ListboxSelect>>', lambda e: self.load_for_editing())
         
         # Control buttons
         edit_controls = ttk.Frame(edit_file_frame)
         edit_controls.pack(fill=tk.X, padx=5, pady=5)
         
-        ttk.Button(edit_controls, text="Load for Editing", 
-                  command=self.load_for_editing).pack(side=tk.LEFT, padx=5)
         ttk.Button(edit_controls, text="Refresh List", 
                   command=self.refresh_processed_files).pack(side=tk.LEFT, padx=5)
         
