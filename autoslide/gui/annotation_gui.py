@@ -585,9 +585,26 @@ class AnnotationGUI:
             ax.clear()
             ax.axis('off')
         
+        # Helper function to ensure portrait orientation
+        def ensure_portrait(image):
+            """Rotate image to portrait orientation if it's in landscape"""
+            if len(image.shape) == 3:
+                height, width = image.shape[:2]
+            else:
+                height, width = image.shape
+            
+            if width > height:
+                # Image is in landscape, rotate 90 degrees counterclockwise
+                if len(image.shape) == 3:
+                    return np.rot90(image, k=1)
+                else:
+                    return np.rot90(image, k=1)
+            return image
+        
         # Left panel: Raw slide image
         if self.current_raw_image is not None:
-            self.edit_axes[0].imshow(self.current_raw_image)
+            portrait_raw_image = ensure_portrait(self.current_raw_image)
+            self.edit_axes[0].imshow(portrait_raw_image)
             self.edit_axes[0].set_title('Raw Slide Image', fontsize=14, weight='bold')
         else:
             self.edit_axes[0].text(0.5, 0.5, 'Raw image not available', 
@@ -596,19 +613,33 @@ class AnnotationGUI:
             self.edit_axes[0].set_title('Raw Slide Image (Not Available)', fontsize=14, weight='bold')
         
         # Right panel: Annotation mask with labels
+        # Ensure mask is also in portrait orientation
+        portrait_mask = ensure_portrait(self.current_mask)
+        
         # Create label overlay
-        image_label_overlay = label2rgb(self.current_mask, 
-                                      image=self.current_mask > 0, 
+        image_label_overlay = label2rgb(portrait_mask, 
+                                      image=portrait_mask > 0, 
                                       bg_label=0)
         self.edit_axes[1].imshow(image_label_overlay)
         
         # Add initial label numbers for all regions
+        # Note: We need to adjust centroid coordinates if we rotated the mask
+        mask_was_rotated = portrait_mask.shape != self.current_mask.shape
+        
         for _, row in self.current_metadata.iterrows():
             centroid = literal_eval(str(row['centroid']))
             initial_label = int(row['label'])
             
+            # Adjust centroid coordinates if mask was rotated
+            if mask_was_rotated:
+                # For 90-degree counterclockwise rotation: (x, y) -> (y, height - x)
+                original_height = self.current_mask.shape[0]
+                adjusted_centroid = (centroid[1], original_height - centroid[0])
+            else:
+                adjusted_centroid = centroid
+            
             # Show initial label number in blue
-            self.edit_axes[1].text(centroid[1], centroid[0], str(initial_label),
+            self.edit_axes[1].text(adjusted_centroid[1], adjusted_centroid[0], str(initial_label),
                                  color='blue', fontsize=12, weight='bold',
                                  bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8))
             
@@ -616,7 +647,7 @@ class AnnotationGUI:
             if not pd.isna(row['tissue_type']):
                 tissue_str = f"{int(row['tissue_num']) if not pd.isna(row['tissue_num']) else '?'}_{row['tissue_type']}"
                 # Offset the tissue annotation slightly to avoid overlap
-                self.edit_axes[1].text(centroid[1] + 20, centroid[0] + 20, tissue_str,
+                self.edit_axes[1].text(adjusted_centroid[1] + 20, adjusted_centroid[0] + 20, tissue_str,
                                      color='red', fontsize=10, weight='bold',
                                      bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
         
