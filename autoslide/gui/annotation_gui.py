@@ -569,16 +569,25 @@ class AnnotationGUI:
                                       bg_label=0)
         self.edit_ax.imshow(image_label_overlay)
         
-        # Add annotations
+        # Add initial label numbers for all regions
         for _, row in self.current_metadata.iterrows():
+            centroid = literal_eval(str(row['centroid']))
+            initial_label = int(row['label'])
+            
+            # Show initial label number in blue
+            self.edit_ax.text(centroid[1], centroid[0], str(initial_label),
+                            color='blue', fontsize=12, weight='bold',
+                            bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8))
+            
+            # Add tissue annotations if they exist
             if not pd.isna(row['tissue_type']):
-                centroid = literal_eval(str(row['centroid']))
                 tissue_str = f"{int(row['tissue_num']) if not pd.isna(row['tissue_num']) else '?'}_{row['tissue_type']}"
-                self.edit_ax.text(centroid[1], centroid[0], tissue_str,
+                # Offset the tissue annotation slightly to avoid overlap
+                self.edit_ax.text(centroid[1] + 20, centroid[0] + 20, tissue_str,
                                 color='red', fontsize=10, weight='bold',
                                 bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
         
-        self.edit_ax.set_title('Annotated Regions')
+        self.edit_ax.set_title('Annotated Regions (Blue: Initial Labels, Red: Tissue Annotations)')
         self.edit_ax.axis('off')
         self.edit_canvas.draw()
         
