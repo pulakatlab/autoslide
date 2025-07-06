@@ -233,6 +233,7 @@ class AnnotationGUI:
         self.current_metadata = None
         self.current_mask = None
         self.current_image = None
+        self.current_raw_image = None
         
         # Annotation parameters
         self.down_sample = 100
@@ -337,10 +338,11 @@ class AnnotationGUI:
         img_frame = ttk.LabelFrame(edit_paned, text="Slide Preview")
         edit_paned.add(img_frame, weight=1)
         
-        self.edit_fig, self.edit_ax = plt.subplots(1, 1, figsize=(8, 8))
+        self.edit_fig, self.edit_axes = plt.subplots(1, 2, figsize=(16, 8))
         self.edit_canvas = FigureCanvasTkAgg(self.edit_fig, img_frame)
         self.edit_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        self.edit_ax.axis('off')
+        for ax in self.edit_axes:
+            ax.axis('off')
         
         
     def check_and_process_initial_annotations(self):
@@ -514,6 +516,7 @@ class AnnotationGUI:
         try:
             data_dir = config['data_dir']
             annot_dir = os.path.join(data_dir, 'initial_annotation')
+            tracking_dir = os.path.join(data_dir, 'tracking')
             
             # Load CSV
             csv_path = os.path.join(annot_dir, selected_file + '.csv')
@@ -527,6 +530,22 @@ class AnnotationGUI:
             mask_path = os.path.join(annot_dir, selected_file + '.npy')
             if os.path.exists(mask_path):
                 self.current_mask = np.load(mask_path)
+            
+            # Load raw slide image from tracking data
+            json_path = os.path.join(tracking_dir, selected_file + '.json')
+            if os.path.exists(json_path):
+                with open(json_path, 'r') as f:
+                    tracking_data = json.load(f)
+                
+                slide_path = tracking_data.get('data_path')
+                if slide_path and os.path.exists(slide_path):
+                    self.current_slide_path = slide_path
+                    slide = slideio.open_slide(slide_path, 'SVS')
+                    scene = slide.get_scene(0)
+                    
+                    # Get raw image at same resolution as mask
+                    image_rect = np.array(scene.rect) // self.down_sample
+                    self.current_raw_image = scene.read_block(size=image_rect[2:])
             
             # Create editable dataframe
             for widget in self.dataframe_container.winfo_children():
@@ -557,17 +576,31 @@ class AnnotationGUI:
         self.auto_finalize_annotation()
         
     def update_edit_preview(self):
-        """Update the editing preview"""
+        """Update the editing preview showing both raw image and annotation mask"""
         if self.current_mask is None:
             return
             
-        self.edit_ax.clear()
+        # Clear both axes
+        for ax in self.edit_axes:
+            ax.clear()
+            ax.axis('off')
         
+        # Left panel: Raw slide image
+        if self.current_raw_image is not None:
+            self.edit_axes[0].imshow(self.current_raw_image)
+            self.edit_axes[0].set_title('Raw Slide Image', fontsize=14, weight='bold')
+        else:
+            self.edit_axes[0].text(0.5, 0.5, 'Raw image not available', 
+                                 transform=self.edit_axes[0].transAxes,
+                                 ha='center', va='center', fontsize=12, color='red')
+            self.edit_axes[0].set_title('Raw Slide Image (Not Available)', fontsize=14, weight='bold')
+        
+        # Right panel: Annotation mask with labels
         # Create label overlay
         image_label_overlay = label2rgb(self.current_mask, 
                                       image=self.current_mask > 0, 
                                       bg_label=0)
-        self.edit_ax.imshow(image_label_overlay)
+        self.edit_axes[1].imshow(image_label_overlay)
         
         # Add initial label numbers for all regions
         for _, row in self.current_metadata.iterrows():
@@ -575,20 +608,23 @@ class AnnotationGUI:
             initial_label = int(row['label'])
             
             # Show initial label number in blue
-            self.edit_ax.text(centroid[1], centroid[0], str(initial_label),
-                            color='blue', fontsize=12, weight='bold',
-                            bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8))
+            self.edit_axes[1].text(centroid[1], centroid[0], str(initial_label),
+                                 color='blue', fontsize=12, weight='bold',
+                                 bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.8))
             
             # Add tissue annotations if they exist
             if not pd.isna(row['tissue_type']):
                 tissue_str = f"{int(row['tissue_num']) if not pd.isna(row['tissue_num']) else '?'}_{row['tissue_type']}"
                 # Offset the tissue annotation slightly to avoid overlap
-                self.edit_ax.text(centroid[1] + 20, centroid[0] + 20, tissue_str,
-                                color='red', fontsize=10, weight='bold',
-                                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+                self.edit_axes[1].text(centroid[1] + 20, centroid[0] + 20, tissue_str,
+                                     color='red', fontsize=10, weight='bold',
+                                     bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
         
-        self.edit_ax.set_title('Annotated Regions (Blue: Initial Labels, Red: Tissue Annotations)')
-        self.edit_ax.axis('off')
+        self.edit_axes[1].set_title('Initial Annotation Mask\n(Blue: Initial Labels, Red: Tissue Annotations)', 
+                                  fontsize=14, weight='bold')
+        
+        # Adjust layout to prevent overlap
+        self.edit_fig.tight_layout()
         self.edit_canvas.draw()
         
     def save_current_annotations(self):
