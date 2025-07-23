@@ -361,6 +361,7 @@ class AnnotationGUI:
         edit_paned.add(img_frame, weight=1)
 
         self.edit_fig, self.edit_axes = plt.subplots(1, 2, figsize=(8, 8))
+        self.edit_fig.subplots_adjust(wspace=0.8)
         self.edit_canvas = FigureCanvasTkAgg(self.edit_fig, img_frame)
         self.edit_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         for ax in self.edit_axes:
@@ -658,7 +659,7 @@ class AnnotationGUI:
 
         # Left panel: Raw slide image
         if portrait_raw_image is not None:
-            self.edit_axes[0].imshow(portrait_raw_image)
+            self.edit_axes[0].imshow(portrait_raw_image.swapaxes(0, 1))
             self.edit_axes[0].set_title(
                 'Raw Slide Image', fontsize=14, weight='bold')
         else:
@@ -709,7 +710,9 @@ class AnnotationGUI:
                                                  facecolor="white", alpha=0.8),
                                        ha='center', va='center')
 
-        self.edit_axes[1].set_title('Initial Annotation Mask\n(Blue: Initial Labels, Red: Tissue Annotations)',
+        self.edit_axes[1].set_title('Initial Annotation Mask\n' +
+                                    'Blue Text: Initial Labels\n' +
+                                    'Red Text: Tissue Annotations',
                                     fontsize=14, weight='bold')
 
         # Adjust layout to prevent overlap
