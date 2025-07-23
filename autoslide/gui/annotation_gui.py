@@ -6,6 +6,8 @@ This module provides a comprehensive interface for:
 2. Editing tissue annotations in a dataframe
 3. Finalizing annotations with tissue type assignments
 4. Visualizing results throughout the process
+
+TODO: In file_list, also mark whether annotation of file is complete or incomplete
 """
 
 import tkinter as tk
