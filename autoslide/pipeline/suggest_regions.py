@@ -85,6 +85,7 @@ json_list = [json.load(open(x, 'r')) for x in json_path_list]
 # for data_path in data_path_list:
 for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)):
     data_path = this_json['data_path']
+    print(f'Processing : {data_path}')
     try:
         # data_basename = os.path.basename(data_path).split('.')[0]
         data_basename = this_json['file_basename'].split('.')[0]
