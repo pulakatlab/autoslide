@@ -47,6 +47,9 @@ class EditableDataFrame:
         self.populate_tree()
 
     def setup_ui(self):
+
+        print('Setting up Editable Dataframe')
+
         # Create main frame
         self.frame = ttk.Frame(self.parent)
         self.frame.pack(fill=tk.BOTH, expand=True)
@@ -103,12 +106,16 @@ class EditableDataFrame:
 
         # Tissue type presets for quick entry
         ttk.Label(edit_frame, text="Quick tissue types:").pack(
-            side=tk.LEFT, padx=(20, 5))
+            side=tk.LEFT, padx=(5, 20))
         for tissue_type in ['heart', 'liver', 'kidney', 'lung', 'muscle']:
             ttk.Button(edit_frame, text=tissue_type,
-                       command=lambda t=tissue_type: self.quick_tissue_type(t)).pack(side=tk.LEFT, padx=2)
+                       command=lambda
+                       t=tissue_type: self.quick_tissue_type(t)).pack(side=tk.LEFT, padx=2)
 
     def populate_tree(self):
+
+        print('Populating tree')
+
         # Clear existing items
         for item in self.tree.get_children():
             self.tree.delete(item)
@@ -162,6 +169,8 @@ class EditableDataFrame:
         """Apply the current edit"""
         if not hasattr(self, 'current_edit_item') or not self.current_edit_item:
             return
+
+        print('Applying edit')
 
         new_value = self.edit_var.get()
 
@@ -565,6 +574,10 @@ class AnnotationGUI:
             mask_path = os.path.join(annot_dir, selected_file + '.npy')
             if os.path.exists(mask_path):
                 self.current_mask = np.load(mask_path)
+            else:
+                messagebox.showerror(
+                    "File Not Found", f"Mask file not found: {mask_path}")
+                return
 
             # Load raw slide image from tracking data
             json_path = os.path.join(tracking_dir, selected_file + '.json')
@@ -582,6 +595,10 @@ class AnnotationGUI:
                     image_rect = np.array(scene.rect) // self.down_sample
                     self.current_raw_image = scene.read_block(
                         size=image_rect[2:])
+            else:
+                messagebox.showerror(
+                    "File Not Found", f"JSON file not found: {json_path}")
+                return
 
             # Create editable dataframe
             for widget in self.dataframe_container.winfo_children():
