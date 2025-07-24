@@ -27,6 +27,7 @@ from skimage.measure import label, regionprops
 from skimage.color import label2rgb
 from skimage.filters.rank import gradient
 from scipy.ndimage import binary_fill_holes
+from ast import literal_eval as lit
 
 # Import config
 from autoslide import config
@@ -100,6 +101,11 @@ for data_path in tqdm(file_list):
     wanted_regions_frame = region_frame[region_frame.area > area_threshold]
     wanted_regions = wanted_regions_frame.label.values
 
+    # Covnert 'centroid' to str
+    wanted_regions_frame['centroid'] = wanted_regions_frame.centroid.apply(
+        lambda x: "[{}, {}]".format(x[0], x[1])
+    )
+
     # Output wanted_regions_frame to be annotated manually
     wanted_regions_frame['tissue_type'] = np.nan
     wanted_regions_frame['tissue_num'] = np.nan
@@ -150,7 +156,8 @@ for data_path in tqdm(file_list):
     ax[4].legend()
     # Add labels at the center of each region
     for this_row in wanted_regions_frame.itertuples():
-        ax[3].text(this_row.centroid[1], this_row.centroid[0],
+        this_centroid = lit(this_row.centroid)
+        ax[3].text(this_centroid[1], this_centroid[0],
                    this_row.label, color='r', fontsize=25,
                    weight='bold')
     fig.suptitle(file_basename)
