@@ -17,6 +17,7 @@ from tqdm import tqdm
 import argparse
 from sklearn.metrics import precision_recall_curve, average_precision_score
 import cv2 as cv
+from scipy.optimize import curve_fit
 
 # Import config and utilities
 from autoslide import config
@@ -490,9 +491,61 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
 # Visualization Functions
 #############################################################################
 
+def logistic_function(x, L, k, x0, b):
+    """
+    Logistic function: L / (1 + exp(-k*(x-x0))) + b
+    
+    Args:
+        x: input values
+        L: maximum value of the curve
+        k: steepness of the curve
+        x0: x-value of the sigmoid's midpoint (inflection point)
+        b: y-offset
+    """
+    return L / (1 + np.exp(-k * (x - x0))) + b
+
+
+def fit_logistic_curve(x_data, y_data):
+    """
+    Fit a logistic curve to the data and return parameters and fitted curve.
+    
+    Args:
+        x_data: x values
+        y_data: y values
+        
+    Returns:
+        tuple: (fitted_params, x_fit, y_fit, inflection_point)
+    """
+    try:
+        # Initial parameter guesses
+        L_guess = np.max(y_data) - np.min(y_data)  # amplitude
+        b_guess = np.min(y_data)  # offset
+        x0_guess = np.median(x_data)  # inflection point guess
+        k_guess = 1.0  # steepness
+        
+        # Fit the logistic curve
+        popt, _ = curve_fit(logistic_function, x_data, y_data, 
+                           p0=[L_guess, k_guess, x0_guess, b_guess],
+                           maxfev=5000)
+        
+        # Generate fitted curve
+        x_fit = np.linspace(np.min(x_data), np.max(x_data), 100)
+        y_fit = logistic_function(x_fit, *popt)
+        
+        # Inflection point is at x0
+        inflection_point = popt[2]
+        inflection_y = logistic_function(inflection_point, *popt)
+        
+        return popt, x_fit, y_fit, (inflection_point, inflection_y)
+    
+    except Exception as e:
+        print(f"Warning: Could not fit logistic curve: {e}")
+        return None, None, None, None
+
+
 def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
     """
-    Plot IoU and Dice scores vs positive area in ground truth masks.
+    Plot IoU and Dice scores vs positive area in ground truth masks with logistic curve fitting.
 
     Args:
         accuracy_results (dict): Results from accuracy evaluation
@@ -512,14 +565,28 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
     axes[0].set_title('IoU Score vs Positive Area in Ground Truth')
     axes[0].grid(True, alpha=0.3)
     
-    # Add trend line for IoU
-    z_iou = np.polyfit(accuracy_results['positive_areas'], 
-                       accuracy_results['iou_scores'], 1)
-    p_iou = np.poly1d(z_iou)
-    x_trend = np.linspace(min(accuracy_results['positive_areas']), 
-                         max(accuracy_results['positive_areas']), 100)
-    axes[0].plot(x_trend, p_iou(x_trend), "r--", alpha=0.8, 
-                label=f'Trend: slope={z_iou[0]:.3f}')
+    # Fit logistic curve for IoU
+    iou_params, x_fit_iou, y_fit_iou, iou_inflection = fit_logistic_curve(
+        np.array(accuracy_results['positive_areas']), 
+        np.array(accuracy_results['iou_scores'])
+    )
+    
+    if iou_params is not None:
+        axes[0].plot(x_fit_iou, y_fit_iou, "r-", alpha=0.8, linewidth=2,
+                    label=f'Logistic fit (k={iou_params[1]:.2f})')
+        # Mark inflection point
+        axes[0].plot(iou_inflection[0], iou_inflection[1], 'ro', markersize=8,
+                    label=f'Inflection point ({iou_inflection[0]:.3f}, {iou_inflection[1]:.3f})')
+    else:
+        # Fallback to linear fit if logistic fails
+        z_iou = np.polyfit(accuracy_results['positive_areas'], 
+                          accuracy_results['iou_scores'], 1)
+        p_iou = np.poly1d(z_iou)
+        x_trend = np.linspace(min(accuracy_results['positive_areas']), 
+                             max(accuracy_results['positive_areas']), 100)
+        axes[0].plot(x_trend, p_iou(x_trend), "r--", alpha=0.8, 
+                    label=f'Linear fit: slope={z_iou[0]:.3f}')
+    
     axes[0].legend()
 
     # Dice vs Positive Area
@@ -531,12 +598,28 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
     axes[1].set_title('Dice Score vs Positive Area in Ground Truth')
     axes[1].grid(True, alpha=0.3)
     
-    # Add trend line for Dice
-    z_dice = np.polyfit(accuracy_results['positive_areas'], 
-                        accuracy_results['dice_scores'], 1)
-    p_dice = np.poly1d(z_dice)
-    axes[1].plot(x_trend, p_dice(x_trend), "r--", alpha=0.8,
-                label=f'Trend: slope={z_dice[0]:.3f}')
+    # Fit logistic curve for Dice
+    dice_params, x_fit_dice, y_fit_dice, dice_inflection = fit_logistic_curve(
+        np.array(accuracy_results['positive_areas']), 
+        np.array(accuracy_results['dice_scores'])
+    )
+    
+    if dice_params is not None:
+        axes[1].plot(x_fit_dice, y_fit_dice, "r-", alpha=0.8, linewidth=2,
+                    label=f'Logistic fit (k={dice_params[1]:.2f})')
+        # Mark inflection point
+        axes[1].plot(dice_inflection[0], dice_inflection[1], 'ro', markersize=8,
+                    label=f'Inflection point ({dice_inflection[0]:.3f}, {dice_inflection[1]:.3f})')
+    else:
+        # Fallback to linear fit if logistic fails
+        z_dice = np.polyfit(accuracy_results['positive_areas'], 
+                           accuracy_results['dice_scores'], 1)
+        p_dice = np.poly1d(z_dice)
+        x_trend = np.linspace(min(accuracy_results['positive_areas']), 
+                             max(accuracy_results['positive_areas']), 100)
+        axes[1].plot(x_trend, p_dice(x_trend), "r--", alpha=0.8,
+                    label=f'Linear fit: slope={z_dice[0]:.3f}')
+    
     axes[1].legend()
 
     plt.tight_layout()
@@ -546,7 +629,7 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
 
     print(f'Metrics vs positive area plot saved to {eval_plot_dir}/metrics_vs_positive_area.png')
 
-    # Print correlation statistics
+    # Print correlation statistics and logistic fit results
     iou_corr = np.corrcoef(accuracy_results['positive_areas'], 
                           accuracy_results['iou_scores'])[0, 1]
     dice_corr = np.corrcoef(accuracy_results['positive_areas'], 
@@ -554,6 +637,11 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
     
     print(f'Correlation between positive area and IoU: {iou_corr:.3f}')
     print(f'Correlation between positive area and Dice: {dice_corr:.3f}')
+    
+    if iou_params is not None:
+        print(f'IoU logistic fit - Inflection point: {iou_inflection[0]:.3f}, Steepness: {iou_params[1]:.3f}')
+    if dice_params is not None:
+        print(f'Dice logistic fit - Inflection point: {dice_inflection[0]:.3f}, Steepness: {dice_params[1]:.3f}')
 
 
 def plot_evaluation_results(accuracy_results, speed_results, plot_dir):
