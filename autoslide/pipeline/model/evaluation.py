@@ -251,6 +251,7 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
     dice_scores = []
     pixel_accuracies = []
     prediction_times = []
+    positive_areas = []  # Store positive area in ground truth masks
 
     # Confidence metrics storage
     confidence_in_vessels = []
@@ -279,6 +280,9 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
             true_mask = (true_mask > 0).astype(
                 np.uint8) * 255  # Ensure binary mask
 
+            # Calculate positive area (fraction of pixels that are positive)
+            positive_area = np.sum(true_mask > 0) / true_mask.size
+
             # Get prediction
             pred_time, pred_mask = predict_single_image(
                 model, image, device, transform, return_time=True)
@@ -297,6 +301,7 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
             dice_scores.append(dice)
             pixel_accuracies.append(pixel_acc)
             prediction_times.append(pred_time)
+            positive_areas.append(positive_area)
 
             # Store confidence metrics
             confidence_in_vessels.append(
@@ -354,6 +359,7 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
         'dice_scores': dice_scores,
         'pixel_accuracies': pixel_accuracies,
         'prediction_times': prediction_times,
+        'positive_areas': positive_areas,
 
         # Confidence metrics
         'mean_confidence_in_vessels': np.mean(confidence_in_vessels),
@@ -453,6 +459,72 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
 #############################################################################
 # Visualization Functions
 #############################################################################
+
+def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
+    """
+    Plot IoU and Dice scores vs positive area in ground truth masks.
+
+    Args:
+        accuracy_results (dict): Results from accuracy evaluation
+        plot_dir (str): Directory to save plots
+    """
+    eval_plot_dir = os.path.join(plot_dir, 'model_evaluation')
+    os.makedirs(eval_plot_dir, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+
+    # IoU vs Positive Area
+    axes[0].scatter(accuracy_results['positive_areas'], 
+                   accuracy_results['iou_scores'], 
+                   alpha=0.6, s=30)
+    axes[0].set_xlabel('Positive Area (fraction of pixels)')
+    axes[0].set_ylabel('IoU Score')
+    axes[0].set_title('IoU Score vs Positive Area in Ground Truth')
+    axes[0].grid(True, alpha=0.3)
+    
+    # Add trend line for IoU
+    z_iou = np.polyfit(accuracy_results['positive_areas'], 
+                       accuracy_results['iou_scores'], 1)
+    p_iou = np.poly1d(z_iou)
+    x_trend = np.linspace(min(accuracy_results['positive_areas']), 
+                         max(accuracy_results['positive_areas']), 100)
+    axes[0].plot(x_trend, p_iou(x_trend), "r--", alpha=0.8, 
+                label=f'Trend: slope={z_iou[0]:.3f}')
+    axes[0].legend()
+
+    # Dice vs Positive Area
+    axes[1].scatter(accuracy_results['positive_areas'], 
+                   accuracy_results['dice_scores'], 
+                   alpha=0.6, s=30, color='orange')
+    axes[1].set_xlabel('Positive Area (fraction of pixels)')
+    axes[1].set_ylabel('Dice Score')
+    axes[1].set_title('Dice Score vs Positive Area in Ground Truth')
+    axes[1].grid(True, alpha=0.3)
+    
+    # Add trend line for Dice
+    z_dice = np.polyfit(accuracy_results['positive_areas'], 
+                        accuracy_results['dice_scores'], 1)
+    p_dice = np.poly1d(z_dice)
+    axes[1].plot(x_trend, p_dice(x_trend), "r--", alpha=0.8,
+                label=f'Trend: slope={z_dice[0]:.3f}')
+    axes[1].legend()
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(eval_plot_dir, 'metrics_vs_positive_area.png'),
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print(f'Metrics vs positive area plot saved to {eval_plot_dir}/metrics_vs_positive_area.png')
+
+    # Print correlation statistics
+    iou_corr = np.corrcoef(accuracy_results['positive_areas'], 
+                          accuracy_results['iou_scores'])[0, 1]
+    dice_corr = np.corrcoef(accuracy_results['positive_areas'], 
+                           accuracy_results['dice_scores'])[0, 1]
+    
+    print(f'Correlation between positive area and IoU: {iou_corr:.3f}')
+    print(f'Correlation between positive area and Dice: {dice_corr:.3f}')
+
 
 def plot_evaluation_results(accuracy_results, speed_results, plot_dir):
     """
@@ -864,6 +936,7 @@ def main():
     # Create visualizations
     print("\nCreating evaluation plots...")
     plot_evaluation_results(accuracy_results, speed_results, plot_dir)
+    plot_metrics_vs_positive_area(accuracy_results, plot_dir)
     create_sample_predictions_plot(
         model, val_imgs, val_masks, img_dir, mask_dir,
         aug_img_dir, aug_mask_dir, device, transform, plot_dir
@@ -883,6 +956,8 @@ def main():
                 accuracy_results['pixel_accuracies'])
         np.save(os.path.join(results_dir, 'prediction_times.npy'),
                 accuracy_results['prediction_times'])
+        np.save(os.path.join(results_dir, 'positive_areas.npy'),
+                accuracy_results['positive_areas'])
 
         # Save confidence results
         np.save(os.path.join(results_dir, 'confidence_in_vessels.npy'),
