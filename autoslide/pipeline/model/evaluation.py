@@ -157,7 +157,7 @@ def calculate_confidence_metrics(pred_mask, true_mask):
 
     # Calculate confidence metrics
     results = {}
-    
+
     # Confidence inside vessel regions (should be high)
     if np.any(vessel_regions):
         vessel_confidences = pred_mask_norm[vessel_regions]
@@ -174,9 +174,12 @@ def calculate_confidence_metrics(pred_mask, true_mask):
     # Confidence outside vessel regions (should be low)
     if np.any(background_regions):
         background_confidences = pred_mask_norm[background_regions]
-        results['mean_confidence_in_background'] = np.mean(background_confidences)
-        results['std_confidence_in_background'] = np.std(background_confidences)
-        results['median_confidence_in_background'] = np.median(background_confidences)
+        results['mean_confidence_in_background'] = np.mean(
+            background_confidences)
+        results['std_confidence_in_background'] = np.std(
+            background_confidences)
+        results['median_confidence_in_background'] = np.median(
+            background_confidences)
         results['num_background_pixels'] = len(background_confidences)
     else:
         results['mean_confidence_in_background'] = 0.0
@@ -187,7 +190,8 @@ def calculate_confidence_metrics(pred_mask, true_mask):
     # Calculate confidence separation (higher is better)
     if results['num_vessel_pixels'] > 0 and results['num_background_pixels'] > 0:
         results['confidence_separation'] = (
-            results['mean_confidence_in_vessels'] - results['mean_confidence_in_background']
+            results['mean_confidence_in_vessels'] -
+            results['mean_confidence_in_background']
         )
     else:
         results['confidence_separation'] = 0.0
@@ -200,14 +204,15 @@ def calculate_confidence_metrics(pred_mask, true_mask):
 #############################################################################
 
 
-
 #############################################################################
 # Evaluation Pipeline
 #############################################################################
 
 def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
                             aug_img_dir, aug_mask_dir, device, transform,
-                            max_samples=None):
+                            output_dir,
+                            max_samples=None,
+                            ):
     """
     Evaluate model accuracy on validation set.
 
@@ -246,7 +251,7 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
     dice_scores = []
     pixel_accuracies = []
     prediction_times = []
-    
+
     # Confidence metrics storage
     confidence_in_vessels = []
     confidence_in_background = []
@@ -270,6 +275,10 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
                 true_mask = np.array(Image.open(
                     os.path.join(mask_dir, mask_name)))
 
+            # Flatten labels in mask
+            true_mask = (true_mask > 0).astype(
+                np.uint8) * 255  # Ensure binary mask
+
             # Get prediction
             pred_time, pred_mask = predict_single_image(
                 model, image, device, transform, return_time=True)
@@ -278,27 +287,48 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
             iou = calculate_iou(pred_mask, true_mask)
             dice = calculate_dice_coefficient(pred_mask, true_mask)
             pixel_acc = calculate_pixel_accuracy(pred_mask, true_mask)
-            
+
             # Calculate confidence metrics
-            confidence_metrics = calculate_confidence_metrics(pred_mask, true_mask)
+            confidence_metrics = calculate_confidence_metrics(
+                pred_mask, true_mask)
 
             # Store results
             iou_scores.append(iou)
             dice_scores.append(dice)
             pixel_accuracies.append(pixel_acc)
             prediction_times.append(pred_time)
-            
+
             # Store confidence metrics
-            confidence_in_vessels.append(confidence_metrics['mean_confidence_in_vessels'])
-            confidence_in_background.append(confidence_metrics['mean_confidence_in_background'])
-            confidence_separations.append(confidence_metrics['confidence_separation'])
-            
+            confidence_in_vessels.append(
+                confidence_metrics['mean_confidence_in_vessels'])
+            confidence_in_background.append(
+                confidence_metrics['mean_confidence_in_background'])
+            confidence_separations.append(
+                confidence_metrics['confidence_separation'])
+
             # Store per-image confidence metrics with image name
             per_image_metrics = confidence_metrics.copy()
             per_image_metrics['image_name'] = img_name
             per_image_metrics['iou'] = iou
             per_image_metrics['dice'] = dice
             per_image_confidence_metrics.append(per_image_metrics)
+
+            # Plot sample predictions
+            fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+            axes[0].imshow(image)
+            axes[0].set_title(f'Original Image\n{img_name}')
+            axes[0].axis('off')
+            axes[1].imshow(true_mask, cmap='gray')
+            axes[1].set_title('Ground Truth Mask')
+            axes[1].axis('off')
+            axes[2].imshow(pred_mask, cmap='gray')
+            axes[2].set_title(
+                f'Predicted Mask\nIoU: {iou:.3f}, Dice: {dice:.3f}')
+            axes[2].axis('off')
+            plt.tight_layout()
+            plt.savefig(os.path.join(output_dir, f'pred_{img_name}.png'),
+                        dpi=300, bbox_inches='tight')
+            plt.close(fig)
 
         except Exception as e:
             print(f'Error processing {img_name}: {e}')
@@ -324,7 +354,7 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
         'dice_scores': dice_scores,
         'pixel_accuracies': pixel_accuracies,
         'prediction_times': prediction_times,
-        
+
         # Confidence metrics
         'mean_confidence_in_vessels': np.mean(confidence_in_vessels),
         'std_confidence_in_vessels': np.std(confidence_in_vessels),
@@ -384,7 +414,8 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
         else:
             image = Image.open(os.path.join(img_dir, img_name)).convert("RGB")
 
-        _ = predict_single_image(model, image, device, transform, return_time=False)
+        _ = predict_single_image(model, image, device,
+                                 transform, return_time=False)
 
     # Benchmark phase
     print(f'Benchmarking with {num_benchmark} iterations...')
@@ -399,7 +430,8 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
         else:
             image = Image.open(os.path.join(img_dir, img_name)).convert("RGB")
 
-        pred_time, _ = predict_single_image(model, image, device, transform, return_time=True)
+        pred_time, _ = predict_single_image(
+            model, image, device, transform, return_time=True)
         benchmark_times.append(pred_time)
 
     # Calculate speed metrics
@@ -537,7 +569,7 @@ def plot_evaluation_results(accuracy_results, speed_results, plot_dir):
     axes[1, 0].grid(True, alpha=0.3)
 
     # Scatter plot: Confidence separation vs IoU
-    axes[1, 1].scatter(accuracy_results['confidence_separations'], 
+    axes[1, 1].scatter(accuracy_results['confidence_separations'],
                        accuracy_results['iou_scores'], alpha=0.6)
     axes[1, 1].set_xlabel('Confidence Separation')
     axes[1, 1].set_ylabel('IoU Score')
@@ -632,7 +664,8 @@ def create_sample_predictions_plot(model, val_imgs, val_masks, img_dir, mask_dir
             true_mask = np.array(Image.open(os.path.join(mask_dir, mask_name)))
 
         # Get prediction
-        pred_mask = predict_single_image(model, image, device, transform, return_time=False)
+        pred_mask = predict_single_image(
+            model, image, device, transform, return_time=False)
 
         # Calculate metrics for this sample
         iou = calculate_iou(pred_mask, true_mask)
@@ -725,17 +758,20 @@ def print_evaluation_summary(accuracy_results, speed_results):
     print(f"  Confidence in Vessel Regions:")
     print(
         f"    Mean: {accuracy_results['mean_confidence_in_vessels']:.4f} ± {accuracy_results['std_confidence_in_vessels']:.4f}")
-    print(f"    Median: {accuracy_results['median_confidence_in_vessels']:.4f}")
+    print(
+        f"    Median: {accuracy_results['median_confidence_in_vessels']:.4f}")
 
     print(f"  Confidence in Background Regions:")
     print(
         f"    Mean: {accuracy_results['mean_confidence_in_background']:.4f} ± {accuracy_results['std_confidence_in_background']:.4f}")
-    print(f"    Median: {accuracy_results['median_confidence_in_background']:.4f}")
+    print(
+        f"    Median: {accuracy_results['median_confidence_in_background']:.4f}")
 
     print(f"  Confidence Separation (Vessel - Background):")
     print(
         f"    Mean: {accuracy_results['mean_confidence_separation']:.4f} ± {accuracy_results['std_confidence_separation']:.4f}")
-    print(f"    Median: {accuracy_results['median_confidence_separation']:.4f}")
+    print(
+        f"    Median: {accuracy_results['median_confidence_separation']:.4f}")
 
     print(f"\nSPEED METRICS (n={speed_results['num_samples']} samples):")
     print(f"  Prediction Time:")
@@ -783,8 +819,10 @@ def main():
     print("Loading validation data...")
     labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(
         data_dir)
-    train_imgs, train_masks, val_imgs, val_masks = split_train_val(
-        image_names, mask_names)
+    # train_imgs, train_masks, val_imgs, val_masks = split_train_val(
+    #     image_names, mask_names)
+    val_imgs = image_names
+    val_masks = mask_names
 
     # Setup augmented directories (may be empty)
     aug_img_dir = os.path.join(labelled_data_dir, 'augmented_images/')
@@ -794,19 +832,22 @@ def main():
     print("Loading trained model...")
     try:
         model, device, transform = load_model(args.model_path, device)
-        model_path = args.model_path if args.model_path else os.path.join(artifacts_dir, 'best_val_mask_rcnn_model.pth')
+        model_path = args.model_path if args.model_path else os.path.join(
+            artifacts_dir, 'best_val_mask_rcnn_model.pth')
         print(f"Model loaded from: {model_path}")
     except FileNotFoundError as e:
         print(f"Error: {e}")
         print("Please train a model first or specify a valid model path.")
         return
 
-
     # Evaluate accuracy
     print("\nEvaluating model accuracy...")
+    output_dir = os.path.join(data_dir, 'plots', 'prediction_visualizations')
+    os.makedirs(output_dir, exist_ok=True)
     accuracy_results = evaluate_model_accuracy(
         model, val_imgs, val_masks, img_dir, mask_dir,
         aug_img_dir, aug_mask_dir, device, transform,
+        output_dir,
         max_samples=args.max_samples
     )
 
@@ -854,7 +895,8 @@ def main():
         # Save per-image confidence metrics as a CSV-like format
         import json
         with open(os.path.join(results_dir, 'per_image_confidence_metrics.json'), 'w') as f:
-            json.dump(accuracy_results['per_image_confidence_metrics'], f, indent=2)
+            json.dump(
+                accuracy_results['per_image_confidence_metrics'], f, indent=2)
 
         # Save speed results
         np.save(os.path.join(results_dir, 'speed_benchmark_times.npy'),
