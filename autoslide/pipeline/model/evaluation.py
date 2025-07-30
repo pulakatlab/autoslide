@@ -625,7 +625,7 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
     plt.close()
 
     # Create separate IoU plots for positive area fraction < 0.15 and >= 0.15
-    threshold = 0.15
+    threshold = 0.015
     low_area_mask = positive_areas < threshold
     high_area_mask = positive_areas >= threshold
     
