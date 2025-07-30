@@ -208,13 +208,14 @@ def calculate_confidence_metrics(pred_mask, true_mask):
 # Evaluation Pipeline
 #############################################################################
 
-def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
-                            aug_img_dir, aug_mask_dir, device, transform,
-                            output_dir,
-                            max_samples=None,
-                            ):
+def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_dir,
+                                      aug_img_dir, aug_mask_dir, device, transform,
+                                      output_dir,
+                                      max_samples=None,
+                                      num_warmup=10,
+                                      ):
     """
-    Evaluate model accuracy on validation set.
+    Evaluate model accuracy and speed on validation set.
 
     Args:
         model (torch.nn.Module): Trained model
@@ -227,12 +228,13 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
         device (torch.device): Device for inference
         transform (callable): Image transformation
         max_samples (int): Maximum number of samples to evaluate
+        num_warmup (int): Number of warmup iterations before timing
 
     Returns:
-        dict: Dictionary containing evaluation metrics
+        tuple: (accuracy_results, speed_results) dictionaries
     """
     print(
-        f'Evaluating model accuracy on {len(val_imgs)} validation samples...')
+        f'Evaluating model accuracy and speed on {len(val_imgs)} validation samples...')
 
     model.eval()
 
@@ -245,6 +247,21 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
     else:
         eval_imgs = val_imgs
         eval_masks = val_masks
+
+    # Warmup phase for accurate timing
+    if num_warmup > 0:
+        print(f'Warming up with {num_warmup} iterations...')
+        warmup_imgs = np.random.choice(eval_imgs, min(num_warmup, len(eval_imgs)), replace=True)
+        for img_name in tqdm(warmup_imgs, desc='Warmup'):
+            try:
+                if 'aug_' in img_name:
+                    image = Image.open(os.path.join(aug_img_dir, img_name)).convert("RGB")
+                else:
+                    image = Image.open(os.path.join(img_dir, img_name)).convert("RGB")
+                _ = predict_single_image(model, image, device, transform, return_time=False)
+            except Exception as e:
+                print(f'Error during warmup with {img_name}: {e}')
+                continue
 
     # Metrics storage
     iou_scores = []
@@ -259,10 +276,10 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
     confidence_separations = []
     per_image_confidence_metrics = []
 
-    # Evaluate each sample
+    # Evaluate each sample (accuracy and timing together)
     for img_name, mask_name in tqdm(zip(eval_imgs, eval_masks),
                                     total=len(eval_imgs),
-                                    desc='Evaluating samples'):
+                                    desc='Evaluating accuracy and speed'):
         try:
             # Load image and mask
             if 'aug_' in img_name:
@@ -339,8 +356,8 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
             print(f'Error processing {img_name}: {e}')
             continue
 
-    # Calculate summary statistics
-    results = {
+    # Calculate accuracy summary statistics
+    accuracy_results = {
         'num_samples': len(iou_scores),
         'mean_iou': np.mean(iou_scores),
         'std_iou': np.std(iou_scores),
@@ -377,7 +394,20 @@ def evaluate_model_accuracy(model, val_imgs, val_masks, img_dir, mask_dir,
         'per_image_confidence_metrics': per_image_confidence_metrics
     }
 
-    return results
+    # Calculate speed summary statistics
+    speed_results = {
+        'num_samples': len(prediction_times),
+        'mean_time': np.mean(prediction_times),
+        'std_time': np.std(prediction_times),
+        'median_time': np.median(prediction_times),
+        'min_time': np.min(prediction_times),
+        'max_time': np.max(prediction_times),
+        'mean_fps': 1.0 / np.mean(prediction_times),
+        'median_fps': 1.0 / np.median(prediction_times),
+        'times': prediction_times
+    }
+
+    return accuracy_results, speed_results
 
 
 def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
@@ -867,11 +897,9 @@ def parse_args():
     parser.add_argument('--model-path', type=str, default=None,
                         help='Path to saved model (default: best_val_mask_rcnn_model.pth)')
     parser.add_argument('--max-samples', type=int, default=None,
-                        help='Maximum number of samples to evaluate for accuracy')
-    parser.add_argument('--benchmark-samples', type=int, default=100,
-                        help='Number of samples for speed benchmarking')
+                        help='Maximum number of samples to evaluate')
     parser.add_argument('--warmup-samples', type=int, default=10,
-                        help='Number of warmup samples for speed benchmarking')
+                        help='Number of warmup samples before timing')
     parser.add_argument('--save-results', action='store_true',
                         help='Save detailed results to files')
     return parser.parse_args()
@@ -912,22 +940,16 @@ def main():
         print("Please train a model first or specify a valid model path.")
         return
 
-    # Evaluate accuracy
-    print("\nEvaluating model accuracy...")
+    # Evaluate accuracy and speed together
+    print("\nEvaluating model accuracy and speed...")
     output_dir = os.path.join(data_dir, 'plots', 'prediction_visualizations')
     os.makedirs(output_dir, exist_ok=True)
-    accuracy_results = evaluate_model_accuracy(
+    accuracy_results, speed_results = evaluate_model_accuracy_and_speed(
         model, val_imgs, val_masks, img_dir, mask_dir,
         aug_img_dir, aug_mask_dir, device, transform,
         output_dir,
-        max_samples=args.max_samples
-    )
-
-    # Benchmark speed
-    print("\nBenchmarking prediction speed...")
-    speed_results = benchmark_prediction_speed(
-        model, val_imgs, img_dir, aug_img_dir, device, transform,
-        num_warmup=args.warmup_samples, num_benchmark=args.benchmark_samples
+        max_samples=args.max_samples,
+        num_warmup=args.warmup_samples
     )
 
     # Print summary
