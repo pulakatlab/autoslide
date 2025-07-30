@@ -18,6 +18,9 @@ import argparse
 from sklearn.metrics import precision_recall_curve, average_precision_score
 import cv2 as cv
 from scipy.optimize import curve_fit
+import pickle
+import hashlib
+import json
 
 # Import config and utilities
 from autoslide import config
@@ -201,6 +204,123 @@ def calculate_confidence_metrics(pred_mask, true_mask):
 
 
 #############################################################################
+# Caching Functions
+#############################################################################
+
+def get_cache_key(model_path, img_name, transform_params=None):
+    """
+    Generate a unique cache key for a prediction based on model and image.
+    
+    Args:
+        model_path (str): Path to the model file
+        img_name (str): Image filename
+        transform_params (dict): Transform parameters (optional)
+    
+    Returns:
+        str: Unique cache key
+    """
+    # Get model file hash
+    if os.path.exists(model_path):
+        with open(model_path, 'rb') as f:
+            model_hash = hashlib.md5(f.read()).hexdigest()[:8]
+    else:
+        model_hash = "unknown"
+    
+    # Create cache key
+    key_data = f"{model_hash}_{img_name}"
+    if transform_params:
+        key_data += f"_{str(transform_params)}"
+    
+    cache_key = hashlib.md5(key_data.encode()).hexdigest()[:16]
+    return cache_key
+
+
+def save_prediction_cache(cache_dir, cache_key, pred_mask, pred_time, metrics=None):
+    """
+    Save prediction results to cache.
+    
+    Args:
+        cache_dir (str): Cache directory
+        cache_key (str): Unique cache key
+        pred_mask (numpy.ndarray): Predicted mask
+        pred_time (float): Prediction time
+        metrics (dict): Optional metrics to cache
+    """
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    cache_data = {
+        'pred_mask': pred_mask,
+        'pred_time': pred_time,
+        'metrics': metrics or {}
+    }
+    
+    cache_path = os.path.join(cache_dir, f"{cache_key}.pkl")
+    with open(cache_path, 'wb') as f:
+        pickle.dump(cache_data, f)
+
+
+def load_prediction_cache(cache_dir, cache_key):
+    """
+    Load prediction results from cache.
+    
+    Args:
+        cache_dir (str): Cache directory
+        cache_key (str): Unique cache key
+    
+    Returns:
+        tuple: (pred_mask, pred_time, metrics) or (None, None, None) if not found
+    """
+    cache_path = os.path.join(cache_dir, f"{cache_key}.pkl")
+    
+    if not os.path.exists(cache_path):
+        return None, None, None
+    
+    try:
+        with open(cache_path, 'rb') as f:
+            cache_data = pickle.load(f)
+        
+        return cache_data['pred_mask'], cache_data['pred_time'], cache_data.get('metrics', {})
+    except Exception as e:
+        print(f"Warning: Could not load cache for key {cache_key}: {e}")
+        return None, None, None
+
+
+def clear_prediction_cache(cache_dir):
+    """
+    Clear all cached predictions.
+    
+    Args:
+        cache_dir (str): Cache directory to clear
+    """
+    if os.path.exists(cache_dir):
+        import shutil
+        shutil.rmtree(cache_dir)
+        print(f"Cleared prediction cache: {cache_dir}")
+
+
+def get_cache_info(cache_dir):
+    """
+    Get information about the prediction cache.
+    
+    Args:
+        cache_dir (str): Cache directory
+    
+    Returns:
+        dict: Cache information
+    """
+    if not os.path.exists(cache_dir):
+        return {'num_files': 0, 'total_size_mb': 0}
+    
+    cache_files = [f for f in os.listdir(cache_dir) if f.endswith('.pkl')]
+    total_size = sum(os.path.getsize(os.path.join(cache_dir, f)) for f in cache_files)
+    
+    return {
+        'num_files': len(cache_files),
+        'total_size_mb': total_size / (1024 * 1024)
+    }
+
+
+#############################################################################
 # Model Prediction Functions
 #############################################################################
 
@@ -214,6 +334,8 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
                                       output_dir,
                                       max_samples=None,
                                       num_warmup=10,
+                                      use_cache=True,
+                                      model_path=None,
                                       ):
     """
     Evaluate model accuracy and speed on validation set.
@@ -228,8 +350,11 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
         aug_mask_dir (str): Augmented masks directory
         device (torch.device): Device for inference
         transform (callable): Image transformation
+        output_dir (str): Directory to save prediction visualizations
         max_samples (int): Maximum number of samples to evaluate
         num_warmup (int): Number of warmup iterations before timing
+        use_cache (bool): Whether to use prediction caching
+        model_path (str): Path to model file (for cache key generation)
 
     Returns:
         tuple: (accuracy_results, speed_results) dictionaries
@@ -238,6 +363,14 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
         f'Evaluating model accuracy and speed on {len(val_imgs)} validation samples...')
 
     model.eval()
+    
+    # Setup cache directory
+    cache_dir = None
+    if use_cache:
+        cache_dir = os.path.join(artifacts_dir, 'prediction_cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        cache_info = get_cache_info(cache_dir)
+        print(f'Using prediction cache: {cache_info["num_files"]} files, {cache_info["total_size_mb"]:.1f} MB')
 
     # Limit samples if specified
     if max_samples and max_samples < len(val_imgs):
@@ -278,6 +411,9 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
     per_image_confidence_metrics = []
 
     # Evaluate each sample (accuracy and timing together)
+    cache_hits = 0
+    cache_misses = 0
+    
     for img_name, mask_name in tqdm(zip(eval_imgs, eval_masks),
                                     total=len(eval_imgs),
                                     desc='Evaluating accuracy and speed'):
@@ -301,9 +437,29 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
             # Calculate positive area (fraction of pixels that are positive)
             positive_area = np.sum(true_mask > 0) / true_mask.size
 
-            # Get prediction
-            pred_time, pred_mask = predict_single_image(
-                model, image, device, transform, return_time=True)
+            # Try to load from cache first
+            pred_mask = None
+            pred_time = None
+            cached_metrics = {}
+            
+            if use_cache and cache_dir and model_path:
+                cache_key = get_cache_key(model_path, img_name)
+                pred_mask, pred_time, cached_metrics = load_prediction_cache(cache_dir, cache_key)
+                
+                if pred_mask is not None:
+                    cache_hits += 1
+                else:
+                    cache_misses += 1
+
+            # Get prediction if not cached
+            if pred_mask is None:
+                pred_time, pred_mask = predict_single_image(
+                    model, image, device, transform, return_time=True)
+                
+                # Save to cache if enabled
+                if use_cache and cache_dir and model_path:
+                    cache_key = get_cache_key(model_path, img_name)
+                    save_prediction_cache(cache_dir, cache_key, pred_mask, pred_time)
 
             # Calculate metrics
             iou = calculate_iou(pred_mask, true_mask)
@@ -356,6 +512,13 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
         except Exception as e:
             print(f'Error processing {img_name}: {e}')
             continue
+
+    # Print cache statistics
+    if use_cache:
+        total_requests = cache_hits + cache_misses
+        if total_requests > 0:
+            cache_hit_rate = cache_hits / total_requests * 100
+            print(f'Cache statistics: {cache_hits} hits, {cache_misses} misses ({cache_hit_rate:.1f}% hit rate)')
 
     # Calculate accuracy summary statistics
     accuracy_results = {
@@ -412,7 +575,8 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
 
 
 def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
-                               device, transform, num_warmup=10, num_benchmark=100):
+                               device, transform, num_warmup=10, num_benchmark=100,
+                               use_cache=True, model_path=None):
     """
     Benchmark prediction speed on a subset of validation images.
 
@@ -425,6 +589,8 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
         transform (callable): Image transformation
         num_warmup (int): Number of warmup iterations
         num_benchmark (int): Number of benchmark iterations
+        use_cache (bool): Whether to use prediction caching
+        model_path (str): Path to model file (for cache key generation)
 
     Returns:
         dict: Speed benchmark results
@@ -432,6 +598,12 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
     print(f'Benchmarking prediction speed...')
 
     model.eval()
+    
+    # Setup cache directory
+    cache_dir = None
+    if use_cache:
+        cache_dir = os.path.join(artifacts_dir, 'prediction_cache')
+        os.makedirs(cache_dir, exist_ok=True)
 
     # Select random images for benchmarking
     benchmark_imgs = np.random.choice(val_imgs,
@@ -467,8 +639,24 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
         else:
             image = Image.open(os.path.join(img_dir, img_name)).convert("RGB")
 
-        pred_time, _ = predict_single_image(
-            model, image, device, transform, return_time=True)
+        # Try to load from cache first (but only use timing if not cached)
+        pred_time = None
+        if use_cache and cache_dir and model_path:
+            cache_key = get_cache_key(model_path, img_name)
+            _, cached_time, _ = load_prediction_cache(cache_dir, cache_key)
+            if cached_time is not None:
+                pred_time = cached_time
+
+        # Get fresh prediction if not cached (for accurate timing)
+        if pred_time is None:
+            pred_time, pred_mask = predict_single_image(
+                model, image, device, transform, return_time=True)
+            
+            # Save to cache if enabled
+            if use_cache and cache_dir and model_path:
+                cache_key = get_cache_key(model_path, img_name)
+                save_prediction_cache(cache_dir, cache_key, pred_mask, pred_time)
+        
         benchmark_times.append(pred_time)
 
     # Calculate speed metrics
@@ -904,11 +1092,19 @@ def create_sample_predictions_plot(model, val_imgs, val_masks, img_dir, mask_dir
         transform (callable): Image transformation
         plot_dir (str): Directory to save plots
         num_samples (int): Number of sample predictions to show
+        use_cache (bool): Whether to use prediction caching
+        model_path (str): Path to model file (for cache key generation)
     """
     eval_plot_dir = os.path.join(plot_dir, 'model_evaluation')
     os.makedirs(eval_plot_dir, exist_ok=True)
 
     model.eval()
+    
+    # Setup cache directory
+    cache_dir = None
+    if use_cache:
+        cache_dir = os.path.join(artifacts_dir, 'prediction_cache')
+        os.makedirs(cache_dir, exist_ok=True)
 
     # Select random samples
     sample_indices = np.random.choice(
@@ -932,9 +1128,22 @@ def create_sample_predictions_plot(model, val_imgs, val_masks, img_dir, mask_dir
             image = Image.open(os.path.join(img_dir, img_name)).convert("RGB")
             true_mask = np.array(Image.open(os.path.join(mask_dir, mask_name)))
 
-        # Get prediction
-        pred_mask = predict_single_image(
-            model, image, device, transform, return_time=False)
+        # Try to load from cache first
+        pred_mask = None
+        if use_cache and cache_dir and model_path:
+            cache_key = get_cache_key(model_path, img_name)
+            pred_mask, _, _ = load_prediction_cache(cache_dir, cache_key)
+
+        # Get prediction if not cached
+        if pred_mask is None:
+            pred_mask = predict_single_image(
+                model, image, device, transform, return_time=False)
+            
+            # Save to cache if enabled
+            if use_cache and cache_dir and model_path:
+                cache_key = get_cache_key(model_path, img_name)
+                # We don't have timing here, so save with None
+                save_prediction_cache(cache_dir, cache_key, pred_mask, None)
 
         # Calculate metrics for this sample
         iou = calculate_iou(pred_mask, true_mask)
@@ -1069,6 +1278,10 @@ def parse_args():
                         help='Number of warmup samples before timing')
     parser.add_argument('--save-results', action='store_true',
                         help='Save detailed results to files')
+    parser.add_argument('--no-cache', action='store_true',
+                        help='Disable prediction caching')
+    parser.add_argument('--clear-cache', action='store_true',
+                        help='Clear prediction cache before running')
     return parser.parse_args()
 
 
@@ -1107,6 +1320,19 @@ def main():
         print("Please train a model first or specify a valid model path.")
         return
 
+    # Handle cache options
+    use_cache = not args.no_cache
+    if args.clear_cache:
+        cache_dir = os.path.join(artifacts_dir, 'prediction_cache')
+        clear_prediction_cache(cache_dir)
+    
+    if use_cache:
+        cache_dir = os.path.join(artifacts_dir, 'prediction_cache')
+        cache_info = get_cache_info(cache_dir)
+        print(f"Prediction caching enabled. Current cache: {cache_info['num_files']} files, {cache_info['total_size_mb']:.1f} MB")
+    else:
+        print("Prediction caching disabled.")
+
     # Evaluate accuracy and speed together
     print("\nEvaluating model accuracy and speed...")
     output_dir = os.path.join(data_dir, 'plots', 'prediction_visualizations')
@@ -1116,7 +1342,9 @@ def main():
         aug_img_dir, aug_mask_dir, device, transform,
         output_dir,
         max_samples=args.max_samples,
-        num_warmup=args.warmup_samples
+        num_warmup=args.warmup_samples,
+        use_cache=use_cache,
+        model_path=model_path
     )
 
     # Print summary
@@ -1128,7 +1356,8 @@ def main():
     plot_metrics_vs_positive_area(accuracy_results, plot_dir)
     create_sample_predictions_plot(
         model, val_imgs, val_masks, img_dir, mask_dir,
-        aug_img_dir, aug_mask_dir, device, transform, plot_dir
+        aug_img_dir, aug_mask_dir, device, transform, plot_dir,
+        use_cache=use_cache, model_path=model_path
     )
 
     # Save detailed results if requested
