@@ -1076,7 +1076,7 @@ def plot_evaluation_results(accuracy_results, speed_results, plot_dir):
 
 def create_sample_predictions_plot(model, val_imgs, val_masks, img_dir, mask_dir,
                                    aug_img_dir, aug_mask_dir, device, transform,
-                                   plot_dir, num_samples=6):
+                                   plot_dir, num_samples=6, use_cache=True, model_path=None):
     """
     Create a plot showing sample predictions vs ground truth.
 
