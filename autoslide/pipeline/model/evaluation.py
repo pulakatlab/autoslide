@@ -546,6 +546,7 @@ def fit_logistic_curve(x_data, y_data):
 def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
     """
     Plot IoU and Dice scores vs positive area in ground truth masks with logistic curve fitting.
+    Also creates separate plots for IoU based on positive area fraction thresholds.
 
     Args:
         accuracy_results (dict): Results from accuracy evaluation
@@ -554,12 +555,16 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
     eval_plot_dir = os.path.join(plot_dir, 'model_evaluation')
     os.makedirs(eval_plot_dir, exist_ok=True)
 
+    # Convert to numpy arrays for easier manipulation
+    positive_areas = np.array(accuracy_results['positive_areas'])
+    iou_scores = np.array(accuracy_results['iou_scores'])
+    dice_scores = np.array(accuracy_results['dice_scores'])
+
+    # Create main plot with IoU and Dice vs positive area
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 
     # IoU vs Positive Area
-    axes[0].scatter(accuracy_results['positive_areas'], 
-                   accuracy_results['iou_scores'], 
-                   alpha=0.6, s=30)
+    axes[0].scatter(positive_areas, iou_scores, alpha=0.6, s=30)
     axes[0].set_xlabel('Positive Area (fraction of pixels)')
     axes[0].set_ylabel('IoU Score')
     axes[0].set_title('IoU Score vs Positive Area in Ground Truth')
@@ -567,8 +572,7 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
     
     # Fit logistic curve for IoU
     iou_params, x_fit_iou, y_fit_iou, iou_inflection = fit_logistic_curve(
-        np.array(accuracy_results['positive_areas']), 
-        np.array(accuracy_results['iou_scores'])
+        positive_areas, iou_scores
     )
     
     if iou_params is not None:
@@ -579,20 +583,16 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
                     label=f'Inflection point ({iou_inflection[0]:.3f}, {iou_inflection[1]:.3f})')
     else:
         # Fallback to linear fit if logistic fails
-        z_iou = np.polyfit(accuracy_results['positive_areas'], 
-                          accuracy_results['iou_scores'], 1)
+        z_iou = np.polyfit(positive_areas, iou_scores, 1)
         p_iou = np.poly1d(z_iou)
-        x_trend = np.linspace(min(accuracy_results['positive_areas']), 
-                             max(accuracy_results['positive_areas']), 100)
+        x_trend = np.linspace(min(positive_areas), max(positive_areas), 100)
         axes[0].plot(x_trend, p_iou(x_trend), "r--", alpha=0.8, 
                     label=f'Linear fit: slope={z_iou[0]:.3f}')
     
     axes[0].legend()
 
     # Dice vs Positive Area
-    axes[1].scatter(accuracy_results['positive_areas'], 
-                   accuracy_results['dice_scores'], 
-                   alpha=0.6, s=30, color='orange')
+    axes[1].scatter(positive_areas, dice_scores, alpha=0.6, s=30, color='orange')
     axes[1].set_xlabel('Positive Area (fraction of pixels)')
     axes[1].set_ylabel('Dice Score')
     axes[1].set_title('Dice Score vs Positive Area in Ground Truth')
@@ -600,8 +600,7 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
     
     # Fit logistic curve for Dice
     dice_params, x_fit_dice, y_fit_dice, dice_inflection = fit_logistic_curve(
-        np.array(accuracy_results['positive_areas']), 
-        np.array(accuracy_results['dice_scores'])
+        positive_areas, dice_scores
     )
     
     if dice_params is not None:
@@ -612,11 +611,9 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
                     label=f'Inflection point ({dice_inflection[0]:.3f}, {dice_inflection[1]:.3f})')
     else:
         # Fallback to linear fit if logistic fails
-        z_dice = np.polyfit(accuracy_results['positive_areas'], 
-                           accuracy_results['dice_scores'], 1)
+        z_dice = np.polyfit(positive_areas, dice_scores, 1)
         p_dice = np.poly1d(z_dice)
-        x_trend = np.linspace(min(accuracy_results['positive_areas']), 
-                             max(accuracy_results['positive_areas']), 100)
+        x_trend = np.linspace(min(positive_areas), max(positive_areas), 100)
         axes[1].plot(x_trend, p_dice(x_trend), "r--", alpha=0.8,
                     label=f'Linear fit: slope={z_dice[0]:.3f}')
     
@@ -627,16 +624,98 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
                 dpi=300, bbox_inches='tight')
     plt.close()
 
+    # Create separate IoU plots for positive area fraction < 0.15 and >= 0.15
+    threshold = 0.15
+    low_area_mask = positive_areas < threshold
+    high_area_mask = positive_areas >= threshold
+    
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # IoU for positive area < 0.15
+    if np.any(low_area_mask):
+        low_areas = positive_areas[low_area_mask]
+        low_ious = iou_scores[low_area_mask]
+        
+        axes[0].scatter(low_areas, low_ious, alpha=0.6, s=30, color='blue')
+        axes[0].set_xlabel('Positive Area (fraction of pixels)')
+        axes[0].set_ylabel('IoU Score')
+        axes[0].set_title(f'IoU Score vs Positive Area < {threshold}\n(n={len(low_ious)} samples)')
+        axes[0].grid(True, alpha=0.3)
+        
+        # Add statistics
+        mean_iou_low = np.mean(low_ious)
+        std_iou_low = np.std(low_ious)
+        axes[0].axhline(mean_iou_low, color='red', linestyle='--', alpha=0.8,
+                       label=f'Mean: {mean_iou_low:.3f} ± {std_iou_low:.3f}')
+        axes[0].legend()
+        
+        # Fit trend line if enough points
+        if len(low_areas) > 2:
+            z_low = np.polyfit(low_areas, low_ious, 1)
+            p_low = np.poly1d(z_low)
+            x_trend_low = np.linspace(min(low_areas), max(low_areas), 100)
+            axes[0].plot(x_trend_low, p_low(x_trend_low), "g--", alpha=0.8,
+                        label=f'Trend: slope={z_low[0]:.3f}')
+            axes[0].legend()
+    else:
+        axes[0].text(0.5, 0.5, f'No samples with positive area < {threshold}', 
+                    ha='center', va='center', transform=axes[0].transAxes)
+        axes[0].set_title(f'IoU Score vs Positive Area < {threshold}')
+    
+    # IoU for positive area >= 0.15
+    if np.any(high_area_mask):
+        high_areas = positive_areas[high_area_mask]
+        high_ious = iou_scores[high_area_mask]
+        
+        axes[1].scatter(high_areas, high_ious, alpha=0.6, s=30, color='green')
+        axes[1].set_xlabel('Positive Area (fraction of pixels)')
+        axes[1].set_ylabel('IoU Score')
+        axes[1].set_title(f'IoU Score vs Positive Area ≥ {threshold}\n(n={len(high_ious)} samples)')
+        axes[1].grid(True, alpha=0.3)
+        
+        # Add statistics
+        mean_iou_high = np.mean(high_ious)
+        std_iou_high = np.std(high_ious)
+        axes[1].axhline(mean_iou_high, color='red', linestyle='--', alpha=0.8,
+                       label=f'Mean: {mean_iou_high:.3f} ± {std_iou_high:.3f}')
+        axes[1].legend()
+        
+        # Fit trend line if enough points
+        if len(high_areas) > 2:
+            z_high = np.polyfit(high_areas, high_ious, 1)
+            p_high = np.poly1d(z_high)
+            x_trend_high = np.linspace(min(high_areas), max(high_areas), 100)
+            axes[1].plot(x_trend_high, p_high(x_trend_high), "g--", alpha=0.8,
+                        label=f'Trend: slope={z_high[0]:.3f}')
+            axes[1].legend()
+    else:
+        axes[1].text(0.5, 0.5, f'No samples with positive area ≥ {threshold}', 
+                    ha='center', va='center', transform=axes[1].transAxes)
+        axes[1].set_title(f'IoU Score vs Positive Area ≥ {threshold}')
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(eval_plot_dir, 'iou_by_positive_area_threshold.png'),
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
     print(f'Metrics vs positive area plot saved to {eval_plot_dir}/metrics_vs_positive_area.png')
+    print(f'IoU by positive area threshold plot saved to {eval_plot_dir}/iou_by_positive_area_threshold.png')
 
     # Print correlation statistics and logistic fit results
-    iou_corr = np.corrcoef(accuracy_results['positive_areas'], 
-                          accuracy_results['iou_scores'])[0, 1]
-    dice_corr = np.corrcoef(accuracy_results['positive_areas'], 
-                           accuracy_results['dice_scores'])[0, 1]
+    iou_corr = np.corrcoef(positive_areas, iou_scores)[0, 1]
+    dice_corr = np.corrcoef(positive_areas, dice_scores)[0, 1]
     
     print(f'Correlation between positive area and IoU: {iou_corr:.3f}')
     print(f'Correlation between positive area and Dice: {dice_corr:.3f}')
+    
+    # Print statistics for different positive area ranges
+    if np.any(low_area_mask):
+        low_ious = iou_scores[low_area_mask]
+        print(f'IoU for positive area < {threshold}: {np.mean(low_ious):.3f} ± {np.std(low_ious):.3f} (n={len(low_ious)})')
+    
+    if np.any(high_area_mask):
+        high_ious = iou_scores[high_area_mask]
+        print(f'IoU for positive area ≥ {threshold}: {np.mean(high_ious):.3f} ± {np.std(high_ious):.3f} (n={len(high_ious)})')
     
     if iou_params is not None:
         print(f'IoU logistic fit - Inflection point: {iou_inflection[0]:.3f}, Steepness: {iou_params[1]:.3f}')
