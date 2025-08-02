@@ -291,5 +291,14 @@ def main():
     )
 
 
+def main():
+    args = parse_args()
+
+    process_all_images(
+        model_path=args.model_path,
+        save_visualizations=args.save_visualizations,
+        max_images=args.max_images
+    )
+
 if __name__ == "__main__":
     main()
