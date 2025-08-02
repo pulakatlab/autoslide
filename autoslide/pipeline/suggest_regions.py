@@ -82,152 +82,132 @@ json_list = [json.load(open(x, 'r')) for x in json_path_list]
 
 ############################################################
 
-# for data_path in data_path_list:
-for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)):
-    data_path = this_json['data_path']
-    try:
-        # data_basename = os.path.basename(data_path).split('.')[0]
-        data_basename = this_json['file_basename'].split('.')[0]
-        # Replace spaces and dashes with underscores
-        data_basename_proc = data_basename.replace(' ', '_').replace('-', '_')
-        this_output_dir = os.path.join(output_base_dir, data_basename_proc)
+def main():
+    for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)):
+        data_path = this_json['data_path']
+        try:
+            data_basename = this_json['file_basename'].split('.')[0]
+            data_basename_proc = data_basename.replace(' ', '_').replace('-', '_')
+            this_output_dir = os.path.join(output_base_dir, data_basename_proc)
 
-        if not os.path.exists(this_output_dir):
-            os.mkdir(this_output_dir)
+            if not os.path.exists(this_output_dir):
+                os.mkdir(this_output_dir)
 
-        label_mask_path = this_json['fin_mask_path']
-        label_mask = np.load(label_mask_path)
-        # metadata_path = os.path.join(metadata_dir, file_basename + '.csv')
-        metadata_path = this_json['wanted_regions_frame_path']
-        metadata = pd.read_csv(metadata_path)
+            label_mask_path = this_json['fin_mask_path']
+            label_mask = np.load(label_mask_path)
+            metadata_path = this_json['wanted_regions_frame_path']
+            metadata = pd.read_csv(metadata_path)
 
-        mask = label_mask.copy()
-        slide = slideio.open_slide(data_path, 'SVS')
-        scene = slide.get_scene(0)
-        resolution = scene.resolution[0]  # meters / pixel
-        size_meteres = np.array(scene.size) * np.array(resolution)
-        down_mag = mask.shape[0] / scene.rect[2]
-        mask_resolution = resolution / down_mag
+            mask = label_mask.copy()
+            slide = slideio.open_slide(data_path, 'SVS')
+            scene = slide.get_scene(0)
+            resolution = scene.resolution[0]
+            size_meteres = np.array(scene.size) * np.array(resolution)
+            down_mag = mask.shape[0] / scene.rect[2]
+            mask_resolution = resolution / down_mag
 
-        slide_metadata = utils.slide_handler(data_path)
+            slide_metadata = utils.slide_handler(data_path)
 
-        # Get tissue dimenions
-        # wanted_labels = [1,4]
-        wanted_labels = metadata.loc[metadata['tissue_type']
-                                     == 'heart']['tissue_num'].values
-        # wanted_mask = mask == wanted_label
-        wanted_mask = np.isin(mask, wanted_labels)
+            wanted_labels = metadata.loc[metadata['tissue_type'] == 'heart']['tissue_num'].values
+            wanted_mask = np.isin(mask, wanted_labels)
 
-        # tissue_props = metadata.loc[metadata['tissue_num'] == wanted_label]
-        # major_len = tissue_props['axis_major_length'].values[0]
-        # minor_len = tissue_props['axis_minor_length'].values[0]
-        # down_mag = mask.shape[0] / scene.rect[2]
-        # len_array_raw = np.array([major_len, minor_len])
-        # len_array_meters = (len_array_raw / down_mag) * resolution
+            eroded_mask = remove_mask_edge(
+                wanted_mask,
+                mask_resolution,
+                closing_len=75e-6,
+                edge_len=100e-6,
+            )
 
-        ##############################
-        eroded_mask = remove_mask_edge(
-            wanted_mask,
-            mask_resolution,
-            closing_len=75e-6,
-            edge_len=100e-6,
-        )
+            window_len = 7e-4
+            window_shape_pixels = int(window_len / resolution)
 
-        window_len = 7e-4  # meters
-        window_shape_pixels = int(window_len / resolution)
+            window_shape = [window_shape_pixels, window_shape_pixels]
+            step_shape = window_shape.copy()
 
-        window_shape = [window_shape_pixels, window_shape_pixels]
-        step_shape = window_shape.copy()
+            step_list = utils.gen_step_windows(
+                step_shape, window_shape, scene.rect[2:])
 
-        step_list = utils.gen_step_windows(
-            step_shape, window_shape, scene.rect[2:])
+            _, wanted_sections = utils.get_wanted_sections(
+                scene,
+                eroded_mask,
+                step_list,
+                min_fraction=1,
+            )
 
-        _, wanted_sections = utils.get_wanted_sections(
-            scene,
-            eroded_mask,
-            step_list,
-            min_fraction=1,
-        )
+            fig, ax = utils.visualize_sections(
+                scene,
+                wanted_sections,
+                plot_n=-1,
+                edgecolor='orange',
+                return_image=True,
+            )
+            ax.legend().set_visible(False)
+            fig.savefig(
+                os.path.join(
+                    this_output_dir,
+                    data_basename_proc + '_' + 'selected_section_visualization.png'),
+                dpi=300,
+                bbox_inches='tight',
+            )
+            plt.close(fig)
 
-        fig, ax = utils.visualize_sections(
-            scene,
-            wanted_sections,
-            plot_n=-1,
-            edgecolor='orange',
-            return_image=True,
-        )
-        ax.legend().set_visible(False)
-        fig.savefig(
-            os.path.join(
+            fin_mask = mask.copy()
+            fin_mask[~eroded_mask] = 0
+            section_frame = utils.annotate_sections(
+                scene,
+                fin_mask,
+                metadata,
+                wanted_sections,
+            )
+
+            section_labels = section_frame['label_values'].astype(str) + '_' + \
+                section_frame['tissue_type']
+
+            section_frame['section_labels'] = section_labels
+
+            section_frame['section_hash'] = [
+                str_to_hash(data_basename_proc + '_' + str(section_frame.iloc[i]))
+                for i in range(len(section_frame))
+            ]
+
+            section_frame['section_bounds'] = section_frame['section_bounds'].apply(
+                lambda x: [int(y) for y in x]
+            )
+
+            section_frame.to_csv(
+                os.path.join(
+                    this_output_dir,
+                    data_basename_proc + '_' + 'section_frame.csv'),
+                index=False,
+            )
+
+            img_section_list, img_list = utils.output_sections(
+                scene,
+                section_frame['section_bounds'].to_list(),
                 this_output_dir,
-                data_basename_proc + '_' + 'selected_section_visualization.png'),
-            dpi=300,
-            bbox_inches='tight',
-        )
-        plt.close(fig)
+                down_sample=4,
+                random_output_n=None,
+                output_type='return',
+            )
 
-        fin_mask = mask.copy()
-        fin_mask[~eroded_mask] = 0
-        section_frame = utils.annotate_sections(
-            scene,
-            fin_mask,
-            metadata,
-            wanted_sections,
-        )
+            out_image_dir = os.path.join(this_output_dir, 'images')
+            if not os.path.exists(out_image_dir):
+                os.mkdir(out_image_dir)
+            utils.write_out_images(
+                img_list,
+                section_frame,
+                out_image_dir,
+            )
 
-        section_labels = section_frame['label_values'].astype(str) + '_' + \
-            section_frame['tissue_type']
-
-        section_frame['section_labels'] = section_labels
-
-        # Generate truly unique identifiers for each section
-        section_frame['section_hash'] = [
-            # str(uuid.uuid4().int)[:16]
-            str_to_hash(data_basename_proc + '_' + str(section_frame.iloc[i]))
-            for i in range(len(section_frame))
-        ]
-
-        # Make sure section_bounds are a list (otherwise they are converted weirdly to np.int64)
-        # This way they are easier to load
-        section_frame['section_bounds'] = section_frame['section_bounds'].apply(
-            lambda x: [int(y) for y in x]
-        )
-
-        # Write out section_frame
-        section_frame.to_csv(
-            os.path.join(
+            this_json['suggested_regions_frame_path'] = os.path.join(
                 this_output_dir,
-                # file_basename_proc + '_' + 'section_frame.csv'),
-                data_basename_proc + '_' + 'section_frame.csv'),
-            index=False,
-        )
+                data_basename_proc + '_' + 'section_frame.csv')
 
-        img_section_list, img_list = utils.output_sections(
-            scene,
-            section_frame['section_bounds'].to_list(),
-            this_output_dir,
-            down_sample=4,
-            random_output_n=None,
-            output_type='return',
-        )
+            with open(json_path, 'w') as f:
+                json.dump(this_json, f, indent=4)
 
-        # Write out images
-        out_image_dir = os.path.join(this_output_dir, 'images')
-        if not os.path.exists(out_image_dir):
-            os.mkdir(out_image_dir)
-        utils.write_out_images(
-            img_list,
-            section_frame,
-            out_image_dir,
-        )
+        except Exception as e:
+            print(e)
 
-        # Add path to section frame to json
-        this_json['suggested_regions_frame_path'] = os.path.join(
-            this_output_dir,
-            data_basename_proc + '_' + 'section_frame.csv')
-
-        with open(json_path, 'w') as f:
-            json.dump(this_json, f, indent=4)
-
-    except Exception as e:
-        print(e)
+if __name__ == "__main__":
+    main()
