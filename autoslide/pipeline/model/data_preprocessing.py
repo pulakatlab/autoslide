@@ -113,6 +113,45 @@ def get_mask_outline(mask):
     return mask_outline
 
 
+class RandomShear():
+    """
+    Randomly shear images with a given probability.
+
+    This transformation is applied to both the image and its corresponding mask.
+    """
+
+    def __init__(self, p=0.5, shear_range=20):
+        """
+        Initialize the random shear transform.
+
+        Args:
+            p (float): Probability of applying the shear
+            shear_range (int): Maximum shear angle in degrees
+        """
+        self.p = p
+        self.shear_range = shear_range
+
+    def __call__(self, img, mask):
+        """
+        Apply random shear to image and mask.
+
+        Args:
+            img (PIL.Image): Input image
+            mask (PIL.Image): Corresponding mask
+
+        Returns:
+            tuple: (sheared_img, sheared_mask)
+        """
+        if np.random.rand() < self.p:
+            shear_angle = np.random.uniform(-self.shear_range,
+                                            self.shear_range)
+            img = img.transform(img.size, Image.AFFINE, (1, np.tan(
+                np.radians(shear_angle)), 0, 0, 1, 0))
+            mask = mask.transform(
+                mask.size, Image.AFFINE, (1, np.tan(np.radians(shear_angle)), 0, 0, 1, 0))
+        return img, mask
+
+
 class RandomRotation90():
     """
     Randomly rotate images by 90 or 270 degrees with probability p.
@@ -161,6 +200,7 @@ def create_transforms():
         T.RandomHorizontalFlip(0.5),
         T.RandomVerticalFlip(0.5),
         RandomRotation90(p=0.5),
+        RandomShear(p=0.5, shear_range=20),  # Added shear transformation
         T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
         T.ToTensor()
     ])
@@ -827,31 +867,33 @@ def test_transformations(img_dir, mask_dir, image_names, mask_names, transform):
 def prepare_data(data_dir=None, use_augmentation=True):
     """
     Main data preprocessing pipeline.
-    
+
     Args:
         data_dir (str): Root data directory
         use_augmentation (bool): Whether to use data augmentation
-        
+
     Returns:
         tuple: All necessary data components for training
     """
     print("Starting data preprocessing pipeline...")
-    
+
     # Load original data
-    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(data_dir)
-    
+    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(
+        data_dir)
+
     # Create transforms
     transform = create_transforms()
-    
+
     # Split data
-    train_imgs, train_masks, val_imgs, val_masks = split_train_val(image_names, mask_names)
-    
+    train_imgs, train_masks, val_imgs, val_masks = split_train_val(
+        image_names, mask_names)
+
     if use_augmentation:
         # Load or create augmented data
         aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names = load_or_create_augmented_data(
             labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks
         )
-        
+
         # Combine datasets
         train_imgs, train_masks, val_imgs, val_masks = combine_datasets(
             train_imgs, train_masks, val_imgs, val_masks,
@@ -865,16 +907,16 @@ def prepare_data(data_dir=None, use_augmentation=True):
         os.makedirs(aug_mask_dir, exist_ok=True)
         aug_img_names = []
         aug_mask_names = []
-    
+
     # Create dataloaders
     train_dl, val_dl = create_dataloaders(
         train_imgs, train_masks, val_imgs, val_masks,
         img_dir, mask_dir, aug_img_dir, aug_mask_dir,
         transform
     )
-    
+
     print("Data preprocessing pipeline complete!")
-    
+
     return {
         'train_dl': train_dl,
         'val_dl': val_dl,
