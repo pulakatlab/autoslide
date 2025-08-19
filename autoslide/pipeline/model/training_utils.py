@@ -43,9 +43,6 @@ def setup_directories(data_dir=None):
 #############################################################################
 
 
-
-
-
 #############################################################################
 # Training and Evaluation Functions
 #############################################################################
@@ -93,7 +90,16 @@ def setup_training(model, device):
     return optimizer
 
 
-def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir, n_epochs=90):
+def train_model(
+        model,
+        train_dl,
+        val_dl,
+        optimizer,
+        device,
+        plot_dir,
+        artifacts_dir,
+        n_epochs=90
+):
     """
     Train the model and evaluate on validation set.
 
@@ -118,12 +124,15 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
         tuple: (model, all_train_losses, all_val_losses, best_val_loss) -
                Trained model, training losses, validation losses, and best validation loss
     """
-    run_test_plot_dir = os.path.join(plot_dir, 'run_test_plot')
+    timestamp = str(np.datetime64('now', 's').astype('int'))
+
+    run_test_plot_dir = os.path.join(plot_dir, f'run_test_plot_{timestamp}')
     os.makedirs(run_test_plot_dir, exist_ok=True)
 
     best_model_path = os.path.join(
-        artifacts_dir, 'best_val_mask_rcnn_model.pth')
-    fin_model_path = os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth')
+        artifacts_dir, f'best_val_mask_rcnn_model_{timestampe}.pth')
+    fin_model_path = os.path.join(
+        artifacts_dir, f'final_mask_rcnn_model_{timestamp}.pth')
 
     all_train_losses = []
     all_val_losses = []
@@ -200,16 +209,17 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
         torch.save(model.state_dict(), fin_model_path)
 
         # Plot training progress
-        plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss)
+        plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss,
+                    suffix=timestamp)
 
     # Save loss histories
-    np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
-    np.save(artifacts_dir + '/val_losses.npy', all_val_losses)
+    np.save(artifacts_dir + f'/train_losses_{timestamp}.npy', all_train_losses)
+    np.save(artifacts_dir + f'/val_losses_{timestamp}.npy', all_val_losses)
 
     return model, all_train_losses, all_val_losses, best_val_loss
 
 
-def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
+def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss, suffix=None):
     """
     Plot training and validation losses.
 
@@ -222,6 +232,10 @@ def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
         plot_dir (str): Directory to save the plot
         best_val_loss (float): Best validation loss achieved during training
     """
+    if suffix is not None:
+        save_path = os.path.join(plot_dir, f'train_val_loss_{suffix}.png')
+    else:
+        save_path = os.path.join(plot_dir, 'train_val_loss.png')
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     ax[0].plot(all_train_losses)
     ax[1].plot(all_val_losses)
@@ -229,7 +243,7 @@ def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
     ax[1].set_title("Validation Loss")
     ax[1].axhline(y=best_val_loss, color='r',
                   linestyle='--', label='Best Val Loss')
-    fig.savefig(plot_dir + '/train_val_loss.png')
+    fig.savefig(save_path)
     plt.close(fig)
 
 
