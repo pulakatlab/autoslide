@@ -10,7 +10,7 @@ from autoslide import config
 # Get directories from config
 data_dir = config['data_dir']
 export_json_path = os.path.join(
-    data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-7_4_2025.ndjson')
+    data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-7_30_2025.ndjson')
 # data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
 
 export_df = pd.read_json(export_json_path, lines=True)
@@ -95,18 +95,18 @@ os.makedirs(test_plot_dir, exist_ok=True)
 for filename in tqdm(filenames):
     if filename not in path_map or path_map[filename] is None:
         continue
-        
+
     this_filepath = path_map[filename]
     this_filename = os.path.basename(filename)
     filename_stem = os.path.splitext(this_filename)[0]
-    
+
     # Get polygons for this file (if any)
     file_polygons = polygon_df[polygon_df['filename'] == filename]
-    
+
     this_img = plt.imread(this_filepath)
     width = this_img.shape[1]
     height = this_img.shape[0]
-    
+
     img_list = []
     if len(file_polygons) > 0:
         # File has annotations - create masks from polygons
@@ -121,13 +121,13 @@ for filename in tqdm(filenames):
             ImageDraw.Draw(img).polygon(
                 polygon, outline=this_obj_num+1, fill=this_obj_num+1)
             img_list.append(img)
-        
+
         summed_img = np.sum(np.array(img_list), axis=0)
         summed_img = summed_img / np.max(summed_img)
     else:
         # File has no annotations - create empty mask
         summed_img = np.zeros((height, width))
-    
+
     mask = np.array(summed_img)*255
     mask = mask.astype(np.uint8)
 
