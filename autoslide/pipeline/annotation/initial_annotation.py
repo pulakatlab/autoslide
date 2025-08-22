@@ -43,8 +43,9 @@ area_threshold = 10000
 
 # Get directories from config
 data_dir = config['data_dir']
-glob_pattern = 'TRI*.svs'
-file_list = glob(os.path.join(data_dir, '**', glob_pattern), recursive=True)
+svs_dir = config['svs_dir']
+glob_pattern = '*.svs'
+file_list = glob(os.path.join(svs_dir, '**', glob_pattern), recursive=True)
 
 annot_dir = os.path.join(data_dir, 'initial_annotation')
 if not os.path.exists(annot_dir):
@@ -56,7 +57,6 @@ if not os.path.exists(tracking_dir):
 
 for data_path in tqdm(file_list):
 
-    # data_path = file_list[0]
     file_basename = os.path.basename(data_path)
     slide = slideio.open_slide(data_path, 'SVS')
     scene = slide.get_scene(0)
