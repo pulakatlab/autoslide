@@ -43,8 +43,9 @@ area_threshold = 10000
 
 # Get directories from config
 data_dir = config['data_dir']
+svs_dir = config['svs_dir']
 glob_pattern = 'TRI*.svs'
-file_list = glob(os.path.join(data_dir, '**', glob_pattern), recursive=True)
+file_list = glob(os.path.join(svs_dir, '**', glob_pattern), recursive=True)
 
 annot_dir = os.path.join(data_dir, 'initial_annotation')
 if not os.path.exists(annot_dir):

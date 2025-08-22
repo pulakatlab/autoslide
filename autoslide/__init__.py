@@ -17,6 +17,7 @@ def load_config():
 
     return {
         'data_dir': data_dir,
+        'svs_dir': os.path.join(data_dir, 'svs'),
         'artifacts_dir': os.path.join(data_dir, 'artifacts'),
         'plot_dirs': os.path.join(data_dir, 'plots'),
     }
