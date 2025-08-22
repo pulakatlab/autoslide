@@ -19,10 +19,13 @@ export_df = pd.read_json(export_json_path, lines=True)
 filename_list = []
 polygon_list = []
 object_num_list = []
+all_filenames = set()
+
 for row_ind in trange(len(export_df)):
     # this_row = export_df.iloc[0]
     this_row = export_df.iloc[row_ind]
     file_name = this_row['data_row']['external_id']
+    all_filenames.add(file_name)
     projects = this_row['projects']
     project_keys = list(projects.keys())
 
@@ -47,7 +50,7 @@ polygon_df = pd.DataFrame(
 )
 
 # Find filepaths and plot overlays
-filenames = polygon_df['filename'].unique()
+filenames = list(all_filenames)
 path_list = []
 for this_name in filenames:
     # Search for this_name in data_dir
@@ -88,33 +91,43 @@ test_plot_dir = os.path.join(data_dir, 'labelled_images', 'test_plots')
 os.makedirs(mask_dir, exist_ok=True)
 os.makedirs(test_plot_dir, exist_ok=True)
 
-polygon_groups = polygon_df.groupby('filename')
-for ind, this_group in tqdm(polygon_groups):
-    # this_row = polygon_df.iloc[ind]
-    this_filepath = this_group.iloc[0]['filepath']
-    this_filename = os.path.basename(this_group.iloc[0]['filename'])
+# Process all files found in ndjson, including those without annotations
+for filename in tqdm(filenames):
+    if filename not in path_map or path_map[filename] is None:
+        continue
+        
+    this_filepath = path_map[filename]
+    this_filename = os.path.basename(filename)
     filename_stem = os.path.splitext(this_filename)[0]
+    
+    # Get polygons for this file (if any)
+    file_polygons = polygon_df[polygon_df['filename'] == filename]
+    
+    this_img = plt.imread(this_filepath)
+    width = this_img.shape[1]
+    height = this_img.shape[0]
+    
     img_list = []
-    for this_row in this_group.iterrows():
-        this_polygon = this_row[1]['polygon']
-        this_obj_num = this_row[1]['object_num']
-        # this_polygon = this_row['polygon']
-        this_img = plt.imread(this_filepath)
-        poly_x = [x['x'] for x in this_polygon]
-        poly_y = [x['y'] for x in this_polygon]
+    if len(file_polygons) > 0:
+        # File has annotations - create masks from polygons
+        for this_row in file_polygons.iterrows():
+            this_polygon = this_row[1]['polygon']
+            this_obj_num = this_row[1]['object_num']
+            poly_x = [x['x'] for x in this_polygon]
+            poly_y = [x['y'] for x in this_polygon]
 
-        # polygon = [(x1,y1),(x2,y2),...] or [x1,y1,x2,y2,...]
-        # width = ?
-        # height = ?
-        width = this_img.shape[1]
-        height = this_img.shape[0]
-        polygon = [(x, y) for x, y in zip(poly_x, poly_y)]
-        img = Image.new('L', (width, height), 0)
-        ImageDraw.Draw(img).polygon(
-            polygon, outline=this_obj_num+1, fill=this_obj_num+1)
-        img_list.append(img)
-    summed_img = np.sum(np.array(img_list), axis=0)
-    summed_img = summed_img / np.max(summed_img)
+            polygon = [(x, y) for x, y in zip(poly_x, poly_y)]
+            img = Image.new('L', (width, height), 0)
+            ImageDraw.Draw(img).polygon(
+                polygon, outline=this_obj_num+1, fill=this_obj_num+1)
+            img_list.append(img)
+        
+        summed_img = np.sum(np.array(img_list), axis=0)
+        summed_img = summed_img / np.max(summed_img)
+    else:
+        # File has no annotations - create empty mask
+        summed_img = np.zeros((height, width))
+    
     mask = np.array(summed_img)*255
     mask = mask.astype(np.uint8)
 
