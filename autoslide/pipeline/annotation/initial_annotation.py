@@ -34,16 +34,19 @@ from autoslide import config
 # Import utilities directly
 from autoslide.pipeline.utils import get_threshold_mask
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description='Initial annotation of slide images')
+    parser = argparse.ArgumentParser(
+        description='Initial annotation of slide images')
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Enable verbose output with detailed processing information')
     return parser.parse_args()
 
+
 def main():
     args = parse_args()
     verbose = args.verbose
-    
+
     ############################################################
     # PARAMS
     down_sample = 100
@@ -67,6 +70,8 @@ def main():
         print(f"  Down sample factor: {down_sample}")
         print(f"  Dilation kernel size: {dilation_kern_size}")
         print(f"  Area threshold: {area_threshold}")
+        print(f"  {len(file_list)} files found to process")
+        pprint(file_list)
         print()
 
     annot_dir = os.path.join(data_dir, 'initial_annotation')
@@ -84,18 +89,19 @@ def main():
     for i, data_path in enumerate(tqdm(file_list)):
 
         file_basename = os.path.basename(data_path)
-        
+
         if verbose:
             print(f"Processing file {i+1}/{len(file_list)}: {file_basename}")
             print(f"  Full path: {data_path}")
-        
+
         slide = slideio.open_slide(data_path, 'SVS')
         scene = slide.get_scene(0)
         image_rect = np.array(scene.rect) // down_sample
         image = scene.read_block(size=image_rect[2:])
 
         if verbose:
-            print(f"  Image loaded - Original size: {scene.rect[2:4]}, Downsampled size: {image_rect[2:4]}")
+            print(
+                f"  Image loaded - Original size: {scene.rect[2:4]}, Downsampled size: {image_rect[2:4]}")
 
         ############################################################
 
@@ -114,7 +120,7 @@ def main():
         regions = regionprops(label_image)
         image_label_overlay = label2rgb(
             label_image, image=dilated_mask, bg_label=0)
-        
+
         if verbose:
             print(f"  Found {len(regions)} regions total")
 
@@ -130,7 +136,8 @@ def main():
         ]
 
         if verbose:
-            print(f"  Extracting region features: {', '.join(wanted_feature_names)}")
+            print(
+                f"  Extracting region features: {', '.join(wanted_feature_names)}")
 
         wanted_features = [
             [getattr(region, feature_name) for region in regions]
@@ -145,19 +152,22 @@ def main():
         region_frame.sort_values('label', ascending=True, inplace=True)
         wanted_regions_frame = region_frame[region_frame.area > area_threshold]
         wanted_regions = wanted_regions_frame.label.values
-        
+
         if verbose:
-            print(f"  Filtered to {len(wanted_regions)} regions above area threshold ({area_threshold})")
+            print(
+                f"  Filtered to {len(wanted_regions)} regions above area threshold ({area_threshold})")
             if len(wanted_regions) > 0:
-                print(f"  Region areas: min={wanted_regions_frame.area.min():.0f}, max={wanted_regions_frame.area.max():.0f}, mean={wanted_regions_frame.area.mean():.0f}")
+                print(
+                    f"  Region areas: min={wanted_regions_frame.area.min():.0f}, max={wanted_regions_frame.area.max():.0f}, mean={wanted_regions_frame.area.mean():.0f}")
 
         # Output wanted_regions_frame to be annotated manually
         wanted_regions_frame['tissue_type'] = np.nan
         wanted_regions_frame['tissue_num'] = np.nan
 
-        csv_path = os.path.join(annot_dir, file_basename.replace('.svs', '.csv'))
+        csv_path = os.path.join(
+            annot_dir, file_basename.replace('.svs', '.csv'))
         wanted_regions_frame.to_csv(csv_path, index=False)
-        
+
         if verbose:
             print(f"  Saved region metadata to: {csv_path}")
 
@@ -173,9 +183,10 @@ def main():
             print(f"  Dropped {dropped_count} regions below area threshold")
 
         # Write out image with regions labelled
-        npy_path = os.path.join(annot_dir, file_basename.replace('.svs', '.npy'))
+        npy_path = os.path.join(
+            annot_dir, file_basename.replace('.svs', '.npy'))
         np.save(npy_path, fin_label_image)
-        
+
         if verbose:
             print(f"  Saved label image to: {npy_path}")
 
@@ -219,11 +230,12 @@ def main():
                        weight='bold')
         fig.suptitle(file_basename)
         plt.tight_layout()
-        
-        plot_path = os.path.join(annot_dir, file_basename.replace('.svs', '.png'))
+
+        plot_path = os.path.join(
+            annot_dir, file_basename.replace('.svs', '.png'))
         fig.savefig(plot_path, bbox_inches='tight')
         plt.close(fig)
-        
+
         if verbose:
             print(f"  Saved visualization plot to: {plot_path}")
 
@@ -240,10 +252,11 @@ def main():
             'wanted_regions_frame_path': os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
         }
 
-        json_path = os.path.join(tracking_dir, file_basename.replace('.svs', '.json'))
+        json_path = os.path.join(
+            tracking_dir, file_basename.replace('.svs', '.json'))
         with open(json_path, 'w') as f:
             json.dump(json_data, f, indent=4)
-            
+
         if verbose:
             print(f"  Saved tracking JSON to: {json_path}")
             print(f"  Completed processing {file_basename}")
@@ -255,6 +268,7 @@ def main():
         print(f"Output files saved to:")
         print(f"  Annotations: {annot_dir}")
         print(f"  Tracking: {tracking_dir}")
+
 
 if __name__ == "__main__":
     main()
