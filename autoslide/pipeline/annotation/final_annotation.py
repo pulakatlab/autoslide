@@ -16,6 +16,7 @@ from skimage.color import label2rgb
 from ast import literal_eval
 from autoslide import config
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Process final annotations')
     parser.add_argument('--verbose', '-v', action='store_true',
@@ -26,10 +27,10 @@ def parse_args():
 def main():
     args = parse_args()
     verbose = args.verbose
-    
+
     if verbose:
         print("Starting final annotation processing...")
-    
+
     # Get directories from config
     data_dir = config['data_dir']
     init_annot_dir = os.path.join(data_dir, 'initial_annotation')
@@ -130,11 +131,17 @@ def main():
         ax.set_title(this_basename)
         # Label with tissue type
         for i, row in metadata.iterrows():
+            # Centroid element could be of form: (np.float64(388.38771290085384), np.float64(431.56985248878283))
+            # Extract using regex
+            if isinstance(row['centroid'], str) and 'np.float64' in row['centroid']:
+                row['centroid'] = row['centroid'].replace('np.float64', '')
+                row['centroid'] = row['centroid'].replace('(', '')
+                row['centroid'] = row['centroid'].replace(')', '')
             centroid = literal_eval(row['centroid'])
             ax.text(centroid[1], centroid[0],
                     row['tissue_str'], color='red',
                     fontsize=25, weight='bold')
-        
+
         plot_path = os.path.join(fin_annotation_dir, this_basename + '.png')
         fig.savefig(plot_path)
         plt.close(fig)
@@ -142,7 +149,8 @@ def main():
         if verbose:
             print(f"Saved visualization: {plot_path}")
 
-        fin_mask_path = os.path.join(fin_annotation_dir, this_basename + '.npy')
+        fin_mask_path = os.path.join(
+            fin_annotation_dir, this_basename + '.npy')
         np.save(fin_mask_path, mask)
         this_json['fin_mask_path'] = fin_mask_path
 
