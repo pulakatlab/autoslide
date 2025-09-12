@@ -19,8 +19,8 @@ from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 from autoslide import config
 
-# Get directories from config
-artifacts_dir = config['artifacts_dir']
+# Get directories from config - use local artifacts directory
+artifacts_dir = os.path.join(os.path.dirname(__file__), 'artifacts')
 
 
 def initialize_model():

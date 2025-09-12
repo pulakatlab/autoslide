@@ -23,7 +23,7 @@ from autoslide.pipeline.model.prediction_utils import load_model, predict_single
 
 # Get directories from config
 data_dir = config['data_dir']
-artifacts_dir = config['artifacts_dir']
+artifacts_dir = os.path.join(os.path.dirname(__file__), 'artifacts')
 plot_dir = config['plot_dirs']
 
 

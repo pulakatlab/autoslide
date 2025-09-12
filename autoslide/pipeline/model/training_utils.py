@@ -27,7 +27,7 @@ def setup_directories(data_dir=None):
     from autoslide import config
 
     plot_dir = config['plot_dirs']
-    artifacts_dir = config['artifacts_dir']
+    artifacts_dir = os.path.join(os.path.dirname(__file__), 'artifacts')
 
     os.makedirs(plot_dir, exist_ok=True)
     os.makedirs(artifacts_dir, exist_ok=True)

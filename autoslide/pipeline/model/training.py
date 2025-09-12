@@ -31,7 +31,7 @@ from autoslide import config
 
 # Get directories from config
 data_dir = config['data_dir']
-artifacts_dir = config['artifacts_dir']
+artifacts_dir = os.path.join(os.path.dirname(__file__), 'artifacts')
 plot_dir = config['plot_dirs']
 
 # Import utilities directly
