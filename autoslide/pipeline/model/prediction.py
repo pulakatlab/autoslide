@@ -126,6 +126,11 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
         numpy.ndarray: Combined predicted mask
     """
     try:
+        # Check if image file exists
+        if not os.path.exists(image_path):
+            print(f"Image not found: {image_path}, skipping")
+            return None
+            
         if verbose:
             print(f"  Loading image from: {image_path}")
             # Check image properties
