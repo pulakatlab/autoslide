@@ -293,13 +293,78 @@ def process_single_image_fibrosis(
         return False, error_msg
 
 
+def check_existing_outputs(images_with_masks, results_dir, save_visualizations, verbose=False):
+    """
+    Check which images already have outputs and filter out processed ones.
+    
+    Args:
+        images_with_masks (list): List of image dictionaries
+        results_dir (str): Results directory path
+        save_visualizations (bool): Whether visualizations are being saved
+        verbose (bool): Whether to print detailed information
+        
+    Returns:
+        list: Filtered list of images that need processing
+    """
+    # Check for existing CSV results
+    csv_path = os.path.join(results_dir, 'fibrosis_quantification_results.csv')
+    existing_results = set()
+    
+    if os.path.exists(csv_path):
+        try:
+            existing_df = pd.read_csv(csv_path)
+            existing_results = set(existing_df['image_name'].tolist())
+            if verbose:
+                print(f"Found existing results for {len(existing_results)} images")
+        except Exception as e:
+            if verbose:
+                print(f"Error reading existing results CSV: {e}")
+    
+    # Filter out images that already have results
+    images_to_process = []
+    skipped_count = 0
+    
+    for item in images_with_masks:
+        image_name = item['image_name']
+        
+        # Check if results exist
+        has_csv_result = image_name in existing_results
+        
+        # Check if visualization exists (if visualizations are being saved)
+        has_visualization = True  # Default to true if not saving visualizations
+        if save_visualizations:
+            vis_dir = os.path.join(results_dir, 'visualizations')
+            vis_filename = image_name.replace('.png', '_fibrosis_analysis.png')
+            vis_path = os.path.join(vis_dir, vis_filename)
+            has_visualization = os.path.exists(vis_path)
+        
+        # Skip if both outputs exist
+        if has_csv_result and has_visualization:
+            skipped_count += 1
+            if verbose:
+                print(f"Skipping {image_name} - outputs already exist")
+        else:
+            images_to_process.append(item)
+            if verbose and has_csv_result and not has_visualization:
+                print(f"Will reprocess {image_name} - missing visualization")
+            elif verbose and not has_csv_result and has_visualization:
+                print(f"Will reprocess {image_name} - missing CSV result")
+    
+    if verbose:
+        print(f"Skipped {skipped_count} images with existing outputs")
+        print(f"Will process {len(images_to_process)} images")
+    
+    return images_to_process
+
+
 def process_all_fibrosis_quantification(
         data_dir=None,
         fibrosis_config=None,
         save_visualizations=True,
         max_images=None,
         verbose=False,
-        n_jobs=-1
+        n_jobs=-1,
+        force_run=False
 ):
     """
     Process all images with neural network masks for fibrosis quantification.
@@ -311,6 +376,7 @@ def process_all_fibrosis_quantification(
         max_images (int): Maximum number of images to process (for testing)
         verbose (bool): Whether to print detailed information
         n_jobs (int): Number of parallel jobs (-1 for all available cores)
+        force_run (bool): If True, process all images regardless of existing outputs
     """
     if data_dir is None:
         data_dir = config['data_dir']
@@ -334,6 +400,7 @@ def process_all_fibrosis_quantification(
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
         print(
             f"  Parallel jobs: {n_jobs if n_jobs != -1 else 'all available cores'}")
+        print(f"  Force run: {force_run}")
 
     # Find images with masks
     images_with_masks = find_images_with_masks(data_dir, verbose=verbose)
@@ -341,11 +408,6 @@ def process_all_fibrosis_quantification(
     if not images_with_masks:
         print("No images found with corresponding neural network masks.")
         return
-
-    # Limit number of images if specified
-    if max_images and max_images < len(images_with_masks):
-        images_with_masks = images_with_masks[:max_images]
-        print(f"Limited processing to {max_images} images for testing")
 
     # Create output directories
     results_dir = os.path.join(data_dir, 'fibrosis_results')
@@ -355,6 +417,21 @@ def process_all_fibrosis_quantification(
     if save_visualizations:
         vis_dir = os.path.join(results_dir, 'visualizations')
         os.makedirs(vis_dir, exist_ok=True)
+
+    # Filter out images that already have outputs (unless force_run is True)
+    if not force_run:
+        images_with_masks = check_existing_outputs(
+            images_with_masks, results_dir, save_visualizations, verbose=verbose
+        )
+        
+        if not images_with_masks:
+            print("All images already have outputs. Use --force-run to reprocess all images.")
+            return
+
+    # Limit number of images if specified
+    if max_images and max_images < len(images_with_masks):
+        images_with_masks = images_with_masks[:max_images]
+        print(f"Limited processing to {max_images} images for testing")
 
     # Process images in parallel
     print(
@@ -380,16 +457,34 @@ def process_all_fibrosis_quantification(
             print(result_or_error)
             failed_analyses += 1
 
-    # Save results to CSV
+    # Save results to CSV (append to existing if not force_run)
     if results_list:
-        results_df = pd.DataFrame(results_list)
+        new_results_df = pd.DataFrame(results_list)
         csv_path = os.path.join(
             results_dir, 'fibrosis_quantification_results.csv')
-        results_df.to_csv(csv_path, index=False)
-        print(f"Results saved to: {csv_path}")
-
-        # Create summary statistics
-        create_summary_statistics(results_df, results_dir, verbose=verbose)
+        
+        # If not force_run and CSV exists, append new results
+        if not force_run and os.path.exists(csv_path):
+            try:
+                existing_df = pd.read_csv(csv_path)
+                # Remove any duplicate entries (in case of partial reprocessing)
+                existing_df = existing_df[~existing_df['image_name'].isin(new_results_df['image_name'])]
+                combined_df = pd.concat([existing_df, new_results_df], ignore_index=True)
+                combined_df.to_csv(csv_path, index=False)
+                print(f"Results appended to existing CSV: {csv_path}")
+                print(f"Total results now: {len(combined_df)} images")
+                
+                # Create summary statistics with combined data
+                create_summary_statistics(combined_df, results_dir, verbose=verbose)
+            except Exception as e:
+                print(f"Error appending to existing CSV, saving new file: {e}")
+                new_results_df.to_csv(csv_path, index=False)
+                create_summary_statistics(new_results_df, results_dir, verbose=verbose)
+        else:
+            # Force run or no existing CSV - save new results
+            new_results_df.to_csv(csv_path, index=False)
+            print(f"Results saved to: {csv_path}")
+            create_summary_statistics(new_results_df, results_dir, verbose=verbose)
 
     print(f"\nFibrosis quantification complete!")
     print(f"Successful analyses: {successful_analyses}")
@@ -585,6 +680,8 @@ def parse_args():
                         help='Color saturation threshold (default: 0.0)')
     parser.add_argument('--n-jobs', type=int, default=-1,
                         help='Number of parallel jobs (-1 for all available cores, default: -1)')
+    parser.add_argument('--force-run', action='store_true',
+                        help='Process all images regardless of existing outputs')
     return parser.parse_args()
 
 
@@ -604,5 +701,6 @@ if __name__ == "__main__":
         save_visualizations=not args.no_visualizations,
         max_images=args.max_images,
         verbose=args.verbose,
-        n_jobs=args.n_jobs
+        n_jobs=args.n_jobs,
+        force_run=args.force_run
     )
