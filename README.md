@@ -20,9 +20,8 @@ Our end-to-end workflow transforms raw histological slides into actionable insig
 1. **🔍 Initial Annotation** - Intelligent thresholding and region identification
 2. **🏷️ Final Annotation** - Precise tissue labeling and mask generation  
 3. **📊 Region Suggestion** - Strategic selection of analysis-ready sections
-4. **🤖 Model Training** - Fine-tuned Mask R-CNN with data augmentation
-5. **🔬 Vessel Detection** - Deep learning-based identification of vascular structures
-6. **📈 Fibrosis Quantification** - Automated measurement of fibrotic tissue using HSV color analysis
+4. **🔬 Vessel Detection** - Deep learning-based identification of vascular structures using pre-trained Mask R-CNN
+5. **📈 Fibrosis Quantification** - Automated measurement of fibrotic tissue using HSV color analysis
 
 ### Initial Annotation
 ![TRI_85B-113_86A-118_38696](https://github.com/user-attachments/assets/5e149cdc-6469-4fe7-9c11-4e710237eb35)
@@ -50,22 +49,21 @@ Our end-to-end workflow transforms raw histological slides into actionable insig
 
 ## 🛠️ Technical Highlights
 
-- **Deep Learning Integration** - Fine-tuned Mask R-CNN models for precise vessel detection
+- **Deep Learning Integration** - Pre-trained Mask R-CNN models for precise vessel detection
 - **Advanced Image Processing** - Sophisticated morphological operations for tissue segmentation
 - **Intelligent Selection Algorithms** - Context-aware region extraction based on tissue properties
 - **Comprehensive Visualization** - Rich visual outputs at every stage of the pipeline
 - **Data Augmentation** - Negative sampling and artificial vessel generation for robust training
 - **Unique Section Tracking** - SHA-256 based hashing for reproducible section identification
 
-## 📊 Data Preparation & Model Training
+## 📊 Data Preparation & Model Usage
 
 AutoSlide includes specialized tools for:
-- Converting annotations from Labelbox and other labeling tools into training-ready formats
+- Converting annotations from Labelbox and other labeling tools into analysis-ready formats
 - Creating high-quality binary masks from polygon annotations
-- Fine-tuning state-of-the-art deep learning models on your specific tissue types
-- Generating insightful visualizations of model performance
-- Automated data augmentation with negative samples and artificial vessels
-- Comprehensive train/validation splitting with visualization
+- Utilizing pre-trained state-of-the-art deep learning models for vessel detection
+- Generating insightful visualizations of model predictions
+- Comprehensive data handling and visualization capabilities
 
 ## 📋 Requirements
 
@@ -109,10 +107,7 @@ python autoslide/pipeline/annotation/final_annotation.py
 # Region suggestion
 python autoslide/pipeline/suggest_regions.py
 
-# Model training with options
-python autoslide/pipeline/model/training.py --retrain
-
-# Prediction
+# Vessel detection using pre-trained model
 python autoslide/pipeline/model/prediction.py
 
 # Fibrosis quantification
@@ -124,11 +119,8 @@ python autoslide/fibrosis_calculation/calc_fibrosis.py
 # Skip annotation steps
 python autoslide/pipeline/run_pipeline.py --skip_annotation
 
-# Skip training (use existing model)
-python autoslide/pipeline/run_pipeline.py --skip_training
-
-# Disable data augmentation
-python autoslide/pipeline/run_pipeline.py --no_augmentation
+# Run with custom options
+python autoslide/pipeline/run_pipeline.py --skip_annotation
 
 # Fibrosis quantification with custom parameters
 python autoslide/fibrosis_calculation/calc_fibrosis.py --hue-value 0.6785 --hue-width 0.4 --verbose
@@ -154,8 +146,7 @@ autoslide/
 AutoSlide generates comprehensive outputs including:
 - **Annotated slide visualizations** with tissue boundaries and labels
 - **Region selection maps** showing extracted analysis areas
-- **Model training metrics** and loss curves
-- **Prediction visualizations** with detected vessels highlighted
+- **Vessel detection results** with identified structures highlighted
 - **Fibrosis quantification reports** with HSV-based percentage measurements and visualizations
 - **Section tracking data** with unique identifiers for reproducibility
 
