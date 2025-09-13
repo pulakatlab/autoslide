@@ -11,3 +11,4 @@ tqdm>=4.60.0
 pillow>=8.2.0
 scipy>=1.7.0
 jupyter>=1.0.0
+joblib
