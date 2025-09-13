@@ -139,6 +139,7 @@ if __name__ == "__main__":
     #     print(f"No section found with hash {test_hash}")
 
     # Example usage of fibrosis quantification
+    # Values taken from ::: https://pmc.ncbi.nlm.nih.gov/articles/PMC5376943/
     fibrosis_config = dict(
         hue_value=0.6785,
         hue_width=0.4,
