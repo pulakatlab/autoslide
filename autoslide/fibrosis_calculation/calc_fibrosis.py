@@ -421,9 +421,9 @@ def create_fibrosis_visualization(image, fibrosis_mask, vessel_mask, results, im
 
         # Fibrosis overlay
         fib_overlay = image.copy()
-        fib_overlay[fibrosis_mask == 1] = [0, 1, 1]  # Cyan for fibrosis
+        fib_overlay[fibrosis_mask == 1] = [0, 1, 0]  # Green for fibrosis
         axes[1, 0].imshow(fib_overlay)
-        axes[1, 0].set_title('Fibrosis Overlay (Cyan)')
+        axes[1, 0].set_title('Fibrosis Overlay (Green)')
         axes[1, 0].axis('off')
 
         # Combined overlay
@@ -431,9 +431,9 @@ def create_fibrosis_visualization(image, fibrosis_mask, vessel_mask, results, im
         vessel_binary = (vessel_mask > 127).astype(
             bool) if vessel_mask.max() > 1 else vessel_mask.astype(bool)
         combined_overlay[vessel_binary] = [1, 0, 0]  # Red for vessels
-        combined_overlay[fibrosis_mask == 1] = [0, 1, 1]  # Cyan for fibrosis
+        combined_overlay[fibrosis_mask == 1] = [0, 1, 0]  # Green for fibrosis
         axes[1, 1].imshow(combined_overlay)
-        axes[1, 1].set_title('Combined Overlay\n(Red=Vessels, Cyan=Fibrosis)')
+        axes[1, 1].set_title('Combined Overlay\n(Red=Vessels, Green=Fibrosis)')
         axes[1, 1].axis('off')
 
         # Results text
