@@ -184,7 +184,13 @@ def find_images_with_masks(data_dir, verbose=False):
     return images_with_masks
 
 
-def process_all_fibrosis_quantification(data_dir=None, fibrosis_config=None, save_visualizations=True, max_images=None, verbose=False):
+def process_all_fibrosis_quantification(
+        data_dir=None, 
+        fibrosis_config=None, 
+        save_visualizations=True, 
+        max_images=None, 
+        verbose=False
+        ):
     """
     Process all images with neural network masks for fibrosis quantification.
     
