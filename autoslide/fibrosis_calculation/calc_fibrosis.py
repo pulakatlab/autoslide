@@ -211,6 +211,7 @@ def process_single_image_fibrosis(
         fibrosis_config,
         save_visualizations,
         vis_dir,
+        results_dir,
         verbose
 ):
     """
@@ -221,6 +222,7 @@ def process_single_image_fibrosis(
         fibrosis_config (dict): Configuration for fibrosis detection
         save_visualizations (bool): Whether to save visualization images
         vis_dir (str): Directory to save visualizations
+        results_dir (str): Directory to save individual CSV results
         verbose (bool): Whether to print detailed information
 
     Returns:
@@ -276,6 +278,17 @@ def process_single_image_fibrosis(
                 print(
                     f"  Vessel area: {fibrosis_results['vessel_area']} pixels")
 
+        # Save individual CSV result
+        csv_filename = image_name.replace('.png', '_fibrosis_results.csv')
+        csv_path = os.path.join(results_dir, 'individual_results', csv_filename)
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+        
+        result_df = pd.DataFrame([result_entry])
+        result_df.to_csv(csv_path, index=False)
+        
+        if verbose:
+            print(f"  Individual results saved to: {csv_path}")
+
         # Create visualization if requested
         if save_visualizations and vis_dir:
             create_fibrosis_visualization(
@@ -306,19 +319,8 @@ def check_existing_outputs(images_with_masks, results_dir, save_visualizations, 
     Returns:
         list: Filtered list of images that need processing
     """
-    # Check for existing CSV results
-    csv_path = os.path.join(results_dir, 'fibrosis_quantification_results.csv')
-    existing_results = set()
-    
-    if os.path.exists(csv_path):
-        try:
-            existing_df = pd.read_csv(csv_path)
-            existing_results = set(existing_df['image_name'].tolist())
-            if verbose:
-                print(f"Found existing results for {len(existing_results)} images")
-        except Exception as e:
-            if verbose:
-                print(f"Error reading existing results CSV: {e}")
+    # Check for existing individual CSV results
+    individual_results_dir = os.path.join(results_dir, 'individual_results')
     
     # Filter out images that already have results
     images_to_process = []
@@ -327,8 +329,10 @@ def check_existing_outputs(images_with_masks, results_dir, save_visualizations, 
     for item in images_with_masks:
         image_name = item['image_name']
         
-        # Check if results exist
-        has_csv_result = image_name in existing_results
+        # Check if individual CSV result exists
+        csv_filename = image_name.replace('.png', '_fibrosis_results.csv')
+        csv_path = os.path.join(individual_results_dir, csv_filename)
+        has_csv_result = os.path.exists(csv_path)
         
         # Check if visualization exists (if visualizations are being saved)
         has_visualization = True  # Default to true if not saving visualizations
@@ -440,7 +444,7 @@ def process_all_fibrosis_quantification(
     # Use joblib to parallelize the processing
     results = Parallel(n_jobs=n_jobs, verbose=1 if verbose else 0)(
         delayed(process_single_image_fibrosis)(
-            item, fibrosis_config, save_visualizations, vis_dir, verbose
+            item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose
         ) for item in tqdm(images_with_masks, desc="Processing fibrosis quantification")
     )
 
@@ -457,34 +461,42 @@ def process_all_fibrosis_quantification(
             print(result_or_error)
             failed_analyses += 1
 
-    # Save results to CSV (append to existing if not force_run)
-    if results_list:
-        new_results_df = pd.DataFrame(results_list)
-        csv_path = os.path.join(
-            results_dir, 'fibrosis_quantification_results.csv')
-        
-        # If not force_run and CSV exists, append new results
-        if not force_run and os.path.exists(csv_path):
-            try:
-                existing_df = pd.read_csv(csv_path)
-                # Remove any duplicate entries (in case of partial reprocessing)
-                existing_df = existing_df[~existing_df['image_name'].isin(new_results_df['image_name'])]
-                combined_df = pd.concat([existing_df, new_results_df], ignore_index=True)
-                combined_df.to_csv(csv_path, index=False)
-                print(f"Results appended to existing CSV: {csv_path}")
-                print(f"Total results now: {len(combined_df)} images")
+    # Create combined CSV from all individual results
+    if results_list or not force_run:
+        # Load all individual CSV files to create combined results
+        individual_results_dir = os.path.join(results_dir, 'individual_results')
+        if os.path.exists(individual_results_dir):
+            individual_csv_files = glob(os.path.join(individual_results_dir, '*_fibrosis_results.csv'))
+            
+            if individual_csv_files:
+                # Read all individual CSV files
+                all_results = []
+                for csv_file in individual_csv_files:
+                    try:
+                        df = pd.read_csv(csv_file)
+                        all_results.append(df)
+                    except Exception as e:
+                        if verbose:
+                            print(f"Error reading {csv_file}: {e}")
                 
-                # Create summary statistics with combined data
-                create_summary_statistics(combined_df, results_dir, verbose=verbose)
-            except Exception as e:
-                print(f"Error appending to existing CSV, saving new file: {e}")
-                new_results_df.to_csv(csv_path, index=False)
-                create_summary_statistics(new_results_df, results_dir, verbose=verbose)
+                if all_results:
+                    # Combine all results
+                    combined_df = pd.concat(all_results, ignore_index=True)
+                    
+                    # Save combined CSV
+                    csv_path = os.path.join(results_dir, 'fibrosis_quantification_results.csv')
+                    combined_df.to_csv(csv_path, index=False)
+                    print(f"Combined results saved to: {csv_path}")
+                    print(f"Total results: {len(combined_df)} images")
+                    
+                    # Create summary statistics
+                    create_summary_statistics(combined_df, results_dir, verbose=verbose)
+                else:
+                    print("No valid individual CSV files found to combine")
+            else:
+                print("No individual CSV files found")
         else:
-            # Force run or no existing CSV - save new results
-            new_results_df.to_csv(csv_path, index=False)
-            print(f"Results saved to: {csv_path}")
-            create_summary_statistics(new_results_df, results_dir, verbose=verbose)
+            print("Individual results directory not found")
 
     print(f"\nFibrosis quantification complete!")
     print(f"Successful analyses: {successful_analyses}")
