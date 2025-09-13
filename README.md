@@ -22,7 +22,7 @@ Our end-to-end workflow transforms raw histological slides into actionable insig
 3. **📊 Region Suggestion** - Strategic selection of analysis-ready sections
 4. **🤖 Model Training** - Fine-tuned Mask R-CNN with data augmentation
 5. **🔬 Vessel Detection** - Deep learning-based identification of vascular structures
-6. **📈 Fibrosis Analysis** - Automated quantification of fibrotic tissue
+6. **📈 Fibrosis Quantification** - Automated measurement of fibrotic tissue using HSV color analysis
 
 ### Initial Annotation
 ![TRI_85B-113_86A-118_38696](https://github.com/user-attachments/assets/5e149cdc-6469-4fe7-9c11-4e710237eb35)
@@ -114,6 +114,9 @@ python autoslide/pipeline/model/training.py --retrain
 
 # Prediction
 python autoslide/pipeline/model/prediction.py
+
+# Fibrosis quantification
+python autoslide/fibrosis_calculation/calc_fibrosis.py
 ```
 
 ### Command Line Options
@@ -126,6 +129,9 @@ python autoslide/pipeline/run_pipeline.py --skip_training
 
 # Disable data augmentation
 python autoslide/pipeline/run_pipeline.py --no_augmentation
+
+# Fibrosis quantification with custom parameters
+python autoslide/fibrosis_calculation/calc_fibrosis.py --hue-value 0.6785 --hue-width 0.4 --verbose
 ```
 
 ## 🗂️ Project Structure
@@ -139,6 +145,7 @@ autoslide/
 │   └── utils.py           # Core utility functions
 ├── utils/                  # Additional utilities
 ├── fibrosis_calculation/   # Fibrosis quantification tools
+│   └── calc_fibrosis.py   # Main fibrosis analysis module
 └── config.json            # Configuration file
 ```
 
@@ -149,7 +156,7 @@ AutoSlide generates comprehensive outputs including:
 - **Region selection maps** showing extracted analysis areas
 - **Model training metrics** and loss curves
 - **Prediction visualizations** with detected vessels highlighted
-- **Fibrosis quantification reports** with percentage measurements
+- **Fibrosis quantification reports** with HSV-based percentage measurements and visualizations
 - **Section tracking data** with unique identifiers for reproducibility
 
 ## 🔬 Supported File Formats
