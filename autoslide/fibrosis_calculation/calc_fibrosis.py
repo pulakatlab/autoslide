@@ -16,6 +16,7 @@ from autoslide import config
 from autoslide.pipeline import utils
 from autoslide.utils.get_section_from_hash import *
 import cv2
+from joblib import Parallel, delayed
 
 ##############################
 
@@ -184,12 +185,91 @@ def find_images_with_masks(data_dir, verbose=False):
     return images_with_masks
 
 
+def process_single_image_fibrosis(item, fibrosis_config, save_visualizations, vis_dir, verbose):
+    """
+    Process a single image for fibrosis quantification.
+    
+    Args:
+        item (dict): Dictionary containing image metadata and paths
+        fibrosis_config (dict): Configuration for fibrosis detection
+        save_visualizations (bool): Whether to save visualization images
+        vis_dir (str): Directory to save visualizations
+        verbose (bool): Whether to print detailed information
+        
+    Returns:
+        tuple: (success_flag, result_entry_or_error_message)
+    """
+    image_path = item['image_path']
+    mask_path = item['mask_path']
+    image_name = item['image_name']
+    
+    try:
+        # Load image and vessel mask
+        image = plt.imread(image_path)
+        if image.shape[-1] == 4:  # Remove alpha channel if present
+            image = image[..., :3]
+        
+        vessel_mask = plt.imread(mask_path)
+        if len(vessel_mask.shape) == 3:  # Convert to grayscale if needed
+            vessel_mask = vessel_mask[..., 0]
+        
+        if verbose:
+            print(f"  Processing {image_name}")
+            print(f"  Image shape: {image.shape}")
+            print(f"  Vessel mask shape: {vessel_mask.shape}")
+            print(f"  Vessel mask range: {vessel_mask.min()} - {vessel_mask.max()}")
+        
+        # Generate fibrosis mask
+        fibrosis_mask = gen_fibrosis_mask(image, fibrosis_config)
+        
+        # Quantify fibrosis
+        fibrosis_results = quantify_fibrosis(
+            image, 
+            mask=fibrosis_mask, 
+            config=fibrosis_config, 
+            vessel_mask=vessel_mask
+        )
+        
+        # Add metadata to results
+        result_entry = {
+            'image_name': image_name,
+            'image_path': image_path,
+            'mask_path': mask_path,
+            'region_type': item['region_type'],
+            'hash_value': item['hash_value'],
+            **fibrosis_results
+        }
+        
+        if verbose:
+            if 'fibrosis_percentage' in fibrosis_results:
+                print(f"  Fibrosis percentage: {fibrosis_results['fibrosis_percentage']:.2f}%")
+            if 'vessel_area' in fibrosis_results:
+                print(f"  Vessel area: {fibrosis_results['vessel_area']} pixels")
+        
+        # Create visualization if requested
+        if save_visualizations and vis_dir:
+            create_fibrosis_visualization(
+                image, fibrosis_mask, vessel_mask, fibrosis_results, 
+                image_name, vis_dir, verbose=verbose
+            )
+        
+        return True, result_entry
+        
+    except Exception as e:
+        error_msg = f"Error processing {image_name}: {e}"
+        if verbose:
+            import traceback
+            error_msg += f"\n  Full traceback: {traceback.format_exc()}"
+        return False, error_msg
+
+
 def process_all_fibrosis_quantification(
         data_dir=None, 
         fibrosis_config=None, 
         save_visualizations=True, 
         max_images=None, 
-        verbose=False
+        verbose=False,
+        n_jobs=-1
         ):
     """
     Process all images with neural network masks for fibrosis quantification.
@@ -200,6 +280,7 @@ def process_all_fibrosis_quantification(
         save_visualizations (bool): Whether to save visualization images
         max_images (int): Maximum number of images to process (for testing)
         verbose (bool): Whether to print detailed information
+        n_jobs (int): Number of parallel jobs (-1 for all available cores)
     """
     if data_dir is None:
         data_dir = config['data_dir']
@@ -221,6 +302,7 @@ def process_all_fibrosis_quantification(
         print(f"  Fibrosis config: {fibrosis_config}")
         print(f"  Save visualizations: {save_visualizations}")
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
+        print(f"  Parallel jobs: {n_jobs if n_jobs != -1 else 'all available cores'}")
     
     # Find images with masks
     images_with_masks = find_images_with_masks(data_dir, verbose=verbose)
@@ -238,80 +320,32 @@ def process_all_fibrosis_quantification(
     results_dir = os.path.join(data_dir, 'fibrosis_results')
     os.makedirs(results_dir, exist_ok=True)
     
+    vis_dir = None
     if save_visualizations:
         vis_dir = os.path.join(results_dir, 'visualizations')
         os.makedirs(vis_dir, exist_ok=True)
     
-    # Process each image
+    # Process images in parallel
+    print(f"Processing {len(images_with_masks)} images using {n_jobs if n_jobs != -1 else 'all available'} parallel jobs...")
+    
+    # Use joblib to parallelize the processing
+    results = Parallel(n_jobs=n_jobs, verbose=1 if verbose else 0)(
+        delayed(process_single_image_fibrosis)(
+            item, fibrosis_config, save_visualizations, vis_dir, verbose
+        ) for item in tqdm(images_with_masks, desc="Processing fibrosis quantification")
+    )
+    
+    # Separate successful results from errors
     results_list = []
     successful_analyses = 0
     failed_analyses = 0
     
-    for i, item in enumerate(tqdm(images_with_masks, desc="Processing fibrosis quantification")):
-        image_path = item['image_path']
-        mask_path = item['mask_path']
-        image_name = item['image_name']
-        
-        if verbose:
-            print(f"\nProcessing image {i+1}/{len(images_with_masks)}: {image_name}")
-        
-        try:
-            # Load image and vessel mask
-            image = plt.imread(image_path)
-            if image.shape[-1] == 4:  # Remove alpha channel if present
-                image = image[..., :3]
-            
-            vessel_mask = plt.imread(mask_path)
-            if len(vessel_mask.shape) == 3:  # Convert to grayscale if needed
-                vessel_mask = vessel_mask[..., 0]
-            
-            if verbose:
-                print(f"  Image shape: {image.shape}")
-                print(f"  Vessel mask shape: {vessel_mask.shape}")
-                print(f"  Vessel mask range: {vessel_mask.min()} - {vessel_mask.max()}")
-            
-            # Generate fibrosis mask
-            fibrosis_mask = gen_fibrosis_mask(image, fibrosis_config)
-            
-            # Quantify fibrosis
-            fibrosis_results = quantify_fibrosis(
-                image, 
-                mask=fibrosis_mask, 
-                config=fibrosis_config, 
-                vessel_mask=vessel_mask
-            )
-            
-            # Add metadata to results
-            result_entry = {
-                'image_name': image_name,
-                'image_path': image_path,
-                'mask_path': mask_path,
-                'region_type': item['region_type'],
-                'hash_value': item['hash_value'],
-                **fibrosis_results
-            }
-            results_list.append(result_entry)
-            
-            if verbose:
-                if 'fibrosis_percentage' in fibrosis_results:
-                    print(f"  Fibrosis percentage: {fibrosis_results['fibrosis_percentage']:.2f}%")
-                if 'vessel_area' in fibrosis_results:
-                    print(f"  Vessel area: {fibrosis_results['vessel_area']} pixels")
-            
-            # Create visualization if requested
-            if save_visualizations:
-                create_fibrosis_visualization(
-                    image, fibrosis_mask, vessel_mask, fibrosis_results, 
-                    image_name, vis_dir, verbose=verbose
-                )
-            
+    for success, result_or_error in results:
+        if success:
+            results_list.append(result_or_error)
             successful_analyses += 1
-            
-        except Exception as e:
-            print(f"Error processing {image_name}: {e}")
-            if verbose:
-                import traceback
-                print(f"  Full traceback: {traceback.format_exc()}")
+        else:
+            print(result_or_error)
             failed_analyses += 1
     
     # Save results to CSV
@@ -509,6 +543,8 @@ def parse_args():
                         help='Hue width for fibrosis detection (default: 0.4)')
     parser.add_argument('--saturation-threshold', type=float, default=0.0,
                         help='Color saturation threshold (default: 0.0)')
+    parser.add_argument('--n-jobs', type=int, default=-1,
+                        help='Number of parallel jobs (-1 for all available cores, default: -1)')
     return parser.parse_args()
 
 
@@ -527,5 +563,6 @@ if __name__ == "__main__":
         fibrosis_config=fibrosis_config,
         save_visualizations=not args.no_visualizations,
         max_images=args.max_images,
-        verbose=args.verbose
+        verbose=args.verbose,
+        n_jobs=args.n_jobs
     )
