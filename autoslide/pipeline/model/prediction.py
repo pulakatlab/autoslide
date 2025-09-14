@@ -292,6 +292,59 @@ def save_timing_to_tracking_json(image_path, prediction_time, verbose=False):
             print(f"  Full traceback: {traceback.format_exc()}")
 
 
+def save_svs_timing_to_tracking_json(svs_dir_path, svs_processing_time, num_images, verbose=False):
+    """
+    Save SVS directory processing timing information to a tracking JSON file.
+
+    Args:
+        svs_dir_path (str): Path to the SVS directory
+        svs_processing_time (float): Time taken to process all images in the SVS directory
+        num_images (int): Number of images processed in this SVS directory
+        verbose (bool): Whether to print detailed information
+    """
+    try:
+        # Create tracking JSON filename in the SVS directory
+        tracking_json_path = os.path.join(svs_dir_path, 'tracking.json')
+        
+        # Load existing tracking data or create new
+        tracking_data = {}
+        if os.path.exists(tracking_json_path):
+            try:
+                with open(tracking_json_path, 'r') as f:
+                    tracking_data = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                if verbose:
+                    print(f"  Warning: Could not load existing tracking.json: {e}")
+                    print(f"  Creating new tracking data")
+                tracking_data = {}
+        
+        # Add SVS directory timing information
+        svs_key = '_svs_processing_summary'
+        if svs_key not in tracking_data:
+            tracking_data[svs_key] = {}
+        
+        tracking_data[svs_key]['total_processing_time_seconds'] = round(svs_processing_time, 3)
+        tracking_data[svs_key]['num_images_processed'] = num_images
+        tracking_data[svs_key]['avg_time_per_image_seconds'] = round(svs_processing_time / num_images, 3) if num_images > 0 else 0
+        tracking_data[svs_key]['processing_timestamp'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Save updated tracking data
+        with open(tracking_json_path, 'w') as f:
+            json.dump(tracking_data, f, indent=2, sort_keys=True)
+        
+        if verbose:
+            print(f"  SVS timing data saved to: {tracking_json_path}")
+            print(f"  Total processing time: {svs_processing_time:.3f} seconds")
+            print(f"  Images processed: {num_images}")
+            print(f"  Average time per image: {svs_processing_time / num_images:.3f} seconds" if num_images > 0 else "  No images processed")
+            
+    except Exception as e:
+        print(f"Error saving SVS timing data for {svs_dir_path}: {e}")
+        if verbose:
+            import traceback
+            print(f"  Full traceback: {traceback.format_exc()}")
+
+
 def save_prediction_visualization(image_path, mask_path, predicted_mask, plot_dir):
     """
     Save a visualization of the prediction for quality control.
@@ -409,6 +462,10 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         if verbose:
             print(f"  Directory contains {len(images_list)} images to process")
 
+        # Start timing for this SVS directory
+        svs_start_time = time.time()
+        svs_successful_count = 0
+
         # Process all images in this SVS directory
         for i, item in enumerate(tqdm(images_list, desc=f"Processing {svs_dir_name}", leave=False)):
             image_path = item['image_path']
@@ -449,6 +506,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
                             image_path, mask_path, predicted_mask, plot_dir)
 
                     successful_predictions += 1
+                    svs_successful_count += 1
                     if verbose:
                         print(f"    ✓ Successfully processed {image_name} in {prediction_time:.3f}s")
                     else:
@@ -466,7 +524,19 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
                     print(f"    ✗ Prediction failed for {image_name}")
                 failed_predictions += 1
 
-        print(f"Completed SVS directory: {svs_dir_name}")
+        # Calculate SVS directory processing time
+        svs_processing_time = time.time() - svs_start_time
+        
+        # Get SVS directory path for saving timing data
+        if images_list:
+            # Get the parent directory of the images directory
+            first_image_path = images_list[0]['image_path']
+            svs_dir_path = os.path.dirname(os.path.dirname(first_image_path))  # Go up from images/ to SVS directory
+            
+            # Save SVS timing information
+            save_svs_timing_to_tracking_json(svs_dir_path, svs_processing_time, svs_successful_count, verbose=verbose)
+
+        print(f"Completed SVS directory: {svs_dir_name} ({svs_processing_time:.1f}s, {svs_successful_count} successful)")
 
     print(f"\nBatch prediction complete!")
     print(f"Processed {len(images_by_svs)} SVS directories")
