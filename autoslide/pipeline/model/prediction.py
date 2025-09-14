@@ -19,6 +19,7 @@ import argparse
 import cv2
 import time
 import json
+import shutil
 
 from autoslide import config
 from autoslide.pipeline.model.prediction_utils import load_model, predict_single_image
@@ -31,12 +32,44 @@ plot_dir = config['plot_dirs']
 
 ##############################
 
-def find_images_to_process(verbose=False):
+def remove_svs_outputs(svs_dir_path, verbose=False):
+    """
+    Remove mask and overlay directories for a given SVS directory.
+    
+    Args:
+        svs_dir_path (str): Path to the SVS directory
+        verbose (bool): Whether to print detailed information
+    """
+    mask_dir = os.path.join(svs_dir_path, 'masks')
+    overlay_dir = os.path.join(svs_dir_path, 'overlays')
+    
+    dirs_removed = 0
+    
+    if os.path.exists(mask_dir):
+        if verbose:
+            print(f"  Removing mask directory: {mask_dir}")
+        shutil.rmtree(mask_dir)
+        dirs_removed += 1
+    
+    if os.path.exists(overlay_dir):
+        if verbose:
+            print(f"  Removing overlay directory: {overlay_dir}")
+        shutil.rmtree(overlay_dir)
+        dirs_removed += 1
+    
+    if verbose and dirs_removed > 0:
+        print(f"  Removed {dirs_removed} output directories")
+    elif verbose:
+        print(f"  No output directories found to remove")
+
+
+def find_images_to_process(reprocess=False, verbose=False):
     """
     Find all images that need prediction and don't already have masks.
     Groups images by their parent SVS directory.
 
     Args:
+        reprocess (bool): If True, process all images regardless of existing masks
         verbose (bool): Whether to print detailed information
 
     Returns:
@@ -90,8 +123,8 @@ def find_images_to_process(verbose=False):
         overlay_path = image_path.replace('/images/', '/overlays/')
         overlay_path = overlay_path.replace('.png', '_overlay.png')
 
-        # Check if mask already exists
-        if not os.path.exists(mask_path):
+        # Check if mask already exists (or if we're reprocessing)
+        if reprocess or not os.path.exists(mask_path):
             # Create mask and overlay directories if they don't exist
             mask_dir = os.path.dirname(mask_path)
             overlay_dir = os.path.dirname(overlay_path)
@@ -117,12 +150,13 @@ def find_images_to_process(verbose=False):
             })
             total_to_process += 1
         else:
-            if verbose:
-                print(f"Mask already exists for {os.path.basename(image_path)} (SVS: {svs_dir_name}), skipping")
-                print(f"  Existing mask: {mask_path}")
-            else:
-                print(
-                    f"Mask already exists for {os.path.basename(image_path)} (SVS: {svs_dir_name}), skipping")
+            if not reprocess:
+                if verbose:
+                    print(f"Mask already exists for {os.path.basename(image_path)} (SVS: {svs_dir_name}), skipping")
+                    print(f"  Existing mask: {mask_path}")
+                else:
+                    print(
+                        f"Mask already exists for {os.path.basename(image_path)} (SVS: {svs_dir_name}), skipping")
 
     print(f"Found {total_to_process} images that need prediction across {len(images_by_svs)} SVS directories")
     if verbose and images_by_svs:
@@ -397,7 +431,7 @@ def save_prediction_visualization(image_path, mask_path, predicted_mask, plot_di
         print(f"Error creating visualization for {image_path}: {e}")
 
 
-def process_all_images(model_path=None, save_visualizations=False, max_images=None, verbose=False):
+def process_all_images(model_path=None, save_visualizations=False, max_images=None, reprocess=False, verbose=False):
     """
     Process all images that need prediction, organized by SVS directory.
 
@@ -405,6 +439,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         model_path (str): Path to saved model
         save_visualizations (bool): Whether to save prediction visualizations
         max_images (int): Maximum number of images to process (for testing)
+        reprocess (bool): If True, remove existing outputs and reprocess all images
         verbose (bool): Whether to print detailed information
     """
     print("Starting batch prediction on suggested regions...")
@@ -417,6 +452,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         print(f"  Model path: {model_path if model_path else 'default best_val_mask_rcnn_model.pth'}")
         print(f"  Save visualizations: {save_visualizations}")
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
+        print(f"  Reprocess existing: {reprocess}")
 
     # Load model
     if verbose:
@@ -429,7 +465,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
     # Find images to process (grouped by SVS directory)
     if verbose:
         print("Scanning for images to process...")
-    images_by_svs = find_images_to_process(verbose=verbose)
+    images_by_svs = find_images_to_process(reprocess=reprocess, verbose=verbose)
 
     if not images_by_svs:
         print("No images found that need prediction.")
@@ -458,6 +494,16 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
     # Double loop: first over SVS directories, then over images within each directory
     for svs_dir_name, images_list in images_by_svs.items():
         print(f"\nProcessing SVS directory: {svs_dir_name} ({len(images_list)} images)")
+        
+        # Remove existing outputs if reprocessing
+        if reprocess and images_list:
+            # Get SVS directory path from first image
+            first_image_path = images_list[0]['image_path']
+            svs_dir_path = os.path.dirname(os.path.dirname(first_image_path))  # Go up from images/ to SVS directory
+            
+            if verbose:
+                print(f"  Reprocessing enabled - removing existing outputs...")
+            remove_svs_outputs(svs_dir_path, verbose=verbose)
         
         if verbose:
             print(f"  Directory contains {len(images_list)} images to process")
@@ -557,6 +603,8 @@ def parse_args():
                         help='Maximum number of images to process (for testing)')
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Print detailed information during processing')
+    parser.add_argument('--reprocess', action='store_true',
+                        help='Remove existing mask and overlay directories and reprocess all images')
     return parser.parse_args()
 
 
@@ -568,6 +616,7 @@ def main():
         model_path=args.model_path,
         save_visualizations=args.save_visualizations,
         max_images=args.max_images,
+        reprocess=args.reprocess,
         verbose=args.verbose
     )
 
