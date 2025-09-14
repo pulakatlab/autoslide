@@ -34,12 +34,13 @@ plot_dir = config['plot_dirs']
 def find_images_to_process(verbose=False):
     """
     Find all images that need prediction and don't already have masks.
+    Groups images by their parent SVS directory.
 
     Args:
         verbose (bool): Whether to print detailed information
 
     Returns:
-        list: List of dictionaries containing image paths and corresponding mask and overlay paths
+        dict: Dictionary mapping SVS directory names to lists of image dictionaries
     """
     suggested_regions_dir = os.path.join(data_dir, 'suggested_regions')
 
@@ -49,7 +50,7 @@ def find_images_to_process(verbose=False):
     if not os.path.exists(suggested_regions_dir):
         print(
             f"Suggested regions directory not found: {suggested_regions_dir}")
-        return []
+        return {}
 
     # Find all image files
     image_pattern = os.path.join(
@@ -68,9 +69,17 @@ def find_images_to_process(verbose=False):
     else:
         print(f"Found {len(image_paths)} images in suggested_regions")
 
-    images_to_process = []
+    # Group images by SVS directory
+    images_by_svs = {}
+    total_to_process = 0
 
     for image_path in image_paths:
+        # Extract SVS directory name (parent of 'images' directory)
+        # Path structure: .../suggested_regions/SVS_NAME/images/image.png
+        path_parts = image_path.split(os.sep)
+        images_idx = path_parts.index('images')
+        svs_dir_name = path_parts[images_idx - 1]
+        
         # Determine corresponding mask path
         # Replace 'images' with 'masks' and add '_mask' suffix
         mask_path = image_path.replace('/images/', '/masks/')
@@ -90,27 +99,38 @@ def find_images_to_process(verbose=False):
             os.makedirs(overlay_dir, exist_ok=True)
 
             if verbose:
-                print(f"Will process: {os.path.basename(image_path)}")
+                print(f"Will process: {os.path.basename(image_path)} (SVS: {svs_dir_name})")
                 print(f"  Image: {image_path}")
                 print(f"  Mask will be saved to: {mask_path}")
                 print(f"  Overlay will be saved to: {overlay_path}")
 
-            images_to_process.append({
+            # Initialize SVS directory list if not exists
+            if svs_dir_name not in images_by_svs:
+                images_by_svs[svs_dir_name] = []
+
+            images_by_svs[svs_dir_name].append({
                 'image_path': image_path,
                 'mask_path': mask_path,
                 'overlay_path': overlay_path,
-                'image_name': os.path.basename(image_path)
+                'image_name': os.path.basename(image_path),
+                'svs_dir': svs_dir_name
             })
+            total_to_process += 1
         else:
             if verbose:
-                print(f"Mask already exists for {os.path.basename(image_path)}, skipping")
+                print(f"Mask already exists for {os.path.basename(image_path)} (SVS: {svs_dir_name}), skipping")
                 print(f"  Existing mask: {mask_path}")
             else:
                 print(
-                    f"Mask already exists for {os.path.basename(image_path)}, skipping")
+                    f"Mask already exists for {os.path.basename(image_path)} (SVS: {svs_dir_name}), skipping")
 
-    print(f"Found {len(images_to_process)} images that need prediction")
-    return images_to_process
+    print(f"Found {total_to_process} images that need prediction across {len(images_by_svs)} SVS directories")
+    if verbose and images_by_svs:
+        print("Images per SVS directory:")
+        for svs_dir, images in images_by_svs.items():
+            print(f"  {svs_dir}: {len(images)} images")
+    
+    return images_by_svs
 
 
 def predict_image_from_path(model, image_path, device, transform, verbose=False):
@@ -326,7 +346,7 @@ def save_prediction_visualization(image_path, mask_path, predicted_mask, plot_di
 
 def process_all_images(model_path=None, save_visualizations=False, max_images=None, verbose=False):
     """
-    Process all images that need prediction.
+    Process all images that need prediction, organized by SVS directory.
 
     Args:
         model_path (str): Path to saved model
@@ -353,83 +373,106 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         f"Model loaded successfully from {model_path if model_path else 'default best_val_mask_rcnn_model.pth'}")
     print(f"Using device: {device}")
 
-    # Find images to process
+    # Find images to process (grouped by SVS directory)
     if verbose:
         print("Scanning for images to process...")
-    images_to_process = find_images_to_process(verbose=verbose)
+    images_by_svs = find_images_to_process(verbose=verbose)
 
-    if not images_to_process:
+    if not images_by_svs:
         print("No images found that need prediction.")
         return
 
-    # Limit number of images if specified
-    if max_images and max_images < len(images_to_process):
-        images_to_process = images_to_process[:max_images]
+    # Calculate total images and apply max_images limit if specified
+    total_images = sum(len(images) for images in images_by_svs.values())
+    if max_images and max_images < total_images:
         print(f"Limited processing to {max_images} images for testing")
+        # Apply limit by truncating image lists
+        remaining_limit = max_images
+        for svs_dir in list(images_by_svs.keys()):
+            if remaining_limit <= 0:
+                del images_by_svs[svs_dir]
+            elif len(images_by_svs[svs_dir]) > remaining_limit:
+                images_by_svs[svs_dir] = images_by_svs[svs_dir][:remaining_limit]
+                remaining_limit = 0
+            else:
+                remaining_limit -= len(images_by_svs[svs_dir])
 
-    # Process each image
+    # Process images grouped by SVS directory
     successful_predictions = 0
     failed_predictions = 0
+    total_processed = 0
 
-    for i, item in enumerate(tqdm(images_to_process, desc="Processing images")):
-        image_path = item['image_path']
-        mask_path = item['mask_path']
-        overlay_path = item['overlay_path']
-        image_name = item['image_name']
-
+    # Double loop: first over SVS directories, then over images within each directory
+    for svs_dir_name, images_list in images_by_svs.items():
+        print(f"\nProcessing SVS directory: {svs_dir_name} ({len(images_list)} images)")
+        
         if verbose:
-            print(f"\nProcessing image {i+1}/{len(images_to_process)}: {image_name}")
+            print(f"  Directory contains {len(images_list)} images to process")
 
-        # Perform prediction
-        predicted_mask, prediction_time = predict_image_from_path(
-            model, image_path, device, transform, verbose=verbose)
+        # Process all images in this SVS directory
+        for i, item in enumerate(tqdm(images_list, desc=f"Processing {svs_dir_name}", leave=False)):
+            image_path = item['image_path']
+            mask_path = item['mask_path']
+            overlay_path = item['overlay_path']
+            image_name = item['image_name']
+            total_processed += 1
 
-        if predicted_mask is not None:
-            # Save timing information to tracking JSON
-            save_timing_to_tracking_json(image_path, prediction_time, verbose=verbose)
-            try:
-                if verbose:
-                    print(f"  Saving predicted mask...")
-                
-                # Save predicted mask
-                mask_img = Image.fromarray(predicted_mask, mode='L')
-                mask_img.save(mask_path)
-                
-                if verbose:
-                    print(f"  Mask saved to: {mask_path}")
-
-                # Create and save overlay image
-                create_overlay_image(image_path, predicted_mask, overlay_path, verbose=verbose)
-
-                # Save visualization if requested
-                if save_visualizations:
-                    if verbose:
-                        print(f"  Creating visualization...")
-                    save_prediction_visualization(
-                        image_path, mask_path, predicted_mask, plot_dir)
-
-                successful_predictions += 1
-                if verbose:
-                    print(f"  ✓ Successfully processed {image_name} in {prediction_time:.3f}s")
-                else:
-                    print(
-                        f"Saved mask and overlay for {image_name} ({prediction_time:.3f}s), parent_dir: {os.path.dirname(mask_path)}")
-
-            except Exception as e:
-                print(f"Error saving outputs for {image_name}: {e}")
-                if verbose:
-                    import traceback
-                    print(f"  Full traceback: {traceback.format_exc()}")
-                failed_predictions += 1
-        else:
             if verbose:
-                print(f"  ✗ Prediction failed for {image_name}")
-            failed_predictions += 1
+                print(f"\n  Processing image {i+1}/{len(images_list)} in {svs_dir_name}: {image_name}")
+
+            # Perform prediction
+            predicted_mask, prediction_time = predict_image_from_path(
+                model, image_path, device, transform, verbose=verbose)
+
+            if predicted_mask is not None:
+                # Save timing information to tracking JSON
+                save_timing_to_tracking_json(image_path, prediction_time, verbose=verbose)
+                try:
+                    if verbose:
+                        print(f"    Saving predicted mask...")
+                    
+                    # Save predicted mask
+                    mask_img = Image.fromarray(predicted_mask, mode='L')
+                    mask_img.save(mask_path)
+                    
+                    if verbose:
+                        print(f"    Mask saved to: {mask_path}")
+
+                    # Create and save overlay image
+                    create_overlay_image(image_path, predicted_mask, overlay_path, verbose=verbose)
+
+                    # Save visualization if requested
+                    if save_visualizations:
+                        if verbose:
+                            print(f"    Creating visualization...")
+                        save_prediction_visualization(
+                            image_path, mask_path, predicted_mask, plot_dir)
+
+                    successful_predictions += 1
+                    if verbose:
+                        print(f"    ✓ Successfully processed {image_name} in {prediction_time:.3f}s")
+                    else:
+                        print(
+                            f"  Saved mask and overlay for {image_name} ({prediction_time:.3f}s)")
+
+                except Exception as e:
+                    print(f"  Error saving outputs for {image_name}: {e}")
+                    if verbose:
+                        import traceback
+                        print(f"    Full traceback: {traceback.format_exc()}")
+                    failed_predictions += 1
+            else:
+                if verbose:
+                    print(f"    ✗ Prediction failed for {image_name}")
+                failed_predictions += 1
+
+        print(f"Completed SVS directory: {svs_dir_name}")
 
     print(f"\nBatch prediction complete!")
+    print(f"Processed {len(images_by_svs)} SVS directories")
     print(f"Successful predictions: {successful_predictions}")
     print(f"Failed predictions: {failed_predictions}")
-    print(f"Total processed: {successful_predictions + failed_predictions}")
+    print(f"Total processed: {total_processed}")
 
 
 def parse_args():
