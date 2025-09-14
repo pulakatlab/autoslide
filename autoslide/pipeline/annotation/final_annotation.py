@@ -8,6 +8,7 @@ import numpy as np
 import os
 import json
 import argparse
+import time
 from pprint import pprint
 from glob import glob
 import pandas as pd
@@ -74,6 +75,9 @@ def main():
     for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)):
         # this_basename = unique_basenames[0]
         this_basename = this_json['file_basename'].split('.')[0]
+        
+        # Start timing for this file
+        start_time = time.time()
 
         if verbose:
             print(f"\nProcessing: {this_basename}")
@@ -157,11 +161,17 @@ def main():
         if verbose:
             print(f"Saved final mask: {fin_mask_path}")
 
-        # Save the updated json with final mask path
+        # Record processing time
+        end_time = time.time()
+        processing_time = end_time - start_time
+        this_json['final_annotation_processing_time'] = processing_time
+
+        # Save the updated json with final mask path and processing time
         with open(json_path, 'w') as f:
             json.dump(this_json, f, indent=4)
 
         if verbose:
+            print(f"Processing time: {processing_time:.2f} seconds")
             print(f"Updated JSON file: {json_path}")
 
     if verbose:
