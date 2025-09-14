@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import argparse
 import cv2
+import time
+import json
 
 from autoslide import config
 from autoslide.pipeline.model.prediction_utils import load_model, predict_single_image
@@ -123,13 +125,13 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
         verbose (bool): Whether to print detailed information
 
     Returns:
-        numpy.ndarray: Combined predicted mask
+        tuple: (predicted_mask, prediction_time) or (None, None) if failed
     """
     try:
         # Check if image file exists
         if not os.path.exists(image_path):
             print(f"Image not found: {image_path}, skipping")
-            return None
+            return None, None
             
         if verbose:
             print(f"  Loading image from: {image_path}")
@@ -138,21 +140,25 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
             print(f"  Image size: {img.size}, mode: {img.mode}")
             print(f"  Running prediction on device: {device}")
         
+        # Time the prediction
+        start_time = time.time()
         result = predict_single_image(model, image_path, device, transform, return_time=False)
+        prediction_time = time.time() - start_time
         
         if verbose and result is not None:
             print(f"  Prediction successful, mask shape: {result.shape}")
             print(f"  Mask value range: {result.min()} - {result.max()}")
             unique_vals = np.unique(result)
             print(f"  Unique mask values: {len(unique_vals)} values")
+            print(f"  Prediction time: {prediction_time:.3f} seconds")
         
-        return result
+        return result, prediction_time
     except Exception as e:
         print(f"Error processing {image_path}: {e}")
         if verbose:
             import traceback
             print(f"  Full traceback: {traceback.format_exc()}")
-        return None
+        return None, None
 
 
 def create_overlay_image(image_path, predicted_mask, overlay_path, verbose=False):
@@ -210,6 +216,57 @@ def create_overlay_image(image_path, predicted_mask, overlay_path, verbose=False
 
     except Exception as e:
         print(f"Error creating overlay for {image_path}: {e}")
+        if verbose:
+            import traceback
+            print(f"  Full traceback: {traceback.format_exc()}")
+
+
+def save_timing_to_tracking_json(image_path, prediction_time, verbose=False):
+    """
+    Save timing information to a tracking JSON file in the same directory as the image.
+
+    Args:
+        image_path (str): Path to the processed image
+        prediction_time (float): Time taken for prediction in seconds
+        verbose (bool): Whether to print detailed information
+    """
+    try:
+        # Get the directory containing the image
+        image_dir = os.path.dirname(image_path)
+        image_name = os.path.basename(image_path)
+        
+        # Create tracking JSON filename
+        tracking_json_path = os.path.join(image_dir, 'tracking.json')
+        
+        # Load existing tracking data or create new
+        tracking_data = {}
+        if os.path.exists(tracking_json_path):
+            try:
+                with open(tracking_json_path, 'r') as f:
+                    tracking_data = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                if verbose:
+                    print(f"  Warning: Could not load existing tracking.json: {e}")
+                    print(f"  Creating new tracking data")
+                tracking_data = {}
+        
+        # Add timing information for this image
+        if image_name not in tracking_data:
+            tracking_data[image_name] = {}
+        
+        tracking_data[image_name]['prediction_time_seconds'] = round(prediction_time, 3)
+        tracking_data[image_name]['prediction_timestamp'] = time.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Save updated tracking data
+        with open(tracking_json_path, 'w') as f:
+            json.dump(tracking_data, f, indent=2, sort_keys=True)
+        
+        if verbose:
+            print(f"  Timing data saved to: {tracking_json_path}")
+            print(f"  Prediction time: {prediction_time:.3f} seconds")
+            
+    except Exception as e:
+        print(f"Error saving timing data for {image_path}: {e}")
         if verbose:
             import traceback
             print(f"  Full traceback: {traceback.format_exc()}")
@@ -324,10 +381,12 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
             print(f"\nProcessing image {i+1}/{len(images_to_process)}: {image_name}")
 
         # Perform prediction
-        predicted_mask = predict_image_from_path(
+        predicted_mask, prediction_time = predict_image_from_path(
             model, image_path, device, transform, verbose=verbose)
 
         if predicted_mask is not None:
+            # Save timing information to tracking JSON
+            save_timing_to_tracking_json(image_path, prediction_time, verbose=verbose)
             try:
                 if verbose:
                     print(f"  Saving predicted mask...")
@@ -351,10 +410,10 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
 
                 successful_predictions += 1
                 if verbose:
-                    print(f"  ✓ Successfully processed {image_name}")
+                    print(f"  ✓ Successfully processed {image_name} in {prediction_time:.3f}s")
                 else:
                     print(
-                        f"Saved mask and overlay for {image_name}, parent_dir: {os.path.dirname(mask_path)}")
+                        f"Saved mask and overlay for {image_name} ({prediction_time:.3f}s), parent_dir: {os.path.dirname(mask_path)}")
 
             except Exception as e:
                 print(f"Error saving outputs for {image_name}: {e}")
