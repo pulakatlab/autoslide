@@ -636,12 +636,24 @@ def save_svs_timing_to_tracking_json(svs_dir_path, svs_processing_time, num_imag
         verbose (bool): Whether to print detailed information
     """
     try:
-        # Find the tracking JSON file in the SVS directory
-        tracking_files = glob(os.path.join(svs_dir_path, '*_tracking.json'))
+        # Find the tracking JSON file - look in the data_dir/tracking directory
+        # based on the SVS directory name
+        svs_name = os.path.basename(svs_dir_path)
+        data_dir = config['data_dir']
+        tracking_dir = os.path.join(data_dir, 'tracking')
+        
+        # Look for tracking files that match this SVS
+        tracking_files = glob(os.path.join(tracking_dir, f'{svs_name}*.json'))
+        
+        if not tracking_files:
+            # Also try looking in the SVS directory itself
+            tracking_files = glob(os.path.join(svs_dir_path, '*_tracking.json'))
         
         if not tracking_files:
             if verbose:
-                print(f"No tracking JSON file found in {svs_dir_path}")
+                print(f"No tracking JSON file found for SVS: {svs_name}")
+                print(f"  Searched in: {tracking_dir}")
+                print(f"  Searched in: {svs_dir_path}")
             return
         
         # Use the first tracking file found
@@ -654,20 +666,15 @@ def save_svs_timing_to_tracking_json(svs_dir_path, svs_processing_time, num_imag
         except (json.JSONDecodeError, FileNotFoundError):
             tracking_data = {}
         
-        # Add fibrosis processing timing
-        if 'fibrosis_processing' not in tracking_data:
-            tracking_data['fibrosis_processing'] = {}
-        
-        tracking_data['fibrosis_processing'].update({
-            'processing_time_seconds': svs_processing_time,
-            'num_images_processed': num_images,
-            'processing_time_per_image': svs_processing_time / num_images if num_images > 0 else 0,
-            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
-        })
+        # Add fibrosis processing timing (following the pattern from final_annotation.py)
+        tracking_data['fibrosis_processing_time'] = svs_processing_time
+        tracking_data['fibrosis_num_images_processed'] = num_images
+        tracking_data['fibrosis_processing_time_per_image'] = svs_processing_time / num_images if num_images > 0 else 0
+        tracking_data['fibrosis_processing_timestamp'] = time.strftime('%Y-%m-%d %H:%M:%S')
         
         # Save updated tracking data
         with open(tracking_file, 'w') as f:
-            json.dump(tracking_data, f, indent=2)
+            json.dump(tracking_data, f, indent=4)
         
         if verbose:
             print(f"Fibrosis timing saved to {tracking_file}")
