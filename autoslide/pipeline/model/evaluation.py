@@ -49,25 +49,29 @@ def calculate_iou(pred_mask, true_mask, threshold=0.5):
     Returns:
         float: IoU score between 0 and 1
     """
-    # Ensure masks are binary
-    if pred_mask.max() > 1:
-        pred_mask = pred_mask / 255.0
-    if true_mask.max() > 1:
-        true_mask = true_mask / 255.0
+    try:
+        # Ensure masks are binary
+        if pred_mask.max() > 1:
+            pred_mask = pred_mask / 255.0
+        if true_mask.max() > 1:
+            true_mask = true_mask / 255.0
 
-    # Binarize predicted mask
-    pred_binary = (pred_mask > threshold).astype(np.uint8)
-    true_binary = (true_mask > threshold).astype(np.uint8)
+        # Binarize predicted mask
+        pred_binary = (pred_mask > threshold).astype(np.uint8)
+        true_binary = (true_mask > threshold).astype(np.uint8)
 
-    # Calculate intersection and union
-    intersection = np.logical_and(pred_binary, true_binary).sum()
-    union = np.logical_or(pred_binary, true_binary).sum()
+        # Calculate intersection and union
+        intersection = np.logical_and(pred_binary, true_binary).sum()
+        union = np.logical_or(pred_binary, true_binary).sum()
 
-    # Handle edge case where both masks are empty
-    if union == 0:
-        return 1.0 if intersection == 0 else 0.0
+        # Handle edge case where both masks are empty
+        if union == 0:
+            return 1.0 if intersection == 0 else 0.0
 
-    return intersection / union
+        return intersection / union
+    except Exception as e:
+        print(f"Error calculating IoU: {e}")
+        return 0.0
 
 
 def calculate_dice_coefficient(pred_mask, true_mask, threshold=0.5):
@@ -219,20 +223,25 @@ def get_cache_key(model_path, img_name, transform_params=None):
     Returns:
         str: Unique cache key
     """
-    # Get model file hash
-    if os.path.exists(model_path):
-        with open(model_path, 'rb') as f:
-            model_hash = hashlib.md5(f.read()).hexdigest()[:8]
-    else:
-        model_hash = "unknown"
-    
-    # Create cache key
-    key_data = f"{model_hash}_{img_name}"
-    if transform_params:
-        key_data += f"_{str(transform_params)}"
-    
-    cache_key = hashlib.md5(key_data.encode()).hexdigest()[:16]
-    return cache_key
+    try:
+        # Get model file hash
+        if os.path.exists(model_path):
+            with open(model_path, 'rb') as f:
+                model_hash = hashlib.md5(f.read()).hexdigest()[:8]
+        else:
+            print(f"Warning: Model file not found at {model_path}, using 'unknown' hash")
+            model_hash = "unknown"
+        
+        # Create cache key
+        key_data = f"{model_hash}_{img_name}"
+        if transform_params:
+            key_data += f"_{str(transform_params)}"
+        
+        cache_key = hashlib.md5(key_data.encode()).hexdigest()[:16]
+        return cache_key
+    except Exception as e:
+        print(f"Error generating cache key for {img_name}: {e}")
+        return hashlib.md5(f"fallback_{img_name}".encode()).hexdigest()[:16]
 
 
 def save_prediction_cache(cache_dir, cache_key, pred_mask, pred_time, metrics=None):
@@ -246,17 +255,20 @@ def save_prediction_cache(cache_dir, cache_key, pred_mask, pred_time, metrics=No
         pred_time (float): Prediction time
         metrics (dict): Optional metrics to cache
     """
-    os.makedirs(cache_dir, exist_ok=True)
-    
-    cache_data = {
-        'pred_mask': pred_mask,
-        'pred_time': pred_time,
-        'metrics': metrics or {}
-    }
-    
-    cache_path = os.path.join(cache_dir, f"{cache_key}.pkl")
-    with open(cache_path, 'wb') as f:
-        pickle.dump(cache_data, f)
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        cache_data = {
+            'pred_mask': pred_mask,
+            'pred_time': pred_time,
+            'metrics': metrics or {}
+        }
+        
+        cache_path = os.path.join(cache_dir, f"{cache_key}.pkl")
+        with open(cache_path, 'wb') as f:
+            pickle.dump(cache_data, f)
+    except Exception as e:
+        print(f"Warning: Could not save prediction to cache (key: {cache_key}): {e}")
 
 
 def load_prediction_cache(cache_dir, cache_key):
@@ -292,10 +304,15 @@ def clear_prediction_cache(cache_dir):
     Args:
         cache_dir (str): Cache directory to clear
     """
-    if os.path.exists(cache_dir):
-        import shutil
-        shutil.rmtree(cache_dir)
-        print(f"Cleared prediction cache: {cache_dir}")
+    try:
+        if os.path.exists(cache_dir):
+            import shutil
+            shutil.rmtree(cache_dir)
+            print(f"Successfully cleared prediction cache: {cache_dir}")
+        else:
+            print(f"Cache directory does not exist: {cache_dir}")
+    except Exception as e:
+        print(f"Error clearing prediction cache: {e}")
 
 
 def get_cache_info(cache_dir):
@@ -413,6 +430,10 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
     # Evaluate each sample (accuracy and timing together)
     cache_hits = 0
     cache_misses = 0
+    processed_count = 0
+    error_count = 0
+    
+    print(f"Starting evaluation of {len(eval_imgs)} samples...")
     
     for img_name, mask_name in tqdm(zip(eval_imgs, eval_masks),
                                     total=len(eval_imgs),
@@ -420,15 +441,24 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
         try:
             # Load image and mask
             if 'aug_' in img_name:
-                image = Image.open(os.path.join(
-                    aug_img_dir, img_name)).convert("RGB")
-                true_mask = np.array(Image.open(
-                    os.path.join(aug_mask_dir, mask_name)))
+                image_path = os.path.join(aug_img_dir, img_name)
+                mask_path = os.path.join(aug_mask_dir, mask_name)
             else:
-                image = Image.open(os.path.join(
-                    img_dir, img_name)).convert("RGB")
-                true_mask = np.array(Image.open(
-                    os.path.join(mask_dir, mask_name)))
+                image_path = os.path.join(img_dir, img_name)
+                mask_path = os.path.join(mask_dir, mask_name)
+            
+            # Check if files exist
+            if not os.path.exists(image_path):
+                print(f"Warning: Image file not found: {image_path}")
+                error_count += 1
+                continue
+            if not os.path.exists(mask_path):
+                print(f"Warning: Mask file not found: {mask_path}")
+                error_count += 1
+                continue
+            
+            image = Image.open(image_path).convert("RGB")
+            true_mask = np.array(Image.open(mask_path))
 
             # Flatten labels in mask
             true_mask = (true_mask > 0).astype(
@@ -493,25 +523,33 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
             per_image_confidence_metrics.append(per_image_metrics)
 
             # Plot sample predictions
-            fig, axes = plt.subplots(1, 3, figsize=(12, 4))
-            axes[0].imshow(image)
-            axes[0].set_title(f'Original Image\n{img_name}')
-            axes[0].axis('off')
-            axes[1].imshow(true_mask, cmap='gray')
-            axes[1].set_title('Ground Truth Mask')
-            axes[1].axis('off')
-            axes[2].imshow(pred_mask, cmap='gray')
-            axes[2].set_title(
-                f'Predicted Mask\nIoU: {iou:.3f}, Dice: {dice:.3f}')
-            axes[2].axis('off')
-            plt.tight_layout()
-            plt.savefig(os.path.join(output_dir, f'pred_{img_name}.png'),
-                        dpi=300, bbox_inches='tight')
-            plt.close(fig)
+            try:
+                fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+                axes[0].imshow(image)
+                axes[0].set_title(f'Original Image\n{img_name}')
+                axes[0].axis('off')
+                axes[1].imshow(true_mask, cmap='gray')
+                axes[1].set_title('Ground Truth Mask')
+                axes[1].axis('off')
+                axes[2].imshow(pred_mask, cmap='gray')
+                axes[2].set_title(
+                    f'Predicted Mask\nIoU: {iou:.3f}, Dice: {dice:.3f}')
+                axes[2].axis('off')
+                plt.tight_layout()
+                plt.savefig(os.path.join(output_dir, f'pred_{img_name}.png'),
+                            dpi=300, bbox_inches='tight')
+                plt.close(fig)
+            except Exception as plot_error:
+                print(f"Warning: Could not save visualization for {img_name}: {plot_error}")
+
+            processed_count += 1
 
         except Exception as e:
             print(f'Error processing {img_name}: {e}')
+            error_count += 1
             continue
+    
+    print(f"Evaluation completed: {processed_count} samples processed successfully, {error_count} errors")
 
     # Print cache statistics
     if use_cache:
@@ -629,35 +667,51 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
     # Benchmark phase
     print(f'Benchmarking with {num_benchmark} iterations...')
     benchmark_times = []
+    benchmark_errors = 0
 
     # for i in range(num_warmup, min(num_warmup + num_benchmark, len(benchmark_imgs))):
-    for img_name in tqdm(benchmark_imgs):
-        # img_name = benchmark_imgs[i]
-        if 'aug_' in img_name:
-            image = Image.open(os.path.join(
-                aug_img_dir, img_name)).convert("RGB")
-        else:
-            image = Image.open(os.path.join(img_dir, img_name)).convert("RGB")
-
-        # Try to load from cache first (but only use timing if not cached)
-        pred_time = None
-        if use_cache and cache_dir and model_path:
-            cache_key = get_cache_key(model_path, img_name)
-            _, cached_time, _ = load_prediction_cache(cache_dir, cache_key)
-            if cached_time is not None:
-                pred_time = cached_time
-
-        # Get fresh prediction if not cached (for accurate timing)
-        if pred_time is None:
-            pred_time, pred_mask = predict_single_image(
-                model, image, device, transform, return_time=True)
+    for img_name in tqdm(benchmark_imgs, desc='Benchmarking speed'):
+        try:
+            # img_name = benchmark_imgs[i]
+            if 'aug_' in img_name:
+                image_path = os.path.join(aug_img_dir, img_name)
+            else:
+                image_path = os.path.join(img_dir, img_name)
             
-            # Save to cache if enabled
+            if not os.path.exists(image_path):
+                print(f"Warning: Benchmark image not found: {image_path}")
+                benchmark_errors += 1
+                continue
+                
+            image = Image.open(image_path).convert("RGB")
+
+            # Try to load from cache first (but only use timing if not cached)
+            pred_time = None
             if use_cache and cache_dir and model_path:
                 cache_key = get_cache_key(model_path, img_name)
-                save_prediction_cache(cache_dir, cache_key, pred_mask, pred_time)
-        
-        benchmark_times.append(pred_time)
+                _, cached_time, _ = load_prediction_cache(cache_dir, cache_key)
+                if cached_time is not None:
+                    pred_time = cached_time
+
+            # Get fresh prediction if not cached (for accurate timing)
+            if pred_time is None:
+                pred_time, pred_mask = predict_single_image(
+                    model, image, device, transform, return_time=True)
+                
+                # Save to cache if enabled
+                if use_cache and cache_dir and model_path:
+                    cache_key = get_cache_key(model_path, img_name)
+                    save_prediction_cache(cache_dir, cache_key, pred_mask, pred_time)
+            
+            benchmark_times.append(pred_time)
+            
+        except Exception as e:
+            print(f"Error during benchmark with {img_name}: {e}")
+            benchmark_errors += 1
+            continue
+    
+    if benchmark_errors > 0:
+        print(f"Benchmark completed with {benchmark_errors} errors out of {len(benchmark_imgs)} samples")
 
     # Calculate speed metrics
     speed_results = {
@@ -740,8 +794,14 @@ def plot_metrics_vs_positive_area(accuracy_results, plot_dir):
         accuracy_results (dict): Results from accuracy evaluation
         plot_dir (str): Directory to save plots
     """
-    eval_plot_dir = os.path.join(plot_dir, 'model_evaluation')
-    os.makedirs(eval_plot_dir, exist_ok=True)
+    print("Creating metrics vs positive area plots...")
+    
+    try:
+        eval_plot_dir = os.path.join(plot_dir, 'model_evaluation')
+        os.makedirs(eval_plot_dir, exist_ok=True)
+    except Exception as e:
+        print(f"Error creating evaluation plot directory: {e}")
+        return
 
     # Convert to numpy arrays for easier manipulation
     positive_areas = np.array(accuracy_results['positive_areas'])
@@ -920,8 +980,14 @@ def plot_evaluation_results(accuracy_results, speed_results, plot_dir):
         speed_results (dict): Results from speed benchmarking
         plot_dir (str): Directory to save plots
     """
-    eval_plot_dir = os.path.join(plot_dir, 'model_evaluation')
-    os.makedirs(eval_plot_dir, exist_ok=True)
+    print("Creating comprehensive evaluation plots...")
+    
+    try:
+        eval_plot_dir = os.path.join(plot_dir, 'model_evaluation')
+        os.makedirs(eval_plot_dir, exist_ok=True)
+    except Exception as e:
+        print(f"Error creating evaluation plot directory: {e}")
+        return
 
     # Plot 1: Accuracy metrics distribution
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
@@ -1095,8 +1161,14 @@ def create_sample_predictions_plot(model, val_imgs, val_masks, img_dir, mask_dir
         use_cache (bool): Whether to use prediction caching
         model_path (str): Path to model file (for cache key generation)
     """
-    eval_plot_dir = os.path.join(plot_dir, 'model_evaluation')
-    os.makedirs(eval_plot_dir, exist_ok=True)
+    print(f"Creating sample predictions plot with {num_samples} samples...")
+    
+    try:
+        eval_plot_dir = os.path.join(plot_dir, 'model_evaluation')
+        os.makedirs(eval_plot_dir, exist_ok=True)
+    except Exception as e:
+        print(f"Error creating evaluation plot directory: {e}")
+        return
 
     model.eval()
     
@@ -1114,82 +1186,104 @@ def create_sample_predictions_plot(model, val_imgs, val_masks, img_dir, mask_dir
     if num_samples == 1:
         axes = axes.reshape(1, -1)
 
+    sample_errors = 0
+    
     for i, idx in enumerate(sample_indices):
-        img_name = val_imgs[idx]
-        mask_name = val_masks[idx]
+        try:
+            img_name = val_imgs[idx]
+            mask_name = val_masks[idx]
 
-        # Load image and mask
-        if 'aug_' in img_name:
-            image = Image.open(os.path.join(
-                aug_img_dir, img_name)).convert("RGB")
-            true_mask = np.array(Image.open(
-                os.path.join(aug_mask_dir, mask_name)))
-        else:
-            image = Image.open(os.path.join(img_dir, img_name)).convert("RGB")
-            true_mask = np.array(Image.open(os.path.join(mask_dir, mask_name)))
-
-        # Try to load from cache first
-        pred_mask = None
-        if use_cache and cache_dir and model_path:
-            cache_key = get_cache_key(model_path, img_name)
-            pred_mask, _, _ = load_prediction_cache(cache_dir, cache_key)
-
-        # Get prediction if not cached
-        if pred_mask is None:
-            pred_mask = predict_single_image(
-                model, image, device, transform, return_time=False)
+            # Load image and mask
+            if 'aug_' in img_name:
+                image_path = os.path.join(aug_img_dir, img_name)
+                mask_path = os.path.join(aug_mask_dir, mask_name)
+            else:
+                image_path = os.path.join(img_dir, img_name)
+                mask_path = os.path.join(mask_dir, mask_name)
             
-            # Save to cache if enabled
+            # Check if files exist
+            if not os.path.exists(image_path):
+                print(f"Warning: Sample image not found: {image_path}")
+                sample_errors += 1
+                continue
+            if not os.path.exists(mask_path):
+                print(f"Warning: Sample mask not found: {mask_path}")
+                sample_errors += 1
+                continue
+            
+            image = Image.open(image_path).convert("RGB")
+            true_mask = np.array(Image.open(mask_path))
+
+            # Try to load from cache first
+            pred_mask = None
             if use_cache and cache_dir and model_path:
                 cache_key = get_cache_key(model_path, img_name)
-                # We don't have timing here, so save with None
-                save_prediction_cache(cache_dir, cache_key, pred_mask, None)
+                pred_mask, _, _ = load_prediction_cache(cache_dir, cache_key)
 
-        # Calculate metrics for this sample
-        iou = calculate_iou(pred_mask, true_mask)
-        dice = calculate_dice_coefficient(pred_mask, true_mask)
+            # Get prediction if not cached
+            if pred_mask is None:
+                pred_mask = predict_single_image(
+                    model, image, device, transform, return_time=False)
+                
+                # Save to cache if enabled
+                if use_cache and cache_dir and model_path:
+                    cache_key = get_cache_key(model_path, img_name)
+                    # We don't have timing here, so save with None
+                    save_prediction_cache(cache_dir, cache_key, pred_mask, None)
 
-        # Plot original image
-        axes[i, 0].imshow(image)
-        axes[i, 0].set_title(f'Original Image\n{img_name}')
-        axes[i, 0].axis('off')
+            # Calculate metrics for this sample
+            iou = calculate_iou(pred_mask, true_mask)
+            dice = calculate_dice_coefficient(pred_mask, true_mask)
 
-        # Plot ground truth mask
-        axes[i, 1].imshow(true_mask, cmap='gray')
-        axes[i, 1].set_title('Ground Truth Mask')
-        axes[i, 1].axis('off')
+            # Plot original image
+            axes[i, 0].imshow(image)
+            axes[i, 0].set_title(f'Original Image\n{img_name}')
+            axes[i, 0].axis('off')
 
-        # Plot predicted mask
-        axes[i, 2].imshow(pred_mask, cmap='gray')
-        axes[i, 2].set_title('Predicted Mask')
-        axes[i, 2].axis('off')
+            # Plot ground truth mask
+            axes[i, 1].imshow(true_mask, cmap='gray')
+            axes[i, 1].set_title('Ground Truth Mask')
+            axes[i, 1].axis('off')
 
-        # Plot overlay
-        overlay = np.array(image)
-        # Create colored overlays
-        true_overlay = overlay.copy()
-        pred_overlay = overlay.copy()
+            # Plot predicted mask
+            axes[i, 2].imshow(pred_mask, cmap='gray')
+            axes[i, 2].set_title('Predicted Mask')
+            axes[i, 2].axis('off')
 
-        # Green for ground truth, Red for prediction
-        true_mask_binary = (true_mask > 127).astype(np.uint8)
-        pred_mask_binary = (pred_mask > 0.5).astype(np.uint8)
+            # Plot overlay
+            overlay = np.array(image)
+            # Create colored overlays
+            true_overlay = overlay.copy()
+            pred_overlay = overlay.copy()
 
-        true_overlay[true_mask_binary > 0] = [0, 255, 0]  # Green
-        pred_overlay[pred_mask_binary > 0] = [255, 0, 0]  # Red
+            # Green for ground truth, Red for prediction
+            true_mask_binary = (true_mask > 127).astype(np.uint8)
+            pred_mask_binary = (pred_mask > 0.5).astype(np.uint8)
 
-        # Combine overlays
-        combined_overlay = overlay.copy()
-        combined_overlay[true_mask_binary > 0] = [0, 255, 0]  # Green for GT
-        combined_overlay[pred_mask_binary > 0] = [
-            255, 0, 0]  # Red for prediction
-        # Yellow for overlap
-        overlap = np.logical_and(true_mask_binary, pred_mask_binary)
-        combined_overlay[overlap] = [255, 255, 0]  # Yellow
+            true_overlay[true_mask_binary > 0] = [0, 255, 0]  # Green
+            pred_overlay[pred_mask_binary > 0] = [255, 0, 0]  # Red
 
-        axes[i, 3].imshow(combined_overlay)
-        axes[i, 3].set_title(
-            f'Overlay (GT=Green, Pred=Red)\nIoU: {iou:.3f}, Dice: {dice:.3f}')
-        axes[i, 3].axis('off')
+            # Combine overlays
+            combined_overlay = overlay.copy()
+            combined_overlay[true_mask_binary > 0] = [0, 255, 0]  # Green for GT
+            combined_overlay[pred_mask_binary > 0] = [
+                255, 0, 0]  # Red for prediction
+            # Yellow for overlap
+            overlap = np.logical_and(true_mask_binary, pred_mask_binary)
+            combined_overlay[overlap] = [255, 255, 0]  # Yellow
+
+            axes[i, 3].imshow(combined_overlay)
+            axes[i, 3].set_title(
+                f'Overlay (GT=Green, Pred=Red)\nIoU: {iou:.3f}, Dice: {dice:.3f}')
+            axes[i, 3].axis('off')
+            
+        except Exception as e:
+            print(f"Error creating sample prediction plot for sample {i} ({img_name}): {e}")
+            sample_errors += 1
+            continue
+    
+    if sample_errors > 0:
+        print(f"Sample predictions plot completed with {sample_errors} errors")
 
     plt.tight_layout()
     plt.savefig(os.path.join(eval_plot_dir, 'sample_predictions.png'),
@@ -1289,40 +1383,62 @@ def main():
     """Main evaluation function"""
     args = parse_args()
 
-    print("Starting model evaluation...")
+    print("="*60)
+    print("STARTING MODEL EVALUATION")
+    print("="*60)
 
     # Setup device
+    print("Setting up compute device...")
     device = setup_device()
     print(f'Using device: {device}')
 
     # Load data
-    print("Loading validation data...")
-    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(
-        data_dir)
-    # train_imgs, train_masks, val_imgs, val_masks = split_train_val(
-    #     image_names, mask_names)
-    val_imgs = image_names
-    val_masks = mask_names
+    print("\nLoading validation data...")
+    try:
+        labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(
+            data_dir)
+        # train_imgs, train_masks, val_imgs, val_masks = split_train_val(
+        #     image_names, mask_names)
+        val_imgs = image_names
+        val_masks = mask_names
+        print(f"Loaded {len(val_imgs)} validation images and {len(val_masks)} masks")
+        
+        if len(val_imgs) == 0:
+            print("Error: No validation images found!")
+            return
+            
+    except Exception as e:
+        print(f"Error loading validation data: {e}")
+        return
 
     # Setup augmented directories (may be empty)
     aug_img_dir = os.path.join(labelled_data_dir, 'augmented_images/')
     aug_mask_dir = os.path.join(labelled_data_dir, 'augmented_masks/')
+    
+    print(f"Image directory: {img_dir}")
+    print(f"Mask directory: {mask_dir}")
+    print(f"Augmented image directory: {aug_img_dir}")
+    print(f"Augmented mask directory: {aug_mask_dir}")
 
     # Load model
-    print("Loading trained model...")
+    print("\nLoading trained model...")
     try:
         model, device, transform = load_model(args.model_path, device)
         model_path = args.model_path if args.model_path else os.path.join(
             artifacts_dir, 'best_val_mask_rcnn_model.pth')
-        print(f"Model loaded from: {model_path}")
+        print(f"Model successfully loaded from: {model_path}")
     except FileNotFoundError as e:
-        print(f"Error: {e}")
+        print(f"Error loading model: {e}")
         print("Please train a model first or specify a valid model path.")
+        return
+    except Exception as e:
+        print(f"Unexpected error loading model: {e}")
         return
 
     # Handle cache options
     use_cache = not args.no_cache
     if args.clear_cache:
+        print("\nClearing prediction cache...")
         cache_dir = os.path.join(artifacts_dir, 'prediction_cache')
         clear_prediction_cache(cache_dir)
     
@@ -1334,70 +1450,104 @@ def main():
         print("Prediction caching disabled.")
 
     # Evaluate accuracy and speed together
-    print("\nEvaluating model accuracy and speed...")
-    output_dir = os.path.join(data_dir, 'plots', 'prediction_visualizations')
-    os.makedirs(output_dir, exist_ok=True)
-    accuracy_results, speed_results = evaluate_model_accuracy_and_speed(
-        model, val_imgs, val_masks, img_dir, mask_dir,
-        aug_img_dir, aug_mask_dir, device, transform,
-        output_dir,
-        max_samples=args.max_samples,
-        num_warmup=args.warmup_samples,
-        use_cache=use_cache,
-        model_path=model_path
-    )
+    print(f"\n{'='*60}")
+    print("RUNNING MODEL EVALUATION")
+    print(f"{'='*60}")
+    
+    try:
+        output_dir = os.path.join(data_dir, 'plots', 'prediction_visualizations')
+        os.makedirs(output_dir, exist_ok=True)
+        print(f"Prediction visualizations will be saved to: {output_dir}")
+        
+        accuracy_results, speed_results = evaluate_model_accuracy_and_speed(
+            model, val_imgs, val_masks, img_dir, mask_dir,
+            aug_img_dir, aug_mask_dir, device, transform,
+            output_dir,
+            max_samples=args.max_samples,
+            num_warmup=args.warmup_samples,
+            use_cache=use_cache,
+            model_path=model_path
+        )
+        
+        print("Model evaluation completed successfully!")
+        
+    except Exception as e:
+        print(f"Error during model evaluation: {e}")
+        return
 
     # Print summary
     print_evaluation_summary(accuracy_results, speed_results)
 
     # Create visualizations
-    print("\nCreating evaluation plots...")
-    plot_evaluation_results(accuracy_results, speed_results, plot_dir)
-    plot_metrics_vs_positive_area(accuracy_results, plot_dir)
-    create_sample_predictions_plot(
-        model, val_imgs, val_masks, img_dir, mask_dir,
-        aug_img_dir, aug_mask_dir, device, transform, plot_dir,
-        use_cache=use_cache, model_path=model_path
-    )
+    print(f"\n{'='*60}")
+    print("CREATING EVALUATION VISUALIZATIONS")
+    print(f"{'='*60}")
+    
+    try:
+        plot_evaluation_results(accuracy_results, speed_results, plot_dir)
+        plot_metrics_vs_positive_area(accuracy_results, plot_dir)
+        create_sample_predictions_plot(
+            model, val_imgs, val_masks, img_dir, mask_dir,
+            aug_img_dir, aug_mask_dir, device, transform, plot_dir,
+            use_cache=use_cache, model_path=model_path
+        )
+        print("All evaluation plots created successfully!")
+        
+    except Exception as e:
+        print(f"Error creating evaluation plots: {e}")
 
     # Save detailed results if requested
     if args.save_results:
-        results_dir = os.path.join(artifacts_dir, 'evaluation_results')
-        os.makedirs(results_dir, exist_ok=True)
+        print(f"\n{'='*60}")
+        print("SAVING DETAILED RESULTS")
+        print(f"{'='*60}")
+        
+        try:
+            results_dir = os.path.join(artifacts_dir, 'evaluation_results')
+            os.makedirs(results_dir, exist_ok=True)
 
-        # Save accuracy results
-        np.save(os.path.join(results_dir, 'iou_scores.npy'),
-                accuracy_results['iou_scores'])
-        np.save(os.path.join(results_dir, 'dice_scores.npy'),
-                accuracy_results['dice_scores'])
-        np.save(os.path.join(results_dir, 'pixel_accuracies.npy'),
-                accuracy_results['pixel_accuracies'])
-        np.save(os.path.join(results_dir, 'prediction_times.npy'),
-                accuracy_results['prediction_times'])
-        np.save(os.path.join(results_dir, 'positive_areas.npy'),
-                accuracy_results['positive_areas'])
+            # Save accuracy results
+            print("Saving accuracy metrics...")
+            np.save(os.path.join(results_dir, 'iou_scores.npy'),
+                    accuracy_results['iou_scores'])
+            np.save(os.path.join(results_dir, 'dice_scores.npy'),
+                    accuracy_results['dice_scores'])
+            np.save(os.path.join(results_dir, 'pixel_accuracies.npy'),
+                    accuracy_results['pixel_accuracies'])
+            np.save(os.path.join(results_dir, 'prediction_times.npy'),
+                    accuracy_results['prediction_times'])
+            np.save(os.path.join(results_dir, 'positive_areas.npy'),
+                    accuracy_results['positive_areas'])
 
-        # Save confidence results
-        np.save(os.path.join(results_dir, 'confidence_in_vessels.npy'),
-                accuracy_results['confidence_in_vessels'])
-        np.save(os.path.join(results_dir, 'confidence_in_background.npy'),
-                accuracy_results['confidence_in_background'])
-        np.save(os.path.join(results_dir, 'confidence_separations.npy'),
-                accuracy_results['confidence_separations'])
+            # Save confidence results
+            print("Saving confidence metrics...")
+            np.save(os.path.join(results_dir, 'confidence_in_vessels.npy'),
+                    accuracy_results['confidence_in_vessels'])
+            np.save(os.path.join(results_dir, 'confidence_in_background.npy'),
+                    accuracy_results['confidence_in_background'])
+            np.save(os.path.join(results_dir, 'confidence_separations.npy'),
+                    accuracy_results['confidence_separations'])
 
-        # Save per-image confidence metrics as a CSV-like format
-        import json
-        with open(os.path.join(results_dir, 'per_image_confidence_metrics.json'), 'w') as f:
-            json.dump(
-                accuracy_results['per_image_confidence_metrics'], f, indent=2)
+            # Save per-image confidence metrics as a CSV-like format
+            print("Saving per-image confidence metrics...")
+            import json
+            with open(os.path.join(results_dir, 'per_image_confidence_metrics.json'), 'w') as f:
+                json.dump(
+                    accuracy_results['per_image_confidence_metrics'], f, indent=2)
 
-        # Save speed results
-        np.save(os.path.join(results_dir, 'speed_benchmark_times.npy'),
-                speed_results['times'])
+            # Save speed results
+            print("Saving speed benchmark results...")
+            np.save(os.path.join(results_dir, 'speed_benchmark_times.npy'),
+                    speed_results['times'])
 
-        print(f"Detailed results saved to: {results_dir}")
+            print(f"All detailed results saved successfully to: {results_dir}")
+            
+        except Exception as e:
+            print(f"Error saving detailed results: {e}")
 
-    print("\nEvaluation complete!")
+    print(f"\n{'='*60}")
+    print("MODEL EVALUATION COMPLETE!")
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":
