@@ -1370,8 +1370,8 @@ def parse_args():
                         help='Maximum number of samples to evaluate')
     parser.add_argument('--warmup-samples', type=int, default=10,
                         help='Number of warmup samples before timing')
-    parser.add_argument('--save-results', action='store_true',
-                        help='Save detailed results to files')
+    parser.add_argument('--no-save-results', action='store_true',
+                        help='Skip saving detailed results to files')
     parser.add_argument('--no-cache', action='store_true',
                         help='Disable prediction caching')
     parser.add_argument('--clear-cache', action='store_true',
@@ -1496,8 +1496,8 @@ def main():
     except Exception as e:
         print(f"Error creating evaluation plots: {e}")
 
-    # Save detailed results if requested
-    if args.save_results:
+    # Save detailed results unless disabled
+    if not args.no_save_results:
         print(f"\n{'='*60}")
         print("SAVING DETAILED RESULTS")
         print(f"{'='*60}")
