@@ -10,7 +10,9 @@ from autoslide import config
 # Get directories from config
 data_dir = config['data_dir']
 export_json_path = os.path.join(
-    data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-7_30_2025.ndjson')
+    # data_dir, #'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-7_30_2025.ndjson')
+    # "/home/abuzarmahmood/projects/autoslide_analysis/data/double_annotation_export.ndjson")
+    "/home/abuzarmahmood/projects/autoslide_data/labelled_images/ndjson/Export_project-trichrome_vessels_6_25-9_15_2025.ndjson")
 # data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
 
 export_df = pd.read_json(export_json_path, lines=True)
