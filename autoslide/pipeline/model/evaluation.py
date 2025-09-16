@@ -642,6 +642,8 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
     if use_cache:
         cache_dir = os.path.join(artifacts_dir, 'prediction_cache')
         os.makedirs(cache_dir, exist_ok=True)
+        cache_info = get_cache_info(cache_dir)
+        print(f'Using prediction cache for speed benchmark: {cache_info["num_files"]} files, {cache_info["total_size_mb"]:.1f} MB')
 
     # Select random images for benchmarking
     benchmark_imgs = np.random.choice(val_imgs,
@@ -652,27 +654,30 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
     # Warmup phase
     print(f'Warming up with {num_warmup} iterations...')
     warmup_imgs = np.random.choice(benchmark_imgs, num_warmup, replace=True)
-    # for i in range(num_warmup):
-    for img_name in tqdm(warmup_imgs):
-        # img_name = benchmark_imgs[i]
-        if 'aug_' in img_name:
-            image = Image.open(os.path.join(
-                aug_img_dir, img_name)).convert("RGB")
-        else:
-            image = Image.open(os.path.join(img_dir, img_name)).convert("RGB")
-
-        _ = predict_single_image(model, image, device,
-                                 transform, return_time=False)
+    for img_name in tqdm(warmup_imgs, desc='Warmup'):
+        try:
+            if 'aug_' in img_name:
+                image_path = os.path.join(aug_img_dir, img_name)
+            else:
+                image_path = os.path.join(img_dir, img_name)
+            
+            if not os.path.exists(image_path):
+                continue
+                
+            image = Image.open(image_path).convert("RGB")
+            _ = predict_single_image(model, image, device, transform, return_time=False)
+        except Exception:
+            continue
 
     # Benchmark phase
     print(f'Benchmarking with {num_benchmark} iterations...')
     benchmark_times = []
     benchmark_errors = 0
+    cache_hits = 0
+    cache_misses = 0
 
-    # for i in range(num_warmup, min(num_warmup + num_benchmark, len(benchmark_imgs))):
     for img_name in tqdm(benchmark_imgs, desc='Benchmarking speed'):
         try:
-            # img_name = benchmark_imgs[i]
             if 'aug_' in img_name:
                 image_path = os.path.join(aug_img_dir, img_name)
             else:
@@ -685,15 +690,19 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
                 
             image = Image.open(image_path).convert("RGB")
 
-            # Try to load from cache first (but only use timing if not cached)
+            # Try to load from cache first
             pred_time = None
+            pred_mask = None
             if use_cache and cache_dir and model_path:
                 cache_key = get_cache_key(model_path, img_name)
-                _, cached_time, _ = load_prediction_cache(cache_dir, cache_key)
-                if cached_time is not None:
+                pred_mask, cached_time, _ = load_prediction_cache(cache_dir, cache_key)
+                if pred_mask is not None and cached_time is not None:
                     pred_time = cached_time
+                    cache_hits += 1
+                else:
+                    cache_misses += 1
 
-            # Get fresh prediction if not cached (for accurate timing)
+            # Get fresh prediction if not cached
             if pred_time is None:
                 pred_time, pred_mask = predict_single_image(
                     model, image, device, transform, return_time=True)
@@ -712,6 +721,13 @@ def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
     
     if benchmark_errors > 0:
         print(f"Benchmark completed with {benchmark_errors} errors out of {len(benchmark_imgs)} samples")
+    
+    # Print cache statistics
+    if use_cache:
+        total_requests = cache_hits + cache_misses
+        if total_requests > 0:
+            cache_hit_rate = cache_hits / total_requests * 100
+            print(f'Speed benchmark cache statistics: {cache_hits} hits, {cache_misses} misses ({cache_hit_rate:.1f}% hit rate)')
 
     # Calculate speed metrics
     speed_results = {
