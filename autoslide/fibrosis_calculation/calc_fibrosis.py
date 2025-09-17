@@ -124,12 +124,17 @@ def quantify_fibrosis(
         fibrosis_mask_no_vessels = mask & (~vessel_binary.astype(bool))
         fibrosis_area_no_vessels = np.sum(fibrosis_mask_no_vessels)
 
+        # Calculate fibrotic pixels within vessel areas
+        fibrosis_in_vessels = mask & vessel_binary.astype(bool)
+        fibrosis_in_vessels_area = np.sum(fibrosis_in_vessels)
+
         fibrosis_percentage = (fibrosis_area_no_vessels /
                                tissue_area) * 100 if tissue_area > 0 else 0
 
         return {
             'fibrosis_area': int(fibrosis_area),
             'fibrosis_area_no_vessels': int(fibrosis_area_no_vessels),
+            'fibrosis_in_vessels_area': int(fibrosis_in_vessels_area),
             'vessel_area': int(vessel_area),
             'tissue_area': int(tissue_area),
             'total_area': int(total_area),
@@ -604,6 +609,8 @@ def create_fibrosis_visualization(image, fibrosis_mask, vessel_mask, results, im
             result_text += f"Fibrosis %: {results['fibrosis_percentage']:.2f}%\n"
         if 'fibrosis_area' in results:
             result_text += f"Fibrosis Area: {results['fibrosis_area']:,} px\n"
+        if 'fibrosis_in_vessels_area' in results:
+            result_text += f"Fibrosis in Vessels: {results['fibrosis_in_vessels_area']:,} px\n"
         if 'vessel_area' in results:
             result_text += f"Vessel Area: {results['vessel_area']:,} px\n"
         if 'tissue_area' in results:
