@@ -10,9 +10,10 @@ import numpy as np
 import pandas as pd
 from glob import glob
 import json
+import time
 from tqdm import tqdm
 from ast import literal_eval
-from autoslide import config
+from autoslide import config as autoslide_config
 from autoslide.pipeline import utils
 from autoslide.utils.get_section_from_hash import *
 import cv2
@@ -280,12 +281,13 @@ def process_single_image_fibrosis(
 
         # Save individual CSV result
         csv_filename = image_name.replace('.png', '_fibrosis_results.csv')
-        csv_path = os.path.join(results_dir, 'individual_results', csv_filename)
+        csv_path = os.path.join(
+            results_dir, 'individual_results', csv_filename)
         os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-        
+
         result_df = pd.DataFrame([result_entry])
         result_df.to_csv(csv_path, index=False)
-        
+
         if verbose:
             print(f"  Individual results saved to: {csv_path}")
 
@@ -309,31 +311,31 @@ def process_single_image_fibrosis(
 def check_existing_outputs(images_with_masks, results_dir, save_visualizations, verbose=False):
     """
     Check which images already have outputs and filter out processed ones.
-    
+
     Args:
         images_with_masks (list): List of image dictionaries
         results_dir (str): Results directory path
         save_visualizations (bool): Whether visualizations are being saved
         verbose (bool): Whether to print detailed information
-        
+
     Returns:
         list: Filtered list of images that need processing
     """
     # Check for existing individual CSV results
     individual_results_dir = os.path.join(results_dir, 'individual_results')
-    
+
     # Filter out images that already have results
     images_to_process = []
     skipped_count = 0
-    
+
     for item in images_with_masks:
         image_name = item['image_name']
-        
+
         # Check if individual CSV result exists
         csv_filename = image_name.replace('.png', '_fibrosis_results.csv')
         csv_path = os.path.join(individual_results_dir, csv_filename)
         has_csv_result = os.path.exists(csv_path)
-        
+
         # Check if visualization exists (if visualizations are being saved)
         has_visualization = True  # Default to true if not saving visualizations
         if save_visualizations:
@@ -341,7 +343,7 @@ def check_existing_outputs(images_with_masks, results_dir, save_visualizations, 
             vis_filename = image_name.replace('.png', '_fibrosis_analysis.png')
             vis_path = os.path.join(vis_dir, vis_filename)
             has_visualization = os.path.exists(vis_path)
-        
+
         # Skip if both outputs exist
         if has_csv_result and has_visualization:
             skipped_count += 1
@@ -353,11 +355,11 @@ def check_existing_outputs(images_with_masks, results_dir, save_visualizations, 
                 print(f"Will reprocess {image_name} - missing visualization")
             elif verbose and not has_csv_result and has_visualization:
                 print(f"Will reprocess {image_name} - missing CSV result")
-    
+
     if verbose:
         print(f"Skipped {skipped_count} images with existing outputs")
         print(f"Will process {len(images_to_process)} images")
-    
+
     return images_to_process
 
 
@@ -427,9 +429,10 @@ def process_all_fibrosis_quantification(
         images_with_masks = check_existing_outputs(
             images_with_masks, results_dir, save_visualizations, verbose=verbose
         )
-        
+
         if not images_with_masks:
-            print("All images already have outputs. Use --force-run to reprocess all images.")
+            print(
+                "All images already have outputs. Use --force-run to reprocess all images.")
             return
 
     # Limit number of images if specified
@@ -437,60 +440,109 @@ def process_all_fibrosis_quantification(
         images_with_masks = images_with_masks[:max_images]
         print(f"Limited processing to {max_images} images for testing")
 
-    # Process images in parallel
-    print(
-        f"Processing {len(images_with_masks)} images using {n_jobs if n_jobs != -1 else 'all available'} parallel jobs...")
+    # Group images by SVS directory for timing tracking
+    svs_groups = {}
+    for item in images_with_masks:
+        # Extract SVS directory from image path
+        # Path structure: data_dir/suggested_regions/svs_name/region_type/images/image.png
+        path_parts = item['image_path'].split(os.sep)
+        suggested_regions_idx = None
+        for i, part in enumerate(path_parts):
+            if part == 'suggested_regions':
+                suggested_regions_idx = i
+                break
 
-    # Use joblib to parallelize the processing
-    results = Parallel(n_jobs=n_jobs, verbose=1 if verbose else 0)(
-        delayed(process_single_image_fibrosis)(
-            item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose
-        ) for item in tqdm(images_with_masks, desc="Processing fibrosis quantification")
-    )
+        if suggested_regions_idx is not None and suggested_regions_idx + 1 < len(path_parts):
+            svs_name = path_parts[suggested_regions_idx + 1]
+            if svs_name not in svs_groups:
+                svs_groups[svs_name] = []
+            svs_groups[svs_name].append(item)
 
-    # Separate successful results from errors
-    results_list = []
-    successful_analyses = 0
-    failed_analyses = 0
+    if verbose:
+        print(f"Found {len(svs_groups)} SVS directories to process:")
+        for svs_name, items in svs_groups.items():
+            print(f"  {svs_name}: {len(items)} images")
 
-    for success, result_or_error in results:
-        if success:
-            results_list.append(result_or_error)
-            successful_analyses += 1
-        else:
-            print(result_or_error)
-            failed_analyses += 1
+    # Process each SVS group and track timing
+    all_results = []
+    total_successful = 0
+    total_failed = 0
+
+    for svs_name, svs_images in tqdm(svs_groups.items()):
+        print(f"\nProcessing SVS: {svs_name} ({len(svs_images)} images)")
+        svs_start_time = time.time()
+
+        # Process images in parallel for this SVS
+        results = Parallel(n_jobs=n_jobs, verbose=1 if verbose else 0)(
+            delayed(process_single_image_fibrosis)(
+                item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose
+            ) for item in tqdm(svs_images, desc=f"Processing {svs_name}")
+        )
+
+        # Calculate timing for this SVS
+        svs_end_time = time.time()
+        svs_processing_time = svs_end_time - svs_start_time
+
+        # Count successful/failed for this SVS
+        svs_successful = 0
+        svs_failed = 0
+        for success, result_or_error in results:
+            if success:
+                all_results.append(result_or_error)
+                svs_successful += 1
+                total_successful += 1
+            else:
+                print(result_or_error)
+                svs_failed += 1
+                total_failed += 1
+
+        # Log timing to tracking JSON for this SVS
+        svs_dir_path = os.path.join(data_dir, 'suggested_regions', svs_name)
+        save_svs_timing_to_tracking_json(
+            svs_dir_path,
+            svs_processing_time,
+            len(svs_images),
+            verbose=verbose
+        )
+
+        print(f"SVS {svs_name} completed in {svs_processing_time:.2f} seconds")
+        print(f"  Successful: {svs_successful}, Failed: {svs_failed}")
 
     # Create combined CSV from all individual results
-    if results_list or not force_run:
+    if all_results or not force_run:
         # Load all individual CSV files to create combined results
-        individual_results_dir = os.path.join(results_dir, 'individual_results')
+        individual_results_dir = os.path.join(
+            results_dir, 'individual_results')
         if os.path.exists(individual_results_dir):
-            individual_csv_files = glob(os.path.join(individual_results_dir, '*_fibrosis_results.csv'))
-            
+            individual_csv_files = glob(os.path.join(
+                individual_results_dir, '*_fibrosis_results.csv'))
+
             if individual_csv_files:
                 # Read all individual CSV files
-                all_results = []
+                combined_results = []
                 for csv_file in individual_csv_files:
                     try:
                         df = pd.read_csv(csv_file)
-                        all_results.append(df)
+                        combined_results.append(df)
                     except Exception as e:
                         if verbose:
                             print(f"Error reading {csv_file}: {e}")
-                
-                if all_results:
+
+                if combined_results:
                     # Combine all results
-                    combined_df = pd.concat(all_results, ignore_index=True)
-                    
+                    combined_df = pd.concat(
+                        combined_results, ignore_index=True)
+
                     # Save combined CSV
-                    csv_path = os.path.join(results_dir, 'fibrosis_quantification_results.csv')
+                    csv_path = os.path.join(
+                        results_dir, 'fibrosis_quantification_results.csv')
                     combined_df.to_csv(csv_path, index=False)
                     print(f"Combined results saved to: {csv_path}")
                     print(f"Total results: {len(combined_df)} images")
-                    
+
                     # Create summary statistics
-                    create_summary_statistics(combined_df, results_dir, verbose=verbose)
+                    create_summary_statistics(
+                        combined_df, results_dir, verbose=verbose)
                 else:
                     print("No valid individual CSV files found to combine")
             else:
@@ -499,9 +551,9 @@ def process_all_fibrosis_quantification(
             print("Individual results directory not found")
 
     print(f"\nFibrosis quantification complete!")
-    print(f"Successful analyses: {successful_analyses}")
-    print(f"Failed analyses: {failed_analyses}")
-    print(f"Total processed: {successful_analyses + failed_analyses}")
+    print(f"Successful analyses: {total_successful}")
+    print(f"Failed analyses: {total_failed}")
+    print(f"Total processed: {total_successful + total_failed}")
 
 
 def create_fibrosis_visualization(image, fibrosis_mask, vessel_mask, results, image_name, vis_dir, verbose=False):
@@ -575,6 +627,65 @@ def create_fibrosis_visualization(image, fibrosis_mask, vessel_mask, results, im
 
     except Exception as e:
         print(f"Error creating visualization for {image_name}: {e}")
+        if verbose:
+            import traceback
+            print(f"  Full traceback: {traceback.format_exc()}")
+
+
+def save_svs_timing_to_tracking_json(svs_dir_path, svs_processing_time, num_images, verbose=False):
+    """
+    Save SVS processing timing information to the tracking JSON file.
+
+    Args:
+        svs_dir_path (str): Path to the SVS directory
+        svs_processing_time (float): Time taken to process the SVS in seconds
+        num_images (int): Number of images processed for this SVS
+        verbose (bool): Whether to print detailed information
+    """
+    try:
+        # Find the tracking JSON file - look in the data_dir/tracking directory
+        # based on the SVS directory name
+        svs_name = os.path.basename(svs_dir_path).split('.')[0]
+        data_dir = autoslide_config['data_dir']
+        tracking_dir = os.path.join(data_dir, 'tracking')
+
+        # Look for tracking files that match this SVS
+        tracking_file = os.path.join(tracking_dir, f"{svs_name}.json")
+
+        if not tracking_file:
+            if verbose:
+                print(f"No tracking JSON file found for SVS: {svs_name}")
+                print(f"Looking for filepath: {tracking_file}")
+            return
+
+        # Load existing tracking data
+        try:
+            with open(tracking_file, 'r') as f:
+                tracking_data = json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            tracking_data = {}
+
+        # Add fibrosis processing timing (following the pattern from final_annotation.py)
+        tracking_data['fibrosis_processing_time'] = svs_processing_time
+        tracking_data['fibrosis_num_images_processed'] = num_images
+        tracking_data['fibrosis_processing_time_per_image'] = svs_processing_time / \
+            num_images if num_images > 0 else 0
+        tracking_data['fibrosis_processing_timestamp'] = time.strftime(
+            '%Y-%m-%d %H:%M:%S')
+
+        # Save updated tracking data
+        with open(tracking_file, 'w') as f:
+            json.dump(tracking_data, f, indent=4)
+
+        if verbose:
+            print(f"Fibrosis timing saved to {tracking_file}")
+            print(f"  Processing time: {svs_processing_time:.2f} seconds")
+            print(f"  Images processed: {num_images}")
+            print(
+                f"  Time per image: {svs_processing_time / num_images:.2f} seconds" if num_images > 0 else "  Time per image: N/A")
+
+    except Exception as e:
+        print(f"Error saving timing to tracking JSON: {e}")
         if verbose:
             import traceback
             print(f"  Full traceback: {traceback.format_exc()}")

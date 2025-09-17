@@ -20,6 +20,7 @@ import json
 from tqdm import tqdm
 import hashlib
 import argparse
+import time
 
 # Import utilities directly
 from autoslide.pipeline import utils
@@ -119,6 +120,9 @@ def main():
     # for data_path in data_path_list:
     for i, (this_json, json_path) in enumerate(tqdm(zip(json_list, json_path_list), total=len(json_list))):
         data_path = this_json['data_path']
+        
+        # Start timing for this file
+        start_time = time.time()
         
         if verbose:
             print(f"\n{'='*60}")
@@ -337,15 +341,31 @@ def main():
                 this_output_dir,
                 data_basename_proc + '_' + 'section_frame.csv')
 
+            # Calculate and log processing time
+            end_time = time.time()
+            processing_time = end_time - start_time
+            this_json['suggest_regions_processing_time_seconds'] = processing_time
+
             with open(json_path, 'w') as f:
                 json.dump(this_json, f, indent=4)
             
             if verbose:
+                print(f"Processing time: {processing_time:.2f} seconds")
                 print(f"Updated JSON file: {json_path}")
                 print(f"Successfully processed {data_basename_proc}")
 
         except Exception as e:
+            # Still log time even if there was an error
+            end_time = time.time()
+            processing_time = end_time - start_time
+            this_json['suggest_regions_processing_time_seconds'] = processing_time
+            this_json['suggest_regions_error'] = str(e)
+            
+            with open(json_path, 'w') as f:
+                json.dump(this_json, f, indent=4)
+            
             print(f"Error processing {data_basename if 'data_basename' in locals() else 'unknown file'}: {e}")
+            print(f"Processing time before error: {processing_time:.2f} seconds")
             if verbose:
                 import traceback
                 traceback.print_exc()
