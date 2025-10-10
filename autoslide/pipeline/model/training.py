@@ -45,6 +45,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train Mask R-CNN model for vessel detection')
     parser.add_argument('--retrain', action='store_true', 
                        help='Force retraining even if a saved model exists')
+    parser.add_argument('--n-runs', type=int, default=1,
+                       help='Number of training runs to perform (default: 1)')
     return parser.parse_args()
 
 
@@ -103,10 +105,105 @@ def main():
         print('Loading model from savefile')
         model = load_model(model, best_model_path, device)
     else:
-        # Train model
-        model, all_train_losses, all_val_losses, best_val_loss = train_model(
-            model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir
-        )
+        # Perform multiple training runs if requested
+        if args.n_runs > 1:
+            print(f'\nPerforming {args.n_runs} training runs to select best model...')
+            best_overall_val_loss = float('inf')
+            best_run_idx = -1
+            run_results = []
+            
+            for run_idx in range(args.n_runs):
+                print(f'\n{"="*60}')
+                print(f'Starting training run {run_idx + 1}/{args.n_runs}')
+                print(f'{"="*60}\n')
+                
+                # Reinitialize model and optimizer for each run
+                run_model = initialize_model()
+                run_optimizer = setup_training(run_model, device)
+                
+                # Train model for this run
+                run_model, run_train_losses, run_val_losses, run_best_val_loss = train_model(
+                    run_model, train_dl, val_dl, run_optimizer, device, plot_dir, artifacts_dir,
+                    run_idx=run_idx
+                )
+                
+                # Store results
+                run_results.append({
+                    'run_idx': run_idx,
+                    'model_state': run_model.state_dict(),
+                    'train_losses': run_train_losses,
+                    'val_losses': run_val_losses,
+                    'best_val_loss': run_best_val_loss
+                })
+                
+                print(f'\nRun {run_idx + 1} completed with best validation loss: {run_best_val_loss:.4f}')
+                
+                # Track best run
+                if run_best_val_loss < best_overall_val_loss:
+                    best_overall_val_loss = run_best_val_loss
+                    best_run_idx = run_idx
+                    print(f'*** New best model found in run {run_idx + 1} ***')
+            
+            # Select and save the best model
+            print(f'\n{"="*60}')
+            print(f'Training complete! Best model from run {best_run_idx + 1}')
+            print(f'Best validation loss: {best_overall_val_loss:.4f}')
+            print(f'{"="*60}\n')
+            
+            # Load the best model
+            best_result = run_results[best_run_idx]
+            model.load_state_dict(best_result['model_state'])
+            
+            # Save the best model
+            torch.save(best_result['model_state'], best_model_path)
+            
+            # Save all run results for analysis
+            run_summary_path = os.path.join(artifacts_dir, 'training_runs_summary.npy')
+            np.save(run_summary_path, {
+                'best_run_idx': best_run_idx,
+                'best_val_loss': best_overall_val_loss,
+                'all_runs': [{
+                    'run_idx': r['run_idx'],
+                    'best_val_loss': r['best_val_loss'],
+                    'train_losses': r['train_losses'],
+                    'val_losses': r['val_losses']
+                } for r in run_results]
+            })
+            
+            # Plot comparison of all runs
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+            for r in run_results:
+                label = f"Run {r['run_idx'] + 1}"
+                if r['run_idx'] == best_run_idx:
+                    label += " (Best)"
+                ax1.plot(r['train_losses'], label=label, 
+                        linewidth=2 if r['run_idx'] == best_run_idx else 1)
+                ax2.plot(r['val_losses'], label=label,
+                        linewidth=2 if r['run_idx'] == best_run_idx else 1)
+            
+            ax1.set_title('Training Loss - All Runs')
+            ax1.set_xlabel('Epoch')
+            ax1.set_ylabel('Loss')
+            ax1.legend()
+            ax1.grid(True, alpha=0.3)
+            
+            ax2.set_title('Validation Loss - All Runs')
+            ax2.set_xlabel('Epoch')
+            ax2.set_ylabel('Loss')
+            ax2.legend()
+            ax2.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(plot_dir, 'all_runs_comparison.png'), dpi=150)
+            plt.close()
+            
+            print(f'Run comparison plot saved to {plot_dir}/all_runs_comparison.png')
+            
+        else:
+            # Single training run (original behavior)
+            model, all_train_losses, all_val_losses, best_val_loss = train_model(
+                model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir
+            )
 
     # Evaluate model
     evaluate_model(
