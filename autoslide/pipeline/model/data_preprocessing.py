@@ -202,6 +202,7 @@ def create_transforms():
         RandomRotation90(p=0.5),
         RandomShear(p=0.5, shear_range=20),  # Added shear transformation
         T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        T.ElasticTransform(alpha=3000, sigma=30),
         T.ToTensor()
     ])
     return transform
