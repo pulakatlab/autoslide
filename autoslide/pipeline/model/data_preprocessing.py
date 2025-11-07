@@ -497,10 +497,14 @@ def load_or_create_augmented_data(
 def combine_datasets(
         train_imgs,
         train_masks,
-        val_imgs,
-        val_masks,
         aug_img_names,
         aug_mask_names,
+        val_imgs,
+        val_masks,
+        img_dir,
+        mask_dir,
+        aug_img_dir,
+        aug_mask_dir,
 ):
     """
     Combine original and augmented datasets.
@@ -511,61 +515,67 @@ def combine_datasets(
     Args:
         train_imgs (list): List of original training image filenames
         train_masks (list): List of original training mask filenames
-        val_imgs (list): List of original validation image filenames
-        val_masks (list): List of original validation mask filenames
         aug_img_names (list): List of augmented image filenames
         aug_mask_names (list): List of augmented mask filenames
+        img_dir (str): Directory containing original images
+        mask_dir (str): Directory containing original masks
+        aug_img_dir (str): Directory containing augmented images
+        aug_mask_dir (str): Directory containing augmented masks
 
     Returns:
         tuple: (train_imgs, train_masks, val_imgs, val_masks) -
                Lists of combined filenames for training and validation
     """
-    print('Combining datasets...')
-    print(f'Original - Train: {len(train_imgs)}, Val: {len(val_imgs)}')
+    print('Combining original training data with augmented data...')
+    print(f'Original - Train: {len(train_imgs)}')
     print(f'Augmented: {len(aug_img_names)}')
 
-    n_aug_train = int(0.9 * len(aug_img_names))
-
-    print(
-        f'Splitting augmented data - Train: {n_aug_train}, Val: {len(aug_img_names) - n_aug_train}')
-
     # Combine datasets
-    train_imgs = np.concatenate(
-        [train_imgs,
-         aug_img_names[:n_aug_train],
+    train_img_paths = np.concatenate(
+        [[os.path.join(img_dir, name) for name in train_imgs],
+         [os.path.join(aug_img_dir, name) for name in aug_img_names]
          ]
     )
-    train_masks = np.concatenate(
+    train_mask_paths = np.concatenate(
         [
-            train_masks,
-            aug_mask_names[:n_aug_train],
-        ]
-    )
-    val_imgs = np.concatenate(
-        [
-            val_imgs,
-            aug_img_names[n_aug_train:],
-        ]
-    )
-    val_masks = np.concatenate(
-        [
-            val_masks,
-            aug_mask_names[n_aug_train:],
+            [os.path.join(mask_dir, name) for name in train_masks],
+            [os.path.join(aug_mask_dir, name) for name in aug_mask_names],
         ]
     )
 
+    val_img_paths = [os.path.join(img_dir, name) for name in val_imgs]
+    val_mask_paths = [os.path.join(mask_dir, name) for name in val_masks]
+
+    # Check that there are not duplicates in any set
+    assert len(train_img_paths) == len(
+        set(train_img_paths)), "Duplicates found in training image paths"
+    assert len(train_mask_paths) == len(
+        set(train_mask_paths)), "Duplicates found in training mask paths"
+    assert len(val_img_paths) == len(
+        set(val_img_paths)), "Duplicates found in validation image paths"
+    assert len(val_mask_paths) == len(
+        set(val_mask_paths)), "Duplicates found in validation mask paths"
+
+    # Check that no training images are in validation set
+    assert len(
+        set(train_img_paths).intersection(set(val_img_paths))) == 0, "Overlap found between training and validation image paths"
+    assert len(
+        set(train_mask_paths).intersection(set(val_mask_paths))) == 0, "Overlap found between training and validation mask paths"
+
     print(
-        f'Final combined dataset - Train: {len(train_imgs)}, Val: {len(val_imgs)}')
+        f'Final combined dataset - Train: {len(train_img_paths)}, Val: {len(val_imgs)}')
 
     # Check that all images have corresponding masks
     print('Validating combined dataset image-mask pairs...')
-    for img_name, mask_name in zip(train_imgs, train_masks):
-        assert img_name.split(".")[0] in mask_name
-    for img_name, mask_name in zip(val_imgs, val_masks):
-        assert img_name.split(".")[0] in mask_name
+    all_img_paths = list(train_img_paths) + list(val_img_paths)
+    all_mask_paths = list(train_mask_paths) + list(val_mask_paths)
+    for img_path, mask_path in zip(all_img_paths, all_mask_paths):
+        assert os.path.basename(img_path).split(".")[0] in os.path.basename(
+            mask_path), f'Mismatch: {img_path} and {mask_path}'
+
     print('Dataset combination and validation complete')
 
-    return train_imgs, train_masks, val_imgs, val_masks
+    return train_img_paths, train_mask_paths, val_img_paths, val_mask_paths
 
 
 #############################################################################
@@ -581,15 +591,23 @@ class AugmentedCustDat(torch.utils.data.Dataset):
     It also handles the conversion of masks to the format required by Mask R-CNN.
     """
 
-    def __init__(self, image_names, mask_names, img_dir, mask_dir,
-                 aug_img_dir, aug_mask_dir,
-                 transform=None):
-        self.image_names = image_names
-        self.mask_names = mask_names
-        self.img_dir = img_dir
-        self.mask_dir = mask_dir
-        self.aug_img_dir = aug_img_dir
-        self.aug_mask_dir = aug_mask_dir
+    def __init__(
+            self,
+            img_paths,
+            mask_paths,
+            transform=None
+    ):
+        """
+        Initialize the dataset.
+
+        Args:
+            img_paths (list): List of image filenames
+            mask_paths (list): List of mask filenames
+            transform (callable): Transformation function to apply to the data
+        """
+
+        self.img_paths = img_paths
+        self.mask_paths = mask_paths
         self.base_transform = T.ToTensor()
         if transform is not None:
             self.transform = transform
@@ -597,17 +615,12 @@ class AugmentedCustDat(torch.utils.data.Dataset):
             self.transform = self.base_transform
 
     def __getitem__(self, idx):
-        img_name = self.image_names[idx]
-        mask_name = self.mask_names[idx]
+        img_path = self.img_paths[idx]
+        mask_path = self.mask_paths[idx]
 
         # Check if this is an augmented image
-        if 'aug_' in img_name:
-            img = Image.open(os.path.join(
-                self.aug_img_dir, img_name)).convert("RGB")
-            mask = Image.open(os.path.join(self.aug_mask_dir, mask_name))
-        else:
-            img = Image.open(self.img_dir + img_name).convert("RGB")
-            mask = Image.open(self.mask_dir + mask_name)
+        img = Image.open(img_path).convert("RGB")
+        mask = Image.open(mask_path)
 
         # Apply transformations
         img_tensor, mask_tensor = self.transform(img, mask)
@@ -660,7 +673,7 @@ class AugmentedCustDat(torch.utils.data.Dataset):
         return img_tensor, target
 
     def __len__(self):
-        return len(self.image_names)
+        return len(self.img_paths)
 
 
 def custom_collate(data):
@@ -679,9 +692,13 @@ def custom_collate(data):
     return data
 
 
-def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
-                       img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-                       transform):
+def create_dataloaders(
+        train_img_paths,
+        train_mask_paths,
+        val_img_paths,
+        val_mask_paths,
+        transform
+):
     """
     Create DataLoader objects for training and validation.
 
@@ -689,14 +706,10 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
     and other parameters for efficient training and validation.
 
     Args:
-        train_imgs (list): List of training image filenames
-        train_masks (list): List of training mask filenames
-        val_imgs (list): List of validation image filenames
-        val_masks (list): List of validation mask filenames
-        img_dir (str): Directory containing original images
-        mask_dir (str): Directory containing original masks
-        aug_img_dir (str): Directory containing augmented images
-        aug_mask_dir (str): Directory containing augmented masks
+        train_img_paths (list): List of training image filenames
+        train_mask_paths (list): List of training mask filenames
+        val_img_paths (list): List of validation image filenames
+        val_mask_paths (list): List of validation mask filenames
         transform (callable): Transformation function to apply to the data
 
     Returns:
@@ -715,9 +728,7 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
 
     train_dl = torch.utils.data.DataLoader(
         AugmentedCustDat(
-            train_imgs, train_masks,
-            img_dir, mask_dir,
-            aug_img_dir, aug_mask_dir,
+            train_img_paths, train_mask_paths,
             transform
         ),
         batch_size=batch_size,
@@ -730,9 +741,7 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
 
     val_dl = torch.utils.data.DataLoader(
         AugmentedCustDat(
-            val_imgs, val_masks,
-            img_dir, mask_dir,
-            aug_img_dir, aug_mask_dir,
+            val_img_paths, val_mask_paths,
             transform
         ),
         batch_size=batch_size,
@@ -929,7 +938,7 @@ def prepare_data(data_dir=None, use_augmentation=True):
         mask_names) = load_data(data_dir)
 
     # Create transforms
-    transform = create_transforms()
+    transform_set = create_transforms()
 
     # Split data
     (
@@ -946,9 +955,14 @@ def prepare_data(data_dir=None, use_augmentation=True):
         )
 
         # Combine datasets
-        train_imgs, train_masks, val_imgs, val_masks = combine_datasets(
-            train_imgs, train_masks, val_imgs, val_masks,
-            aug_img_names, aug_mask_names,
+        (
+            fin_train_img_paths,
+            fin_train_mask_paths,
+            val_img_paths,
+            val_mask_paths,
+        ) = combine_datasets(
+            train_imgs, train_masks, aug_img_names, aug_mask_names, val_imgs, val_masks,
+            img_dir, mask_dir, aug_img_dir, aug_mask_dir
         )
     else:
         # Use empty augmented directories if not using augmentation
@@ -961,9 +975,11 @@ def prepare_data(data_dir=None, use_augmentation=True):
 
     # Create dataloaders
     train_dl, val_dl = create_dataloaders(
-        train_imgs, train_masks, val_imgs, val_masks,
-        img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-        transform
+        fin_train_img_paths,
+        fin_train_mask_paths,
+        val_img_paths,
+        val_mask_paths,
+        transform_set,
     )
 
     print("Data preprocessing pipeline complete!")
