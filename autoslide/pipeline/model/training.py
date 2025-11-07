@@ -31,7 +31,7 @@ from autoslide import config
 
 # Get directories from config
 data_dir = config['data_dir']
-artifacts_dir = os.path.join(os.path.dirname(__file__), 'artifacts')
+artifacts_dir = config['artifacts_dir']
 plot_dir = config['plot_dirs']
 
 # Import utilities directly
@@ -42,9 +42,10 @@ plot_dir = config['plot_dirs']
 
 def parse_args():
     """Parse command line arguments"""
-    parser = argparse.ArgumentParser(description='Train Mask R-CNN model for vessel detection')
-    parser.add_argument('--retrain', action='store_true', 
-                       help='Force retraining even if a saved model exists')
+    parser = argparse.ArgumentParser(
+        description='Train Mask R-CNN model for vessel detection')
+    parser.add_argument('--retrain', action='store_true',
+                        help='Force retraining even if a saved model exists')
     return parser.parse_args()
 
 
@@ -52,13 +53,13 @@ def main():
     """Main function to run the training pipeline"""
     # Parse command line arguments
     args = parse_args()
-    
+
     # Setup directories
     plot_dir, artifacts_dir = setup_directories(data_dir)
 
     # Prepare all data using the preprocessing pipeline
     data_components = prepare_data(data_dir, use_augmentation=True)
-    
+
     # Extract components
     train_dl = data_components['train_dl']
     val_dl = data_components['val_dl']
