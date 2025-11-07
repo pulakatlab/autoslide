@@ -16,6 +16,7 @@ import torch
 import cv2 as cv
 from torchvision.transforms import v2 as T
 from tqdm import tqdm, trange
+import autoslide
 from autoslide import config
 
 
@@ -197,14 +198,19 @@ def create_transforms():
         torchvision.transforms.Compose: Composed transformation pipeline
     """
     transform = T.Compose([
-        T.RandomHorizontalFlip(0.5),
-        T.RandomVerticalFlip(0.5),
+        T.RandomHorizontalFlip(p=0.5),
+        T.RandomVerticalFlip(p=0.5),
         RandomRotation90(p=0.5),
         RandomShear(p=0.5, shear_range=20),  # Added shear transformation
         T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
         T.ElasticTransform(alpha=3000, sigma=30),
         T.ToTensor()
     ])
+
+    print('Created data augmentation transforms:')
+    for t in transform.transforms:
+        print(f'  - {t.__class__.__name__}')
+
     return transform
 
 
@@ -318,48 +324,78 @@ def generate_artificial_vessels(img, mask):
     return art_img, art_mask
 
 
-def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
+def augment_images(aug_images, aug_masks, neg_ratio=0.5, art_ratio=None):
     """
     Augment a dataset with negative samples and artificial vessels.
 
     Inputs:
-        images: List of original images
-        masks: List of original masks
+        aug_images: List of original images to augment
+        aug_masks: List of original masks to augment
         neg_ratio: Ratio of negative samples to add
-        art_ratio: Ratio of artificial vessel samples to add
+        art_ratio: Ratio of artificial vessel samples to add (1 - neg_ratio if None)
 
     Outputs:
         aug_images: List of augmented images
         aug_masks: List of augmented masks
     """
-    print(
-        f'Starting dataset augmentation with {len(images)} original images...')
-    aug_images = images.copy()
-    aug_masks = masks.copy()
 
-    num_orig = len(images)
-    num_neg = int(num_orig * neg_ratio)
-    num_art = int(num_orig * art_ratio)
+    assert len(aug_images) == len(
+        aug_masks), "Images and masks lists must be of the same length"
+    assert 0 <= neg_ratio <= 1, "neg_ratio must be between 0 and 1"
+    assert art_ratio is None or (
+        0 <= art_ratio <= 1), "art_ratio must be between 0 and 1"
+    assert art_ratio is None or (
+        neg_ratio + art_ratio <= 1), "Sum of neg_ratio and art_ratio must be <= 1"
+
+    if art_ratio is None:
+        art_ratio = 1.0 - neg_ratio
 
     print(
-        f'Will generate {num_neg} negative samples and {num_art} artificial vessel samples')
+        f'Starting dataset augmentation with {len(aug_images)} original images...')
+
+    num_orig = len(aug_images)
+    neg_inds = np.random.choice(
+        range(num_orig), int(num_orig * neg_ratio), replace=False)
+    # set diff
+    art_inds = np.setdiff1d(range(num_orig), neg_inds)
+
+    print(
+        f'Will generate {len(neg_inds)} negative samples and {len(art_inds)} artificial vessel samples')
 
     # Generate negative samples
     print('Generating negative samples...')
-    for i in trange(min(num_neg, num_orig)):
-        neg_imgs, neg_msks = generate_negative_samples(images[i], masks[i])
-        aug_images.append(neg_imgs)
-        aug_masks.append(neg_msks)
+    neg_img_list = []
+    neg_msk_list = []
+    for i in tqdm(neg_inds, desc='Negative samples'):
+        neg_img, neg_msk = generate_negative_samples(
+            aug_images[i], aug_masks[i])
+        neg_img_list.append(neg_img)
+        neg_msk_list.append(neg_msk)
 
     # Generate artificial vessel samples
     print('Generating artificial vessel samples...')
-    for i in trange(min(num_art, num_orig)):
-        art_imgs, art_msks = generate_artificial_vessels(images[i], masks[i])
-        aug_images.append(art_imgs)
-        aug_masks.append(art_msks)
+    art_img_list = []
+    art_msk_list = []
+    # Since artificial vessels are generated from existing vessels,
+    # we can only use images that contain vessels
+    for i in tqdm(art_inds, desc='Artificial vessel samples'):
+        art_imgs, art_msks = generate_artificial_vessels(
+            aug_images[i], aug_masks[i])
+        if art_imgs is not None and art_msks is not None:
+            art_img_list.append(art_imgs)
+            art_msk_list.append(art_msks)
+
+    aug_images = neg_img_list + art_img_list
+    aug_masks = neg_msk_list + art_msk_list
 
     print(
-        f'Dataset augmentation complete. Total images: {len(aug_images)} (original: {num_orig}, negative: {num_neg}, artificial: {num_art})')
+        f"""
+            Augmentation complete:
+            - Original images: {num_orig}
+            - Negative samples: {len(neg_img_list)}
+            - Artificial vessel samples: {len(art_img_list)}
+            - Total augmented images: {len(aug_images)}
+            """)
     return aug_images, aug_masks
 
 
@@ -369,6 +405,9 @@ def load_or_create_augmented_data(
         mask_dir,
         train_imgs,
         train_masks,
+        aug_ratio=2.0,
+        neg_ratio=0.3,
+        art_ratio=0.5,
 ):
     """
     Load existing augmented data or create a new augmented dataset.
@@ -385,6 +424,9 @@ def load_or_create_augmented_data(
         mask_dir (str): Directory containing original masks
         train_imgs (list): List of training image filenames
         train_masks (list): List of training mask filenames
+        aug_ratio (float): Ratio of augmented samples to create relative to training set size
+        neg_ratio (float): Ratio of negative samples to include in augmentation
+        art_ratio (float): Ratio of artificial vessel samples to include in augmentation
 
     Returns:
         tuple: (aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names) -
@@ -403,7 +445,7 @@ def load_or_create_augmented_data(
     else:
         # Create augmented dataset paths
         print("Creating augmented dataset...")
-        n_augmented = len(train_imgs) * 10
+        n_augmented = int(len(train_imgs) * aug_ratio)
         print(
             f'Will create {n_augmented} augmented samples from {len(train_imgs)} training images')
 
@@ -418,8 +460,8 @@ def load_or_create_augmented_data(
             aug_mask_list.append(mask)
 
         # Augment the dataset
-        aug_images, aug_masks = augment_dataset(
-            aug_img_list, aug_mask_list, neg_ratio=0.3, art_ratio=0.5)
+        aug_images, aug_masks = augment_images(
+            aug_img_list, aug_mask_list, neg_ratio=neg_ratio, art_ratio=art_ratio)
 
         # Save augmented images and masks
         print('Saving augmented images to disk...')
@@ -879,20 +921,28 @@ def prepare_data(data_dir=None, use_augmentation=True):
     print("Starting data preprocessing pipeline...")
 
     # Load original data
-    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(
-        data_dir)
+    (
+        labelled_data_dir,
+        img_dir,
+        mask_dir,
+        image_names,
+        mask_names) = load_data(data_dir)
 
     # Create transforms
     transform = create_transforms()
 
     # Split data
-    train_imgs, train_masks, val_imgs, val_masks = split_train_val(
-        image_names, mask_names)
+    (
+        train_imgs,
+        train_masks,
+        val_imgs,
+        val_masks) = split_train_val(image_names, mask_names, train_ratio=0.8)
 
     if use_augmentation:
         # Load or create augmented data
         aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names = load_or_create_augmented_data(
-            labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks
+            labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks,
+            aug_ratio=2.0, neg_ratio=0.3, art_ratio=0.5,
         )
 
         # Combine datasets
