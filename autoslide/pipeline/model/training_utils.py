@@ -93,7 +93,7 @@ def setup_training(model, device):
     return optimizer
 
 
-def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir, n_epochs=90):
+def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir, n_epochs=90, run_idx=None):
     """
     Train the model and evaluate on validation set.
 
@@ -113,17 +113,28 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
         plot_dir (str): Directory to save plots
         artifacts_dir (str): Directory to save model checkpoints
         n_epochs (int): Number of epochs to train for
+        run_idx (int, optional): Index of the current training run for multi-run training
 
     Returns:
         tuple: (model, all_train_losses, all_val_losses, best_val_loss) -
                Trained model, training losses, validation losses, and best validation loss
     """
-    run_test_plot_dir = os.path.join(plot_dir, 'run_test_plot')
+    # Create run-specific directory if this is part of multi-run training
+    if run_idx is not None:
+        run_test_plot_dir = os.path.join(plot_dir, f'run_test_plot_run{run_idx}')
+    else:
+        run_test_plot_dir = os.path.join(plot_dir, 'run_test_plot')
     os.makedirs(run_test_plot_dir, exist_ok=True)
 
-    best_model_path = os.path.join(
-        artifacts_dir, 'best_val_mask_rcnn_model.pth')
-    fin_model_path = os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth')
+    # Use run-specific paths if this is part of multi-run training
+    if run_idx is not None:
+        best_model_path = os.path.join(
+            artifacts_dir, f'best_val_mask_rcnn_model_run{run_idx}.pth')
+        fin_model_path = os.path.join(artifacts_dir, f'final_mask_rcnn_model_run{run_idx}.pth')
+    else:
+        best_model_path = os.path.join(
+            artifacts_dir, 'best_val_mask_rcnn_model.pth')
+        fin_model_path = os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth')
 
     all_train_losses = []
     all_val_losses = []
@@ -200,16 +211,23 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
         torch.save(model.state_dict(), fin_model_path)
 
         # Plot training progress
-        plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss)
+        if run_idx is not None:
+            plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss, run_idx=run_idx)
+        else:
+            plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss)
 
-    # Save loss histories
-    np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
-    np.save(artifacts_dir + '/val_losses.npy', all_val_losses)
+    # Save loss histories with run-specific names if applicable
+    if run_idx is not None:
+        np.save(artifacts_dir + f'/train_losses_run{run_idx}.npy', all_train_losses)
+        np.save(artifacts_dir + f'/val_losses_run{run_idx}.npy', all_val_losses)
+    else:
+        np.save(artifacts_dir + '/train_losses.npy', all_train_losses)
+        np.save(artifacts_dir + '/val_losses.npy', all_val_losses)
 
     return model, all_train_losses, all_val_losses, best_val_loss
 
 
-def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
+def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss, run_idx=None):
     """
     Plot training and validation losses.
 
@@ -221,6 +239,7 @@ def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
         all_val_losses (list): List of validation losses for each epoch
         plot_dir (str): Directory to save the plot
         best_val_loss (float): Best validation loss achieved during training
+        run_idx (int, optional): Index of the current training run for multi-run training
     """
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     ax[0].plot(all_train_losses)
@@ -229,7 +248,14 @@ def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
     ax[1].set_title("Validation Loss")
     ax[1].axhline(y=best_val_loss, color='r',
                   linestyle='--', label='Best Val Loss')
-    fig.savefig(plot_dir + '/train_val_loss.png')
+    
+    # Use run-specific filename if applicable
+    if run_idx is not None:
+        filename = f'/train_val_loss_run{run_idx}.png'
+    else:
+        filename = '/train_val_loss.png'
+    
+    fig.savefig(plot_dir + filename)
     plt.close(fig)
 
 
