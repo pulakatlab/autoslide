@@ -43,9 +43,6 @@ def setup_directories(data_dir=None):
 #############################################################################
 
 
-
-
-
 #############################################################################
 # Training and Evaluation Functions
 #############################################################################
@@ -233,8 +230,7 @@ def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
     plt.close(fig)
 
 
-def evaluate_model(model, val_imgs, val_masks,
-                   img_dir, mask_dir, aug_img_dir, aug_mask_dir,
+def evaluate_model(model, val_img_paths, val_mask_paths,
                    device, plot_dir):
     """
     Evaluate the model on validation data and generate prediction visualizations.
@@ -244,12 +240,8 @@ def evaluate_model(model, val_imgs, val_masks,
 
     Args:
         model (torch.nn.Module): The trained Mask R-CNN model
-        val_imgs (list): List of validation image filenames
-        val_masks (list): List of validation mask filenames
-        img_dir (str): Directory containing original images
-        mask_dir (str): Directory containing original masks
-        aug_img_dir (str): Directory containing augmented images
-        aug_mask_dir (str): Directory containing augmented masks
+        val_img_paths (list): List of validation image file names
+        val_mask_paths (list): List of validation mask file names
         device (torch.device): Device to run the model on (CPU or GPU)
         plot_dir (str): Directory to save the visualizations
     """
@@ -263,17 +255,18 @@ def evaluate_model(model, val_imgs, val_masks,
     transform = T.ToTensor()
 
     # Evaluate on validation set
-    print(f'Evaluating on {len(val_imgs)} validation images...')
+    print(f'Evaluating on {len(val_img_paths)} validation images...')
     predictions_with_masks = 0
     predictions_without_masks = 0
 
-    for img_name, mask_name in tqdm(zip(val_imgs, val_masks), total=len(val_imgs), desc='Validation evaluation'):
-        if 'aug_' in img_name:
-            img = Image.open(aug_img_dir + img_name).convert("RGB")
-            mask = Image.open(aug_mask_dir + mask_name)
-        else:
-            img = Image.open(img_dir + img_name).convert("RGB")
-            mask = Image.open(mask_dir + mask_name)
+    for img_path, mask_path in tqdm(
+            zip(val_img_paths, val_mask_paths),
+            total=len(val_img_paths),
+            desc='Validation evaluation'
+    ):
+        img_basename = os.path.basename(img_path)
+        img = Image.open(img_path).convert("RGB")
+        mask = Image.open(mask_path)
 
         # Use the base transform for prediction to match training
         ig = transform(img)
@@ -288,7 +281,7 @@ def evaluate_model(model, val_imgs, val_masks,
                 ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy()
                                * 255).astype("uint8").squeeze())
             fig.savefig(pred_out_path +
-                        f'/{img_name.split(".")[0]}example_masks.png')
+                        f'/{img_basename.split(".")[0]}example_masks.png')
             plt.close(fig)
 
             all_preds = np.stack(
@@ -304,14 +297,14 @@ def evaluate_model(model, val_imgs, val_masks,
             ax[1].imshow(all_preds.mean(axis=0))
             ax[2].imshow(np.array(mask))
             plt.savefig(pred_out_path +
-                        f'/{img_name.split(".")[0]}mean_example_mask.png')
+                        f'/{img_basename.split(".")[0]}mean_example_mask.png')
             plt.close()
         else:
             fig, ax = plt.subplots(1, 1, figsize=(10, 5))
             ax.imshow(img)
             ax.set_title('No predicted mask')
             plt.savefig(pred_out_path +
-                        f'/{img_name.split(".")[0]}_mean_example_mask.png')
+                        f'/{img_basename.split(".")[0]}_mean_example_mask.png')
             plt.close()
             predictions_without_masks += 1
 

@@ -16,6 +16,7 @@ import torch
 import cv2 as cv
 from torchvision.transforms import v2 as T
 from tqdm import tqdm, trange
+import autoslide
 from autoslide import config
 
 
@@ -197,13 +198,19 @@ def create_transforms():
         torchvision.transforms.Compose: Composed transformation pipeline
     """
     transform = T.Compose([
-        T.RandomHorizontalFlip(0.5),
-        T.RandomVerticalFlip(0.5),
+        T.RandomHorizontalFlip(p=0.5),
+        T.RandomVerticalFlip(p=0.5),
         RandomRotation90(p=0.5),
         RandomShear(p=0.5, shear_range=20),  # Added shear transformation
         T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        T.ElasticTransform(alpha=3000, sigma=30),
         T.ToTensor()
     ])
+
+    print('Created data augmentation transforms:')
+    for t in transform.transforms:
+        print(f'  - {t.__class__.__name__}')
+
     return transform
 
 
@@ -317,48 +324,78 @@ def generate_artificial_vessels(img, mask):
     return art_img, art_mask
 
 
-def augment_dataset(images, masks, neg_ratio=0.2, art_ratio=0.5):
+def augment_images(aug_images, aug_masks, neg_ratio=0.5, art_ratio=None):
     """
     Augment a dataset with negative samples and artificial vessels.
 
     Inputs:
-        images: List of original images
-        masks: List of original masks
+        aug_images: List of original images to augment
+        aug_masks: List of original masks to augment
         neg_ratio: Ratio of negative samples to add
-        art_ratio: Ratio of artificial vessel samples to add
+        art_ratio: Ratio of artificial vessel samples to add (1 - neg_ratio if None)
 
     Outputs:
         aug_images: List of augmented images
         aug_masks: List of augmented masks
     """
-    print(
-        f'Starting dataset augmentation with {len(images)} original images...')
-    aug_images = images.copy()
-    aug_masks = masks.copy()
 
-    num_orig = len(images)
-    num_neg = int(num_orig * neg_ratio)
-    num_art = int(num_orig * art_ratio)
+    assert len(aug_images) == len(
+        aug_masks), "Images and masks lists must be of the same length"
+    assert 0 <= neg_ratio <= 1, "neg_ratio must be between 0 and 1"
+    assert art_ratio is None or (
+        0 <= art_ratio <= 1), "art_ratio must be between 0 and 1"
+    assert art_ratio is None or (
+        neg_ratio + art_ratio <= 1), "Sum of neg_ratio and art_ratio must be <= 1"
+
+    if art_ratio is None:
+        art_ratio = 1.0 - neg_ratio
 
     print(
-        f'Will generate {num_neg} negative samples and {num_art} artificial vessel samples')
+        f'Starting dataset augmentation with {len(aug_images)} original images...')
+
+    num_orig = len(aug_images)
+    neg_inds = np.random.choice(
+        range(num_orig), int(num_orig * neg_ratio), replace=False)
+    # set diff
+    art_inds = np.setdiff1d(range(num_orig), neg_inds)
+
+    print(
+        f'Will generate {len(neg_inds)} negative samples and {len(art_inds)} artificial vessel samples')
 
     # Generate negative samples
     print('Generating negative samples...')
-    for i in trange(min(num_neg, num_orig)):
-        neg_imgs, neg_msks = generate_negative_samples(images[i], masks[i])
-        aug_images.append(neg_imgs)
-        aug_masks.append(neg_msks)
+    neg_img_list = []
+    neg_msk_list = []
+    for i in tqdm(neg_inds, desc='Negative samples'):
+        neg_img, neg_msk = generate_negative_samples(
+            aug_images[i], aug_masks[i])
+        neg_img_list.append(neg_img)
+        neg_msk_list.append(neg_msk)
 
     # Generate artificial vessel samples
     print('Generating artificial vessel samples...')
-    for i in trange(min(num_art, num_orig)):
-        art_imgs, art_msks = generate_artificial_vessels(images[i], masks[i])
-        aug_images.append(art_imgs)
-        aug_masks.append(art_msks)
+    art_img_list = []
+    art_msk_list = []
+    # Since artificial vessels are generated from existing vessels,
+    # we can only use images that contain vessels
+    for i in tqdm(art_inds, desc='Artificial vessel samples'):
+        art_imgs, art_msks = generate_artificial_vessels(
+            aug_images[i], aug_masks[i])
+        if art_imgs is not None and art_msks is not None:
+            art_img_list.append(art_imgs)
+            art_msk_list.append(art_msks)
+
+    aug_images = neg_img_list + art_img_list
+    aug_masks = neg_msk_list + art_msk_list
 
     print(
-        f'Dataset augmentation complete. Total images: {len(aug_images)} (original: {num_orig}, negative: {num_neg}, artificial: {num_art})')
+        f"""
+            Augmentation complete:
+            - Original images: {num_orig}
+            - Negative samples: {len(neg_img_list)}
+            - Artificial vessel samples: {len(art_img_list)}
+            - Total augmented images: {len(aug_images)}
+            """)
     return aug_images, aug_masks
 
 
@@ -368,6 +405,9 @@ def load_or_create_augmented_data(
         mask_dir,
         train_imgs,
         train_masks,
+        aug_ratio=2.0,
+        neg_ratio=0.3,
+        art_ratio=0.5,
 ):
     """
     Load existing augmented data or create a new augmented dataset.
@@ -384,6 +424,9 @@ def load_or_create_augmented_data(
         mask_dir (str): Directory containing original masks
         train_imgs (list): List of training image filenames
         train_masks (list): List of training mask filenames
+        aug_ratio (float): Ratio of augmented samples to create relative to training set size
+        neg_ratio (float): Ratio of negative samples to include in augmentation
+        art_ratio (float): Ratio of artificial vessel samples to include in augmentation
 
     Returns:
         tuple: (aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names) -
@@ -402,7 +445,7 @@ def load_or_create_augmented_data(
     else:
         # Create augmented dataset paths
         print("Creating augmented dataset...")
-        n_augmented = len(train_imgs) * 10
+        n_augmented = int(len(train_imgs) * aug_ratio)
         print(
             f'Will create {n_augmented} augmented samples from {len(train_imgs)} training images')
 
@@ -417,8 +460,8 @@ def load_or_create_augmented_data(
             aug_mask_list.append(mask)
 
         # Augment the dataset
-        aug_images, aug_masks = augment_dataset(
-            aug_img_list, aug_mask_list, neg_ratio=0.3, art_ratio=0.5)
+        aug_images, aug_masks = augment_images(
+            aug_img_list, aug_mask_list, neg_ratio=neg_ratio, art_ratio=art_ratio)
 
         # Save augmented images and masks
         print('Saving augmented images to disk...')
@@ -454,10 +497,14 @@ def load_or_create_augmented_data(
 def combine_datasets(
         train_imgs,
         train_masks,
-        val_imgs,
-        val_masks,
         aug_img_names,
         aug_mask_names,
+        val_imgs,
+        val_masks,
+        img_dir,
+        mask_dir,
+        aug_img_dir,
+        aug_mask_dir,
 ):
     """
     Combine original and augmented datasets.
@@ -468,61 +515,67 @@ def combine_datasets(
     Args:
         train_imgs (list): List of original training image filenames
         train_masks (list): List of original training mask filenames
-        val_imgs (list): List of original validation image filenames
-        val_masks (list): List of original validation mask filenames
         aug_img_names (list): List of augmented image filenames
         aug_mask_names (list): List of augmented mask filenames
+        img_dir (str): Directory containing original images
+        mask_dir (str): Directory containing original masks
+        aug_img_dir (str): Directory containing augmented images
+        aug_mask_dir (str): Directory containing augmented masks
 
     Returns:
         tuple: (train_imgs, train_masks, val_imgs, val_masks) -
                Lists of combined filenames for training and validation
     """
-    print('Combining datasets...')
-    print(f'Original - Train: {len(train_imgs)}, Val: {len(val_imgs)}')
+    print('Combining original training data with augmented data...')
+    print(f'Original - Train: {len(train_imgs)}')
     print(f'Augmented: {len(aug_img_names)}')
 
-    n_aug_train = int(0.9 * len(aug_img_names))
-
-    print(
-        f'Splitting augmented data - Train: {n_aug_train}, Val: {len(aug_img_names) - n_aug_train}')
-
     # Combine datasets
-    train_imgs = np.concatenate(
-        [train_imgs,
-         aug_img_names[:n_aug_train],
+    train_img_paths = np.concatenate(
+        [[os.path.join(img_dir, name) for name in train_imgs],
+         [os.path.join(aug_img_dir, name) for name in aug_img_names]
          ]
     )
-    train_masks = np.concatenate(
+    train_mask_paths = np.concatenate(
         [
-            train_masks,
-            aug_mask_names[:n_aug_train],
-        ]
-    )
-    val_imgs = np.concatenate(
-        [
-            val_imgs,
-            aug_img_names[n_aug_train:],
-        ]
-    )
-    val_masks = np.concatenate(
-        [
-            val_masks,
-            aug_mask_names[n_aug_train:],
+            [os.path.join(mask_dir, name) for name in train_masks],
+            [os.path.join(aug_mask_dir, name) for name in aug_mask_names],
         ]
     )
 
+    val_img_paths = [os.path.join(img_dir, name) for name in val_imgs]
+    val_mask_paths = [os.path.join(mask_dir, name) for name in val_masks]
+
+    # Check that there are not duplicates in any set
+    assert len(train_img_paths) == len(
+        set(train_img_paths)), "Duplicates found in training image paths"
+    assert len(train_mask_paths) == len(
+        set(train_mask_paths)), "Duplicates found in training mask paths"
+    assert len(val_img_paths) == len(
+        set(val_img_paths)), "Duplicates found in validation image paths"
+    assert len(val_mask_paths) == len(
+        set(val_mask_paths)), "Duplicates found in validation mask paths"
+
+    # Check that no training images are in validation set
+    assert len(
+        set(train_img_paths).intersection(set(val_img_paths))) == 0, "Overlap found between training and validation image paths"
+    assert len(
+        set(train_mask_paths).intersection(set(val_mask_paths))) == 0, "Overlap found between training and validation mask paths"
+
     print(
-        f'Final combined dataset - Train: {len(train_imgs)}, Val: {len(val_imgs)}')
+        f'Final combined dataset - Train: {len(train_img_paths)}, Val: {len(val_imgs)}')
 
     # Check that all images have corresponding masks
     print('Validating combined dataset image-mask pairs...')
-    for img_name, mask_name in zip(train_imgs, train_masks):
-        assert img_name.split(".")[0] in mask_name
-    for img_name, mask_name in zip(val_imgs, val_masks):
-        assert img_name.split(".")[0] in mask_name
+    all_img_paths = list(train_img_paths) + list(val_img_paths)
+    all_mask_paths = list(train_mask_paths) + list(val_mask_paths)
+    for img_path, mask_path in zip(all_img_paths, all_mask_paths):
+        assert os.path.basename(img_path).split(".")[0] in os.path.basename(
+            mask_path), f'Mismatch: {img_path} and {mask_path}'
+
     print('Dataset combination and validation complete')
 
-    return train_imgs, train_masks, val_imgs, val_masks
+    return train_img_paths, train_mask_paths, val_img_paths, val_mask_paths
 
 
 #############################################################################
@@ -538,15 +591,23 @@ class AugmentedCustDat(torch.utils.data.Dataset):
     It also handles the conversion of masks to the format required by Mask R-CNN.
     """
 
-    def __init__(self, image_names, mask_names, img_dir, mask_dir,
-                 aug_img_dir, aug_mask_dir,
-                 transform=None):
-        self.image_names = image_names
-        self.mask_names = mask_names
-        self.img_dir = img_dir
-        self.mask_dir = mask_dir
-        self.aug_img_dir = aug_img_dir
-        self.aug_mask_dir = aug_mask_dir
+    def __init__(
+            self,
+            img_paths,
+            mask_paths,
+            transform=None
+    ):
+        """
+        Initialize the dataset.
+
+        Args:
+            img_paths (list): List of image filenames
+            mask_paths (list): List of mask filenames
+            transform (callable): Transformation function to apply to the data
+        """
+
+        self.img_paths = img_paths
+        self.mask_paths = mask_paths
         self.base_transform = T.ToTensor()
         if transform is not None:
             self.transform = transform
@@ -554,17 +615,12 @@ class AugmentedCustDat(torch.utils.data.Dataset):
             self.transform = self.base_transform
 
     def __getitem__(self, idx):
-        img_name = self.image_names[idx]
-        mask_name = self.mask_names[idx]
+        img_path = self.img_paths[idx]
+        mask_path = self.mask_paths[idx]
 
         # Check if this is an augmented image
-        if 'aug_' in img_name:
-            img = Image.open(os.path.join(
-                self.aug_img_dir, img_name)).convert("RGB")
-            mask = Image.open(os.path.join(self.aug_mask_dir, mask_name))
-        else:
-            img = Image.open(self.img_dir + img_name).convert("RGB")
-            mask = Image.open(self.mask_dir + mask_name)
+        img = Image.open(img_path).convert("RGB")
+        mask = Image.open(mask_path)
 
         # Apply transformations
         img_tensor, mask_tensor = self.transform(img, mask)
@@ -617,7 +673,7 @@ class AugmentedCustDat(torch.utils.data.Dataset):
         return img_tensor, target
 
     def __len__(self):
-        return len(self.image_names)
+        return len(self.img_paths)
 
 
 def custom_collate(data):
@@ -636,9 +692,13 @@ def custom_collate(data):
     return data
 
 
-def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
-                       img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-                       transform):
+def create_dataloaders(
+        train_img_paths,
+        train_mask_paths,
+        val_img_paths,
+        val_mask_paths,
+        transform
+):
     """
     Create DataLoader objects for training and validation.
 
@@ -646,14 +706,10 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
     and other parameters for efficient training and validation.
 
     Args:
-        train_imgs (list): List of training image filenames
-        train_masks (list): List of training mask filenames
-        val_imgs (list): List of validation image filenames
-        val_masks (list): List of validation mask filenames
-        img_dir (str): Directory containing original images
-        mask_dir (str): Directory containing original masks
-        aug_img_dir (str): Directory containing augmented images
-        aug_mask_dir (str): Directory containing augmented masks
+        train_img_paths (list): List of training image filenames
+        train_mask_paths (list): List of training mask filenames
+        val_img_paths (list): List of validation image filenames
+        val_mask_paths (list): List of validation mask filenames
         transform (callable): Transformation function to apply to the data
 
     Returns:
@@ -672,9 +728,7 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
 
     train_dl = torch.utils.data.DataLoader(
         AugmentedCustDat(
-            train_imgs, train_masks,
-            img_dir, mask_dir,
-            aug_img_dir, aug_mask_dir,
+            train_img_paths, train_mask_paths,
             transform
         ),
         batch_size=batch_size,
@@ -687,9 +741,7 @@ def create_dataloaders(train_imgs, train_masks, val_imgs, val_masks,
 
     val_dl = torch.utils.data.DataLoader(
         AugmentedCustDat(
-            val_imgs, val_masks,
-            img_dir, mask_dir,
-            aug_img_dir, aug_mask_dir,
+            val_img_paths, val_mask_paths,
             transform
         ),
         batch_size=batch_size,
@@ -878,26 +930,39 @@ def prepare_data(data_dir=None, use_augmentation=True):
     print("Starting data preprocessing pipeline...")
 
     # Load original data
-    labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(
-        data_dir)
+    (
+        labelled_data_dir,
+        img_dir,
+        mask_dir,
+        image_names,
+        mask_names) = load_data(data_dir)
 
     # Create transforms
-    transform = create_transforms()
+    transform_set = create_transforms()
 
     # Split data
-    train_imgs, train_masks, val_imgs, val_masks = split_train_val(
-        image_names, mask_names)
+    (
+        train_imgs,
+        train_masks,
+        val_imgs,
+        val_masks) = split_train_val(image_names, mask_names, train_ratio=0.8)
 
     if use_augmentation:
         # Load or create augmented data
         aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names = load_or_create_augmented_data(
-            labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks
+            labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks,
+            aug_ratio=2.0, neg_ratio=0.3, art_ratio=0.5,
         )
 
         # Combine datasets
-        train_imgs, train_masks, val_imgs, val_masks = combine_datasets(
-            train_imgs, train_masks, val_imgs, val_masks,
-            aug_img_names, aug_mask_names,
+        (
+            fin_train_img_paths,
+            fin_train_mask_paths,
+            val_img_paths,
+            val_mask_paths,
+        ) = combine_datasets(
+            train_imgs, train_masks, aug_img_names, aug_mask_names, val_imgs, val_masks,
+            img_dir, mask_dir, aug_img_dir, aug_mask_dir
         )
     else:
         # Use empty augmented directories if not using augmentation
@@ -910,9 +975,11 @@ def prepare_data(data_dir=None, use_augmentation=True):
 
     # Create dataloaders
     train_dl, val_dl = create_dataloaders(
-        train_imgs, train_masks, val_imgs, val_masks,
-        img_dir, mask_dir, aug_img_dir, aug_mask_dir,
-        transform
+        fin_train_img_paths,
+        fin_train_mask_paths,
+        val_img_paths,
+        val_mask_paths,
+        transform_set,
     )
 
     print("Data preprocessing pipeline complete!")
@@ -928,7 +995,7 @@ def prepare_data(data_dir=None, use_augmentation=True):
         'mask_dir': mask_dir,
         'aug_img_dir': aug_img_dir,
         'aug_mask_dir': aug_mask_dir,
-        'transform': transform,
+        'transform': transform_set,
         'labelled_data_dir': labelled_data_dir,
         'aug_img_names': aug_img_names,
         'aug_mask_names': aug_mask_names
