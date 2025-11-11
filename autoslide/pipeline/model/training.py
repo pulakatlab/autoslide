@@ -74,6 +74,9 @@ def main():
     aug_img_names = data_components['aug_img_names']
     aug_mask_names = data_components['aug_mask_names']
 
+    val_img_paths = [os.path.join(img_dir, name) for name in val_imgs]
+    val_mask_paths = [os.path.join(mask_dir, name) for name in val_masks]
+
     # Create visualization plots
     if len(aug_img_names) > 0:
         plot_augmented_samples(aug_img_dir, aug_mask_dir,
@@ -111,8 +114,7 @@ def main():
 
     # Evaluate model
     evaluate_model(
-        model, val_imgs, val_masks,
-        img_dir, mask_dir, aug_img_dir, aug_mask_dir,
+        model, val_img_paths, val_mask_paths,
         device, plot_dir
     )
 

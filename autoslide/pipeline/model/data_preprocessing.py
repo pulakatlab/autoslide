@@ -995,7 +995,7 @@ def prepare_data(data_dir=None, use_augmentation=True):
         'mask_dir': mask_dir,
         'aug_img_dir': aug_img_dir,
         'aug_mask_dir': aug_mask_dir,
-        'transform': transform,
+        'transform': transform_set,
         'labelled_data_dir': labelled_data_dir,
         'aug_img_names': aug_img_names,
         'aug_mask_names': aug_mask_names
