@@ -203,7 +203,6 @@ def create_transforms():
         RandomRotation90(p=0.5),
         RandomShear(p=0.5, shear_range=20),  # Added shear transformation
         T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-        T.ElasticTransform(alpha=3000, sigma=30),
         T.ToTensor()
     ])
 
@@ -239,6 +238,35 @@ def generate_negative_samples(img, mask):
     neg_mask = np.zeros_like(mask)
 
     return neg_img, neg_mask
+
+
+def generate_elastic_deformation(img, mask):
+    """
+    Generate elastically deformed samples using PyTorch's ElasticTransform.
+
+    Inputs:
+        img: Original image (numpy array)
+        mask: Original mask (numpy array)
+
+    Outputs:
+        elastic_img: Elastically deformed image
+        elastic_mask: Elastically deformed mask
+    """
+    # Convert numpy arrays to PIL Images
+    img_pil = Image.fromarray(img)
+    mask_pil = Image.fromarray(mask)
+    
+    # Create elastic transform
+    elastic_transform = T.ElasticTransform(alpha=3000, sigma=30)
+    
+    # Apply transform to both image and mask
+    elastic_img_pil, elastic_mask_pil = elastic_transform(img_pil, mask_pil)
+    
+    # Convert back to numpy arrays
+    elastic_img = np.array(elastic_img_pil)
+    elastic_mask = np.array(elastic_mask_pil)
+    
+    return elastic_img, elastic_mask
 
 
 def generate_artificial_vessels(img, mask):
@@ -324,15 +352,16 @@ def generate_artificial_vessels(img, mask):
     return art_img, art_mask
 
 
-def augment_images(aug_images, aug_masks, neg_ratio=0.5, art_ratio=None):
+def augment_images(aug_images, aug_masks, neg_ratio=0.3, art_ratio=0.3, elastic_ratio=0.4):
     """
-    Augment a dataset with negative samples and artificial vessels.
+    Augment a dataset with negative samples, artificial vessels, and elastic deformations.
 
     Inputs:
         aug_images: List of original images to augment
         aug_masks: List of original masks to augment
         neg_ratio: Ratio of negative samples to add
-        art_ratio: Ratio of artificial vessel samples to add (1 - neg_ratio if None)
+        art_ratio: Ratio of artificial vessel samples to add
+        elastic_ratio: Ratio of elastic deformation samples to add
 
     Outputs:
         aug_images: List of augmented images
@@ -342,25 +371,30 @@ def augment_images(aug_images, aug_masks, neg_ratio=0.5, art_ratio=None):
     assert len(aug_images) == len(
         aug_masks), "Images and masks lists must be of the same length"
     assert 0 <= neg_ratio <= 1, "neg_ratio must be between 0 and 1"
-    assert art_ratio is None or (
-        0 <= art_ratio <= 1), "art_ratio must be between 0 and 1"
-    assert art_ratio is None or (
-        neg_ratio + art_ratio <= 1), "Sum of neg_ratio and art_ratio must be <= 1"
-
-    if art_ratio is None:
-        art_ratio = 1.0 - neg_ratio
+    assert 0 <= art_ratio <= 1, "art_ratio must be between 0 and 1"
+    assert 0 <= elastic_ratio <= 1, "elastic_ratio must be between 0 and 1"
+    assert (neg_ratio + art_ratio + elastic_ratio) <= 1, "Sum of all ratios must be <= 1"
 
     print(
         f'Starting dataset augmentation with {len(aug_images)} original images...')
 
     num_orig = len(aug_images)
-    neg_inds = np.random.choice(
-        range(num_orig), int(num_orig * neg_ratio), replace=False)
-    # set diff
-    art_inds = np.setdiff1d(range(num_orig), neg_inds)
+    
+    # Calculate number of samples for each augmentation type
+    num_neg = int(num_orig * neg_ratio)
+    num_art = int(num_orig * art_ratio)
+    num_elastic = int(num_orig * elastic_ratio)
+    
+    # Randomly assign indices for each augmentation type
+    all_inds = np.arange(num_orig)
+    np.random.shuffle(all_inds)
+    
+    neg_inds = all_inds[:num_neg]
+    art_inds = all_inds[num_neg:num_neg + num_art]
+    elastic_inds = all_inds[num_neg + num_art:num_neg + num_art + num_elastic]
 
     print(
-        f'Will generate {len(neg_inds)} negative samples and {len(art_inds)} artificial vessel samples')
+        f'Will generate {len(neg_inds)} negative samples, {len(art_inds)} artificial vessel samples, and {len(elastic_inds)} elastic deformation samples')
 
     # Generate negative samples
     print('Generating negative samples...')
@@ -385,8 +419,18 @@ def augment_images(aug_images, aug_masks, neg_ratio=0.5, art_ratio=None):
             art_img_list.append(art_imgs)
             art_msk_list.append(art_msks)
 
-    aug_images = neg_img_list + art_img_list
-    aug_masks = neg_msk_list + art_msk_list
+    # Generate elastic deformation samples
+    print('Generating elastic deformation samples...')
+    elastic_img_list = []
+    elastic_msk_list = []
+    for i in tqdm(elastic_inds, desc='Elastic deformation samples'):
+        elastic_img, elastic_msk = generate_elastic_deformation(
+            aug_images[i], aug_masks[i])
+        elastic_img_list.append(elastic_img)
+        elastic_msk_list.append(elastic_msk)
+
+    aug_images = neg_img_list + art_img_list + elastic_img_list
+    aug_masks = neg_msk_list + art_msk_list + elastic_msk_list
 
     print(
         f"""
@@ -394,6 +438,7 @@ def augment_images(aug_images, aug_masks, neg_ratio=0.5, art_ratio=None):
             - Original images: {num_orig}
             - Negative samples: {len(neg_img_list)}
             - Artificial vessel samples: {len(art_img_list)}
+            - Elastic deformation samples: {len(elastic_img_list)}
             - Total augmented images: {len(aug_images)}
             """)
     return aug_images, aug_masks
@@ -407,7 +452,8 @@ def load_or_create_augmented_data(
         train_masks,
         aug_ratio=2.0,
         neg_ratio=0.3,
-        art_ratio=0.5,
+        art_ratio=0.3,
+        elastic_ratio=0.4,
 ):
     """
     Load existing augmented data or create a new augmented dataset.
@@ -427,6 +473,7 @@ def load_or_create_augmented_data(
         aug_ratio (float): Ratio of augmented samples to create relative to training set size
         neg_ratio (float): Ratio of negative samples to include in augmentation
         art_ratio (float): Ratio of artificial vessel samples to include in augmentation
+        elastic_ratio (float): Ratio of elastic deformation samples to include in augmentation
 
     Returns:
         tuple: (aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names) -
@@ -461,7 +508,7 @@ def load_or_create_augmented_data(
 
         # Augment the dataset
         aug_images, aug_masks = augment_images(
-            aug_img_list, aug_mask_list, neg_ratio=neg_ratio, art_ratio=art_ratio)
+            aug_img_list, aug_mask_list, neg_ratio=neg_ratio, art_ratio=art_ratio, elastic_ratio=elastic_ratio)
 
         # Save augmented images and masks
         print('Saving augmented images to disk...')
@@ -919,6 +966,18 @@ def test_transformations(img_dir, mask_dir, image_names, mask_names, transform):
     axis[1, 0].scatter(*np.where(art_mask_outline)[::-1], c='y', s=1)
     plt.show()
 
+    # Test elastic deformation generation
+    elastic_img, elastic_mask = generate_elastic_deformation(img_np, mask_np)
+    elastic_mask_outline = get_mask_outline(elastic_mask)
+
+    fig, axis = plt.subplots(2, 2, figsize=(10, 10))
+    axis[0, 0].imshow(img_np)
+    axis[0, 1].imshow(mask_np)
+    axis[1, 0].imshow(elastic_img)
+    axis[1, 1].imshow(elastic_mask)
+    axis[1, 0].scatter(*np.where(elastic_mask_outline)[::-1], c='y', s=1)
+    plt.show()
+
 
 #############################################################################
 # Main Preprocessing Pipeline
@@ -959,7 +1018,7 @@ def prepare_data(data_dir=None, use_augmentation=True):
         # Load or create augmented data
         aug_img_dir, aug_mask_dir, aug_img_names, aug_mask_names = load_or_create_augmented_data(
             labelled_data_dir, img_dir, mask_dir, train_imgs, train_masks,
-            aug_ratio=2.0, neg_ratio=0.3, art_ratio=0.5,
+            aug_ratio=2.0, neg_ratio=0.3, art_ratio=0.3, elastic_ratio=0.4,
         )
 
         # Combine datasets
