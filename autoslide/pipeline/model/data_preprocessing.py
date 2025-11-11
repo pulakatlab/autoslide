@@ -618,57 +618,60 @@ class AugmentedCustDat(torch.utils.data.Dataset):
         img_path = self.img_paths[idx]
         mask_path = self.mask_paths[idx]
 
-        # Check if this is an augmented image
+        # Load images more efficiently
         img = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path)
 
         # Apply transformations
         img_tensor, mask_tensor = self.transform(img, mask)
 
-        # Convert mask back to numpy array
-        mask = mask_tensor.numpy()[0] * 255
-        mask = mask.astype(np.uint8)
+        # Convert mask back to numpy array more efficiently
+        mask = (mask_tensor[0].numpy() * 255).astype(np.uint8)
 
-        # Filter objects by size
-        obj_ids = np.unique(mask)
-        obj_ids = obj_ids[1:]
-        fin_objs = []
-        for obj in obj_ids:
-            if np.mean(mask == obj) > 0.005:
-                fin_objs.append(obj)
+        # More efficient object filtering using vectorized operations
+        obj_ids = np.unique(mask)[1:]  # Skip background (0)
+        if len(obj_ids) == 0:
+            # Return empty targets if no objects
+            return img_tensor, {
+                "boxes": torch.zeros((0, 4), dtype=torch.float32),
+                "labels": torch.zeros((0,), dtype=torch.int64),
+                "masks": torch.zeros((0, mask.shape[0], mask.shape[1]), dtype=torch.uint8)
+            }
 
-        obj_ids = np.array(fin_objs)
+        # Vectorized size filtering
+        obj_sizes = np.array([np.sum(mask == obj_id) for obj_id in obj_ids])
+        min_size = 0.005 * mask.size
+        valid_objs = obj_ids[obj_sizes > min_size]
 
-        num_objs = len(obj_ids)
-        masks = np.zeros((num_objs, mask.shape[0], mask.shape[1]))
-        for i in range(num_objs):
-            masks[i][mask == obj_ids[i]] = True
+        if len(valid_objs) == 0:
+            # Return empty targets if no valid objects
+            return img_tensor, {
+                "boxes": torch.zeros((0, 4), dtype=torch.float32),
+                "labels": torch.zeros((0,), dtype=torch.int64),
+                "masks": torch.zeros((0, mask.shape[0], mask.shape[1]), dtype=torch.uint8)
+            }
 
+        # Vectorized mask and box creation
+        masks = np.stack([mask == obj_id for obj_id in valid_objs])
+        
+        # Vectorized bounding box computation
         boxes = []
-        for i in range(num_objs):
-            pos = np.where(masks[i] > 0)
-            if len(pos[0]) == 0:  # Skip if mask is empty
-                continue
-            xmin = np.min(pos[1])
-            xmax = np.max(pos[1])
-            ymin = np.min(pos[0])
-            ymax = np.max(pos[0])
-            boxes.append([xmin, ymin, xmax, ymax])
+        for i, obj_mask in enumerate(masks):
+            pos = np.where(obj_mask)
+            if len(pos[0]) > 0:
+                boxes.append([np.min(pos[1]), np.min(pos[0]), 
+                             np.max(pos[1]), np.max(pos[0])])
 
-        if len(boxes) == 0:  # If no valid boxes, create a dummy box
-            boxes = torch.zeros((0, 4), dtype=torch.float32)
-            labels = torch.zeros((0,), dtype=torch.int64)
-            masks = torch.zeros(
-                (0, mask.shape[0], mask.shape[1]), dtype=torch.uint8)
-        else:
-            boxes = torch.as_tensor(boxes, dtype=torch.float32)
-            labels = torch.ones((len(boxes),), dtype=torch.int64)
-            masks = torch.as_tensor(masks, dtype=torch.uint8)
+        # Convert to tensors
+        boxes = torch.as_tensor(boxes, dtype=torch.float32)
+        labels = torch.ones((len(boxes),), dtype=torch.int64)
+        masks = torch.as_tensor(masks, dtype=torch.uint8)
 
-        target = {}
-        target["boxes"] = boxes
-        target["labels"] = labels
-        target["masks"] = masks
+        target = {
+            "boxes": boxes,
+            "labels": labels,
+            "masks": masks
+        }
 
         return img_tensor, target
 
@@ -717,7 +720,8 @@ def create_dataloaders(
     """
     print('Creating DataLoaders...')
     batch_size = 2
-    num_workers = 1
+    # Use more workers for better CPU utilization
+    num_workers = min(8, os.cpu_count() or 1)
     use_cuda = torch.cuda.is_available()
 
     print(f'DataLoader configuration:')
@@ -732,11 +736,13 @@ def create_dataloaders(
             transform
         ),
         batch_size=batch_size,
-        shuffle=True,  # Changed to True for better training
+        shuffle=True,
         collate_fn=custom_collate,
         num_workers=num_workers,
         pin_memory=use_cuda,
-        drop_last=True
+        drop_last=True,
+        persistent_workers=True,  # Keep workers alive between epochs
+        prefetch_factor=2  # Prefetch more batches per worker
     )
 
     val_dl = torch.utils.data.DataLoader(
@@ -749,7 +755,9 @@ def create_dataloaders(
         collate_fn=custom_collate,
         num_workers=num_workers,
         pin_memory=use_cuda,
-        drop_last=True
+        drop_last=True,
+        persistent_workers=True,
+        prefetch_factor=2
     )
 
     print(
