@@ -48,7 +48,7 @@ retrain_bool = False
 def main():
     """Main function to run the training pipeline"""
     # Setup directories
-    plot_dir, artifacts_dir = setup_directories(data_dir)
+    # plot_dir, artifacts_dir = setup_directories(data_dir)
 
     # Load data
     labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(
@@ -108,14 +108,15 @@ def main():
         artifacts_dir, 'best_val_mask_rcnn_model.pth')
 
     # Load existing model or train new one
-    if os.path.exists(best_model_path) and not retrain_bool:
-        print('Loading model from savefile')
-        model = load_model(model, best_model_path, device)
-    else:
-        # Train model
-        model, all_train_losses, all_val_losses, best_val_loss = train_model(
-            model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir
-        )
+    # if os.path.exists(best_model_path) and not retrain_bool:
+    #     print('Loading model from savefile')
+    #     model = load_model(model, best_model_path, device)
+    # else:
+
+    # Train model
+    model, all_train_losses, all_val_losses, best_val_loss = train_model(
+        model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir
+    )
 
     # Evaluate model
     evaluate_model(
@@ -126,4 +127,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    base_plot_dir = plot_dir
+    base_artifacts_dir = artifacts_dir
+    n_runs = 10
+    for run_num in trange(n_runs):
+        artifacts_dir = os.path.join(base_artifacts_dir, f'run_{run_num}')
+        plot_dir = os.path.join(base_plot_dir, f'run_{run_num}')
+        os.makedirs(artifacts_dir, exist_ok=True)
+        os.makedirs(plot_dir, exist_ok=True)
+
+        main()
