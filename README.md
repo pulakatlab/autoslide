@@ -11,16 +11,17 @@ AutoSlide is a comprehensive pipeline that transforms how researchers analyze hi
 - **Advanced Vessel Detection** - Precisely locate and measure blood vessels using Mask R-CNN
 - **Fibrosis Quantification** - Objectively measure fibrotic changes in tissue samples
 - **Reproducible Workflow** - Ensure consistent results across multiple samples and studies
+- **Comprehensive Data Management** - Track annotations and regions with unique hashing system
 
 ## 🚀 The AutoSlide Pipeline
 
 Our end-to-end workflow transforms raw histological slides into actionable insights:
 
 1. **🔍 Initial Annotation** - Intelligent thresholding and region identification
-2. **🏷️ Final Annotation** - Precise tissue labeling and mask generation
+2. **🏷️ Final Annotation** - Precise tissue labeling and mask generation  
 3. **📊 Region Suggestion** - Strategic selection of analysis-ready sections
-4. **🧩 Pixel Clustering** - Advanced segmentation of tissue components
-5. **🔬 Vessel Detection** - Deep learning-based identification of vascular structures
+4. **🔬 Vessel Detection** - Deep learning-based identification of vascular structures using pre-trained Mask R-CNN
+5. **📈 Fibrosis Quantification** - Automated measurement of fibrotic tissue using HSV color analysis
 
 ### Initial Annotation
 ![TRI_85B-113_86A-118_38696](https://github.com/user-attachments/assets/5e149cdc-6469-4fe7-9c11-4e710237eb35)
@@ -44,50 +45,124 @@ Our end-to-end workflow transforms raw histological slides into actionable insig
 - **Increase Accuracy** - Leverage deep learning for consistent, objective analysis
 - **Enhance Reproducibility** - Standardize your histological analysis workflow
 - **Discover More** - Identify patterns and features invisible to the human eye
+- **Scale Analysis** - Process multiple slides efficiently with batch processing
 
 ## 🛠️ Technical Highlights
 
-- **Deep Learning Integration** - Fine-tuned Mask R-CNN models for precise vessel detection
+- **Deep Learning Integration** - Pre-trained Mask R-CNN models for precise vessel detection
 - **Advanced Image Processing** - Sophisticated morphological operations for tissue segmentation
 - **Intelligent Selection Algorithms** - Context-aware region extraction based on tissue properties
 - **Comprehensive Visualization** - Rich visual outputs at every stage of the pipeline
+- **Data Augmentation** - Negative sampling and artificial vessel generation for robust training
+- **Unique Section Tracking** - SHA-256 based hashing for reproducible section identification
 
-## 📊 Data Preparation & Model Training
+## 📊 Data Preparation & Model Usage
 
 AutoSlide includes specialized tools for:
-- Converting annotations from popular labeling tools into training-ready formats
+- Converting annotations from Labelbox and other labeling tools into analysis-ready formats
 - Creating high-quality binary masks from polygon annotations
-- Fine-tuning state-of-the-art deep learning models on your specific tissue types
-- Generating insightful visualizations of model performance
+- Utilizing pre-trained state-of-the-art deep learning models for vessel detection
+- Generating insightful visualizations of model predictions
+- Comprehensive data handling and visualization capabilities
 
 ## 📋 Requirements
 
 The pipeline leverages powerful Python libraries:
-- **slideio** - For efficient slide image handling
+- **slideio** - For efficient slide image handling (.svs format support)
 - **PyTorch** - For deep learning model training and inference
+- **torchvision** - For computer vision models and transforms
 - **scikit-learn** - For clustering and dimensionality reduction
 - **OpenCV** - For advanced image processing
 - **matplotlib/pandas** - For visualization and data handling
+- **PIL/Pillow** - For image manipulation
+- **tqdm** - For progress tracking
+- **numpy/scipy** - For numerical computations
 
 ## 🔧 Getting Started
 
+### Quick Start
 Run the complete pipeline with a single command:
 ```bash
-python src/pipeline/run_pipeline.py
+python autoslide/pipeline/run_pipeline.py
 ```
 
-Or execute individual stages as needed for your specific workflow.
+### Configuration
+Set up your data directory in `autoslide/config.json`:
+```json
+{
+    "data_dir": "/path/to/your/data"
+}
+```
+
+### Individual Pipeline Steps
+Execute specific stages as needed:
+
+```bash
+# Initial annotation only
+python autoslide/pipeline/annotation/initial_annotation.py
+
+# Final annotation only  
+python autoslide/pipeline/annotation/final_annotation.py
+
+# Region suggestion
+python autoslide/pipeline/suggest_regions.py
+
+# Vessel detection using pre-trained model
+python autoslide/pipeline/model/prediction.py
+
+# Fibrosis quantification
+python autoslide/fibrosis_calculation/calc_fibrosis.py
+```
+
+### Command Line Options
+```bash
+# Skip annotation steps
+python autoslide/pipeline/run_pipeline.py --skip_annotation
+
+# Run with custom options
+python autoslide/pipeline/run_pipeline.py --skip_annotation
+
+# Fibrosis quantification with custom parameters
+python autoslide/fibrosis_calculation/calc_fibrosis.py --hue-value 0.6785 --hue-width 0.4 --verbose
+```
+
+## 🗂️ Project Structure
+
+```
+autoslide/
+├── pipeline/
+│   ├── annotation/          # Tissue annotation modules
+│   ├── model/              # Deep learning training and prediction
+│   ├── label_handling/     # Label import/export utilities
+│   └── utils.py           # Core utility functions
+├── utils/                  # Additional utilities
+├── fibrosis_calculation/   # Fibrosis quantification tools
+│   └── calc_fibrosis.py   # Main fibrosis analysis module
+└── config.json            # Configuration file
+```
+
+## 📈 Output and Results
+
+AutoSlide generates comprehensive outputs including:
+- **Annotated slide visualizations** with tissue boundaries and labels
+- **Region selection maps** showing extracted analysis areas
+- **Vessel detection results** with identified structures highlighted
+- **Fibrosis quantification reports** with HSV-based percentage measurements and visualizations
+- **Section tracking data** with unique identifiers for reproducibility
+
+## 🔬 Supported File Formats
+
+- **Input**: .svs slide files (Aperio format)
+- **Annotations**: Labelbox NDJSON exports, CSV metadata
+- **Models**: PyTorch .pth files
+- **Outputs**: PNG images, CSV data, JSON tracking files
 
 Ready to transform your histological analysis? Get started with AutoSlide today!
 
+## 📚 Using DVC for Model and Data Versioning
+
 <details>
-<summary>## Using DVC for Model and Data Versioning</summary>
-
-# AutoSlide Artifacts
-
-This directory contains model artifacts and other large files used by the AutoSlide project.
-
-## Using DVC for Model and Data Versioning
+<summary>Click to expand DVC setup instructions</summary>
 
 This project uses [DVC (Data Version Control)](https://dvc.org/) to track large files and model artifacts.
 

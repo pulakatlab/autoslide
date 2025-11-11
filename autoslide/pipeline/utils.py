@@ -199,6 +199,7 @@ def visualize_sections(
 def get_threshold_mask(
         scene,
         down_sample=100,
+        plot_bool=False,
 ):
     """
     Get threshold mask for scene.
@@ -211,6 +212,8 @@ def get_threshold_mask(
 
     # Get image
     gray_image = cv.cvtColor(small_image, cv.COLOR_BGR2GRAY)
+    if gray_image.min() == 0:
+        gray_image[gray_image == 0] = 1  # Avoid log(0)
     log_gray_image = np.log(gray_image)
     # Rescale to 0-255
     log_gray_image = log_gray_image - np.min(log_gray_image)
@@ -224,9 +227,18 @@ def get_threshold_mask(
 
     bin_image = thresh == 0
 
-    # plt.imshow(bin_image)
-    # plt.colorbar()
-    # plt.show()
+    if plot_bool:
+        fig, ax = plt.subplots(1, 4)
+        ax[0].imshow(small_image)
+        ax[0].set_title('Original Image')
+        ax[1].imshow(gray_image, cmap='gray')
+        ax[1].set_title('Grayscale Image')
+        ax[2].imshow(log_gray_image, cmap='gray')
+        ax[2].set_title('Log Grayscale Image')
+        ax[3].imshow(bin_image, cmap='gray')
+        ax[3].set_title('Threshold Mask')
+        plt.show()
+
     return bin_image
 
 

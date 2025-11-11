@@ -104,6 +104,32 @@ def test_get_mask_outline(sample_image_mask):
     assert np.sum(outline > 0) < np.sum(mask > 0)
 
 
+def test_random_shear():
+    """Test that RandomShear correctly shears images and masks"""
+    # Create a simple test image and mask
+    img = Image.new('RGB', (100, 100), color='red')
+    # Draw a rectangle in the top-left corner
+    for i in range(20, 40):
+        for j in range(20, 40):
+            img.putpixel((i, j), (0, 255, 0))
+
+    mask = Image.new('L', (100, 100), 0)
+    # Draw a rectangle in the top-left corner
+    for i in range(20, 40):
+        for j in range(20, 40):
+            mask.putpixel((i, j), 255)
+
+    # Apply shear with 100% probability
+    shearer = RandomShear(p=1.0, shear_range=20)
+    sheared_img, sheared_mask = shearer(img, mask)
+
+    # Check that the images are different (shear occurred)
+    assert np.array(sheared_img).shape == np.array(img).shape
+    assert np.array(sheared_mask).shape == np.array(mask).shape
+    assert not np.array_equal(np.array(sheared_img), np.array(img))
+    assert not np.array_equal(np.array(sheared_mask), np.array(mask))
+
+
 def test_random_rotation90():
     """Test that RandomRotation90 correctly rotates images and masks"""
     # Create a simple test image and mask
