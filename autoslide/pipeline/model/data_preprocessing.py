@@ -243,6 +243,8 @@ def generate_negative_samples(img, mask):
 def generate_elastic_deformation(img, mask):
     """
     Generate elastically deformed samples using PyTorch's ElasticTransform.
+    **NOTE**: This is implemented as an offline transform because it is too computationally
+    expensive to perform online during training.
 
     Inputs:
         img: Original image (numpy array)
@@ -255,17 +257,17 @@ def generate_elastic_deformation(img, mask):
     # Convert numpy arrays to PIL Images
     img_pil = Image.fromarray(img)
     mask_pil = Image.fromarray(mask)
-    
+
     # Create elastic transform
     elastic_transform = T.ElasticTransform(alpha=3000, sigma=30)
-    
+
     # Apply transform to both image and mask
     elastic_img_pil, elastic_mask_pil = elastic_transform(img_pil, mask_pil)
-    
+
     # Convert back to numpy arrays
     elastic_img = np.array(elastic_img_pil)
     elastic_mask = np.array(elastic_mask_pil)
-    
+
     return elastic_img, elastic_mask
 
 
@@ -373,22 +375,23 @@ def augment_images(aug_images, aug_masks, neg_ratio=0.3, art_ratio=0.3, elastic_
     assert 0 <= neg_ratio <= 1, "neg_ratio must be between 0 and 1"
     assert 0 <= art_ratio <= 1, "art_ratio must be between 0 and 1"
     assert 0 <= elastic_ratio <= 1, "elastic_ratio must be between 0 and 1"
-    assert (neg_ratio + art_ratio + elastic_ratio) <= 1, "Sum of all ratios must be <= 1"
+    assert (neg_ratio + art_ratio +
+            elastic_ratio) <= 1, "Sum of all ratios must be <= 1"
 
     print(
         f'Starting dataset augmentation with {len(aug_images)} original images...')
 
     num_orig = len(aug_images)
-    
+
     # Calculate number of samples for each augmentation type
     num_neg = int(num_orig * neg_ratio)
     num_art = int(num_orig * art_ratio)
     num_elastic = int(num_orig * elastic_ratio)
-    
+
     # Randomly assign indices for each augmentation type
     all_inds = np.arange(num_orig)
     np.random.shuffle(all_inds)
-    
+
     neg_inds = all_inds[:num_neg]
     art_inds = all_inds[num_neg:num_neg + num_art]
     elastic_inds = all_inds[num_neg + num_art:num_neg + num_art + num_elastic]
@@ -700,13 +703,13 @@ class AugmentedCustDat(torch.utils.data.Dataset):
 
         # Vectorized mask and box creation
         masks = np.stack([mask == obj_id for obj_id in valid_objs])
-        
+
         # Vectorized bounding box computation
         boxes = []
         for i, obj_mask in enumerate(masks):
             pos = np.where(obj_mask)
             if len(pos[0]) > 0:
-                boxes.append([np.min(pos[1]), np.min(pos[0]), 
+                boxes.append([np.min(pos[1]), np.min(pos[0]),
                              np.max(pos[1]), np.max(pos[0])])
 
         # Convert to tensors
