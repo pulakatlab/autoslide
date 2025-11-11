@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
+import torch.nn.utils
 import cv2 as cv  # Alias cv2 as cv for consistency
 from torchvision.transforms import v2 as T
 from tqdm import tqdm, trange
@@ -168,6 +169,8 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
                 continue
             optimizer.zero_grad()
             losses.backward()
+            # Clip gradients to prevent exploding gradients and NaN losses
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
         all_train_losses.append(train_epoch_loss)
