@@ -4,6 +4,7 @@ the original data file.
 """
 
 from autoslide.pipeline.utils import visualize_sections, get_section
+from autoslide.pipeline import utils
 import os
 import slideio
 from matplotlib import pyplot as plt
@@ -80,8 +81,8 @@ sec_hash = int(sec_name.split('_')[-1])
 sec_metadata = fin_metadata_df[fin_metadata_df['section_hash'] == sec_hash]
 
 data_path = sec_metadata.data_path.values[0]
-slide = slideio.open_slide(data_path, 'SVS')
-scene = slide.get_scene(0)
+slide_handler = utils.slide_handler(data_path)
+scene = slide_handler.scene
 
 wanted_section = eval(sec_metadata.section_bounds.values[0])
 # utils.visualize_sections(

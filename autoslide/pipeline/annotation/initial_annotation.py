@@ -33,6 +33,7 @@ from scipy.ndimage import binary_fill_holes
 from autoslide import config
 # Import utilities directly
 from autoslide.pipeline.utils import get_threshold_mask
+from autoslide.pipeline import utils
 
 
 def parse_args():
@@ -94,8 +95,8 @@ def main():
             print(f"Processing file {i+1}/{len(file_list)}: {file_basename}")
             print(f"  Full path: {data_path}")
 
-        slide = slideio.open_slide(data_path, 'SVS')
-        scene = slide.get_scene(0)
+        slide_handler = utils.slide_handler(data_path)
+        scene = slide_handler.scene
         image_rect = np.array(scene.rect) // down_sample
         image = scene.read_block(size=image_rect[2:])
 
