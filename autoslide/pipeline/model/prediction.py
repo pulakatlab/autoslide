@@ -75,7 +75,7 @@ def find_images_to_process(reprocess=False, verbose=False):
     Returns:
         dict: Dictionary mapping SVS directory names to lists of image dictionaries
     """
-    suggested_regions_dir = os.path.join(data_dir, 'suggested_regions')
+    suggested_regions_dir = config['suggested_regions_dir']
 
     if verbose:
         print(f"Looking for suggested regions in: {suggested_regions_dir}")

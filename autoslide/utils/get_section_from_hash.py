@@ -4,7 +4,6 @@ If given a hash, return the section from the SVS corresponding to that hash.
 
 import os
 import sys
-import slideio
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
@@ -155,7 +154,7 @@ def main():
     # Define paths
     # data_dir = os.path.join(auto_slide_dir, 'data')
     data_dir = config['data_dir']
-    tracking_dir = os.path.join(data_dir, 'tracking')
+    tracking_dir = config['tracking_dir']
 
     # Load tracking data
     suggested_regions_paths, basename_list, data_path_list = load_tracking_data(

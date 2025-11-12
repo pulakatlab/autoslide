@@ -14,7 +14,6 @@ Steps:
 
 import os
 import json
-import slideio
 import pylab as plt
 import cv2 as cv
 import numpy as np
@@ -32,7 +31,6 @@ from scipy.ndimage import binary_fill_holes
 # Import config
 from autoslide import config
 # Import utilities directly
-from autoslide.pipeline.utils import get_threshold_mask
 from autoslide.pipeline import utils
 
 
@@ -75,13 +73,13 @@ def main():
         pprint(file_list)
         print()
 
-    annot_dir = os.path.join(data_dir, 'initial_annotation')
+    annot_dir = config['initial_annotation_dir']
     if not os.path.exists(annot_dir):
         os.makedirs(annot_dir)
         if verbose:
             print(f"Created annotation directory: {annot_dir}")
 
-    tracking_dir = os.path.join(data_dir, 'tracking')
+    tracking_dir = config['tracking_dir']
     if not os.path.exists(tracking_dir):
         os.makedirs(tracking_dir)
         if verbose:
@@ -108,7 +106,7 @@ def main():
 
         if verbose:
             print(f"  Generating threshold mask...")
-        threshold_mask = get_threshold_mask(scene, down_sample=down_sample)
+        threshold_mask = utils.get_threshold_mask(scene, down_sample=down_sample)
 
         if verbose:
             print(f"  Applying morphological dilation...")

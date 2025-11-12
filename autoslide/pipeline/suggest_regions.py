@@ -6,7 +6,6 @@ regions to be used for classification.
 import os
 import sys
 import uuid
-import slideio
 from matplotlib import pyplot as plt
 import cv2 as cv
 import numpy as np
@@ -87,9 +86,9 @@ def main():
     
     # Get directories from config
     data_dir = config['data_dir']
-    mask_dir = os.path.join(data_dir, 'final_annotation')
-    metadata_dir = os.path.join(data_dir, 'initial_annotation')
-    output_base_dir = os.path.join(data_dir, 'suggested_regions')
+    mask_dir = config['final_annotation_dir']
+    metadata_dir = config['initial_annotation_dir']
+    output_base_dir = config['suggested_regions_dir']
     
     if verbose:
         print(f"Data directory: {data_dir}")
@@ -102,7 +101,7 @@ def main():
         if verbose:
             print(f"Created output directory: {output_base_dir}")
     
-    tracking_dir = os.path.join(data_dir, 'tracking')
+    tracking_dir = config['tracking_dir']
     if verbose:
         print(f"Tracking directory: {tracking_dir}")
 

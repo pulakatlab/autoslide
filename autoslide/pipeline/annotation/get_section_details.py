@@ -3,10 +3,8 @@ Given a section id, this script will return the details of the section from
 the original data file.
 """
 
-from autoslide.pipeline.utils import visualize_sections, get_section
 from autoslide.pipeline import utils
 import os
-import slideio
 from matplotlib import pyplot as plt
 import cv2 as cv
 import numpy as np
@@ -25,9 +23,9 @@ plot_dir = config['plot_dirs']
 
 # Get directories from config
 data_dir = config['data_dir']
-mask_dir = os.path.join(data_dir, 'final_annotation')
-metadata_dir = os.path.join(data_dir, 'initial_annotation')
-section_dir = os.path.join(data_dir, 'suggested_regions')
+mask_dir = config['final_annotation_dir']
+metadata_dir = config['initial_annotation_dir']
+section_dir = config['suggested_regions_dir']
 data_path_list = glob(os.path.join(data_dir, '*TRI*.svs'))
 
 # Get paths to all metadata files
@@ -89,7 +87,7 @@ wanted_section = eval(sec_metadata.section_bounds.values[0])
 #     scene,
 #     [wanted_section],
 #     )
-img = get_section(scene, wanted_section, down_sample=10)
+img = utils.get_section(scene, wanted_section, down_sample=10)
 
 og_img = plt.imread(og_image_path)
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))

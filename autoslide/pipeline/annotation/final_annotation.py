@@ -34,7 +34,7 @@ def main():
 
     # Get directories from config
     data_dir = config['data_dir']
-    init_annot_dir = os.path.join(data_dir, 'initial_annotation')
+    init_annot_dir = config['initial_annotation_dir']
     file_list = os.listdir(init_annot_dir)
 
     if verbose:
@@ -42,7 +42,7 @@ def main():
         print(f"Initial annotation directory: {init_annot_dir}")
         print(f"Found {len(file_list)} files in initial annotation directory")
 
-    fin_annotation_dir = os.path.join(data_dir, 'final_annotation')
+    fin_annotation_dir = config['final_annotation_dir']
     if not os.path.exists(fin_annotation_dir):
         os.makedirs(fin_annotation_dir)
         if verbose:
@@ -50,7 +50,7 @@ def main():
     elif verbose:
         print(f"Final annotation directory exists: {fin_annotation_dir}")
 
-    tracking_dir = os.path.join(data_dir, 'tracking')
+    tracking_dir = config['tracking_dir']
     if not os.path.exists(tracking_dir):
         os.makedirs(tracking_dir)
         if verbose:
