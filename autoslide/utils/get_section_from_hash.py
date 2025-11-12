@@ -4,7 +4,6 @@ If given a hash, return the section from the SVS corresponding to that hash.
 
 import os
 import sys
-import slideio
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
@@ -48,8 +47,8 @@ def get_section_from_hash(hash_value, df, down_sample=1):
     section_details = get_section_details_from_hash(hash_value, df)
 
     section_bounds = literal_eval(section_details['section_bounds'])
-    slide = slideio.open_slide(section_details['data_path'], 'SVS')
-    scene = slide.get_scene(0)
+    slide_handler = utils.slide_handler(section_details['data_path'])
+    scene = slide_handler.scene
 
     section = utils.get_section(scene, section_bounds,
                                 down_sample=down_sample)
@@ -131,8 +130,8 @@ def visualize_section(section, utils):
     """
     section_bounds = literal_eval(section['section_bounds'])
 
-    slide = slideio.open_slide(section['data_path'], 'SVS')
-    scene = slide.get_scene(0)
+    slide_handler = utils.slide_handler(section['data_path'])
+    scene = slide_handler.scene
 
     fig, ax = utils.visualize_sections(
         scene,
@@ -155,7 +154,7 @@ def main():
     # Define paths
     # data_dir = os.path.join(auto_slide_dir, 'data')
     data_dir = config['data_dir']
-    tracking_dir = os.path.join(data_dir, 'tracking')
+    tracking_dir = config['tracking_dir']
 
     # Load tracking data
     suggested_regions_paths, basename_list, data_path_list = load_tracking_data(

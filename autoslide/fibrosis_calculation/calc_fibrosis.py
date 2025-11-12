@@ -4,7 +4,6 @@ Functionality to calculate fibrosis given a single image + optional mask
 
 import os
 import sys
-import slideio
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd

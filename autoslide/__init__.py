@@ -20,6 +20,11 @@ def load_config():
         'svs_dir': os.path.join(data_dir, 'svs'),
         'artifacts_dir': os.path.join(data_dir, 'artifacts'),
         'plot_dirs': os.path.join(data_dir, 'plots'),
+        'initial_annotation_dir': os.path.join(data_dir, 'initial_annotation'),
+        'final_annotation_dir': os.path.join(data_dir, 'final_annotation'),
+        'suggested_regions_dir': os.path.join(data_dir, 'suggested_regions'),
+        'tracking_dir': os.path.join(data_dir, 'tracking'),
+        'labelled_data_dir': os.path.join(data_dir, 'labelled_images'),
     }
 
 

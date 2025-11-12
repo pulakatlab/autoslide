@@ -38,7 +38,7 @@ def load_data(data_dir=None):
     if data_dir is None:
         data_dir = config['data_dir']
 
-    labelled_data_dir = os.path.join(data_dir, 'labelled_images')
+    labelled_data_dir = config['labelled_data_dir']
     img_dir = os.path.join(labelled_data_dir, 'images/')
     mask_dir = os.path.join(labelled_data_dir, 'masks/')
     image_names = sorted(os.listdir(img_dir))
