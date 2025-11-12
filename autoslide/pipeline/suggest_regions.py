@@ -165,18 +165,10 @@ def main():
             if verbose:
                 print(f"Opening slide: {data_path}")
             
-            # Automatically detect driver based on file extension
-            file_ext = os.path.splitext(data_path)[1].lower()
-            if file_ext == '.vsi':
-                driver = 'VSI'
-            elif file_ext == '.svs':
-                driver = 'SVS'
-            else:
-                # Default to SVS for backward compatibility
-                driver = 'SVS'
-            
-            slide = slideio.open_slide(data_path, driver)
-            scene = slide.get_scene(0)
+            # Use slide_handler for consistent slide opening
+            slide_metadata = utils.slide_handler(data_path)
+            slide = slide_metadata.slide
+            scene = slide_metadata.scene
             resolution = scene.resolution[0]  # meters / pixel
             size_meteres = np.array(scene.size) * np.array(resolution)
             down_mag = mask.shape[0] / scene.rect[2]
@@ -188,8 +180,6 @@ def main():
                 print(f"Size in meters: {size_meteres}")
                 print(f"Down magnification: {down_mag:.2f}")
                 print(f"Mask resolution: {mask_resolution:.2e} meters/pixel")
-
-            slide_metadata = utils.slide_handler(data_path)
 
             # Get tissue dimenions
             # wanted_labels = [1,4]
