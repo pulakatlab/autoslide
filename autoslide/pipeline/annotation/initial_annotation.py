@@ -58,14 +58,13 @@ def main():
     # Get directories from config
     data_dir = config['data_dir']
     svs_dir = config['svs_dir']
-    glob_pattern_list = ['*.svs','*.vsi']
-    file_list = [ 
-            [glob(os.path.join(svs_dir, '**', this_pattern), recursive=True)
-             for this_pattern in glob_pattern_list]
-                 ]
+    glob_pattern_list = ['*.svs', '*.vsi']
+    file_list = [glob(os.path.join(svs_dir, '**', this_pattern), recursive=True)
+                 for this_pattern in glob_pattern_list]
+
     file_list = [item for sublist in file_list for item in sublist]
 
-   ############################## 
+   ##############################
 
     if verbose:
         print(f"Configuration loaded:")
@@ -113,7 +112,8 @@ def main():
 
         if verbose:
             print(f"  Generating threshold mask...")
-        threshold_mask = utils.get_threshold_mask(scene, down_sample=down_sample)
+        threshold_mask = utils.get_threshold_mask(
+            scene, down_sample=down_sample)
 
         if verbose:
             print(f"  Applying morphological dilation...")
@@ -241,8 +241,11 @@ def main():
         fig.suptitle(file_basename)
         plt.tight_layout()
 
+        basename_noext = os.path.splitext(file_basename)[0]
         plot_path = os.path.join(
-            annot_dir, file_basename.replace('.svs', '.png'))
+            annot_dir,  # file_basename.replace('.svs', '.png'))
+            f"{basename_noext}_annotation_visualization.png"
+        )
         # Ensure directory exists and handle spaces in paths
         os.makedirs(os.path.dirname(plot_path), exist_ok=True)
         fig.savefig(plot_path, bbox_inches='tight')
@@ -260,12 +263,15 @@ def main():
         json_data = {
             'file_basename': file_basename,
             'data_path': data_path,
-            'initial_mask_path': os.path.join(annot_dir, file_basename.replace('.svs', '.npy')),
-            'wanted_regions_frame_path': os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
+            # 'initial_mask_path': os.path.join(annot_dir, file_basename.replace('.svs', '.npy')),
+            # 'wanted_regions_frame_path': os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
+            'initial_mask_path': os.path.join(annot_dir, basename_noext + '.npy'),
+            'wanted_regions_frame_path': os.path.join(annot_dir, basename_noext + '.csv'),
         }
 
         json_path = os.path.join(
-            tracking_dir, file_basename.replace('.svs', '.json'))
+            # tracking_dir, file_basename.replace('.svs', '.json'))
+            tracking_dir, f"{basename_noext}.json")
         # Ensure directory exists and handle spaces in paths
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, 'w') as f:
