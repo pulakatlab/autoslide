@@ -21,7 +21,18 @@ class slide_handler():
             self,
             slide_path):
         self.slide_path = slide_path
-        self.slide = slideio.open_slide(slide_path, 'SVS')
+        
+        # Automatically detect driver based on file extension
+        file_ext = os.path.splitext(slide_path)[1].lower()
+        if file_ext == '.vsi':
+            driver = 'VSI'
+        elif file_ext == '.svs':
+            driver = 'SVS'
+        else:
+            # Default to SVS for backward compatibility
+            driver = 'SVS'
+        
+        self.slide = slideio.open_slide(slide_path, driver)
         self.scene = self.slide.get_scene(0)
         self.metadata_str = self.slide.raw_metadata
         self.metadata = {}
