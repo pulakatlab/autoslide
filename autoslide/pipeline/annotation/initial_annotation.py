@@ -57,8 +57,14 @@ def main():
     # Get directories from config
     data_dir = config['data_dir']
     svs_dir = config['svs_dir']
-    glob_pattern = '*.svs'
-    file_list = glob(os.path.join(svs_dir, '**', glob_pattern), recursive=True)
+    glob_pattern_list = ['*.svs','*.vsi']
+    file_list = [ 
+            [glob(os.path.join(svs_dir, '**', this_pattern), recursive=True)
+             for this_pattern in glob_pattern_list]
+                 ]
+    file_list = [item for sublist in file_list for item in sublist]
+
+   ############################## 
 
     if verbose:
         print(f"Configuration loaded:")
