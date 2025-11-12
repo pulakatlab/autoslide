@@ -164,7 +164,18 @@ def main():
             mask = label_mask.copy()
             if verbose:
                 print(f"Opening slide: {data_path}")
-            slide = slideio.open_slide(data_path, 'SVS')
+            
+            # Automatically detect driver based on file extension
+            file_ext = os.path.splitext(data_path)[1].lower()
+            if file_ext == '.vsi':
+                driver = 'VSI'
+            elif file_ext == '.svs':
+                driver = 'SVS'
+            else:
+                # Default to SVS for backward compatibility
+                driver = 'SVS'
+            
+            slide = slideio.open_slide(data_path, driver)
             scene = slide.get_scene(0)
             resolution = scene.resolution[0]  # meters / pixel
             size_meteres = np.array(scene.size) * np.array(resolution)
