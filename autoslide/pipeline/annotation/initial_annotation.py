@@ -94,6 +94,7 @@ def main():
     for i, data_path in enumerate(tqdm(file_list)):
 
         file_basename = os.path.basename(data_path)
+        basename_stem = os.path.splitext(file_basename)[0]
 
         if verbose:
             print(f"Processing file {i+1}/{len(file_list)}: {file_basename}")
@@ -125,10 +126,9 @@ def main():
 
             # Create scene-specific basename for multi-scene slides
             if num_scenes > 1:
-                scene_basename = file_basename.replace(
-                    '.svs', f'_scene{scene_idx}.svs')
+                scene_basename_stem = f"{basename_stem}_scene{scene_idx}"
             else:
-                scene_basename = file_basename
+                scene_basename_stem = basename_stem
 
             if verbose:
                 print(f"    Generating threshold mask...")
@@ -192,7 +192,7 @@ def main():
             wanted_regions_frame['tissue_num'] = np.nan
 
             csv_path = os.path.join(
-                annot_dir, scene_basename.replace('.svs', '.csv'))
+                annot_dir, f"{scene_basename_stem}.csv")
             wanted_regions_frame.to_csv(csv_path, index=False)
 
             if verbose:
@@ -212,7 +212,7 @@ def main():
 
             # Write out image with regions labelled
             npy_path = os.path.join(
-                annot_dir, scene_basename.replace('.svs', '.npy'))
+                annot_dir, f"{scene_basename_stem}.npy")
             np.save(npy_path, fin_label_image)
 
             if verbose:
@@ -260,7 +260,7 @@ def main():
             plt.tight_layout()
 
             plot_path = os.path.join(
-                annot_dir, scene_basename.replace('.svs', '.png'))
+                annot_dir, f"{scene_basename_stem}.png")
             fig.savefig(plot_path, bbox_inches='tight')
             plt.close(fig)
 
@@ -277,16 +277,16 @@ def main():
 
             json_data = {
                 'file_basename': file_basename,
-                'scene_basename': scene_basename,
+                'scene_basename_stem': scene_basename_stem,
                 'data_path': data_path,
                 'scene_index': scene_idx,
                 'num_scenes': num_scenes,
-                'initial_mask_path': os.path.join(annot_dir, scene_basename.replace('.svs', '.npy')),
-                'wanted_regions_frame_path': os.path.join(annot_dir, scene_basename.replace('.svs', '.csv')),
+                'initial_mask_path': os.path.join(annot_dir, f"{scene_basename_stem}.npy"),
+                'wanted_regions_frame_path': os.path.join(annot_dir, f"{scene_basename_stem}.csv"),
             }
 
             json_path = os.path.join(
-                tracking_dir, scene_basename.replace('.svs', '.json'))
+                tracking_dir, f"{scene_basename_stem}.json")
             with open(json_path, 'w') as f:
                 json.dump(json_data, f, indent=4)
 
