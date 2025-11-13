@@ -106,6 +106,8 @@ def main():
         # metadata = pd.read_csv(os.path.join(init_annot_dir, this_basename + '.csv'))
         try:
             metadata = pd.read_csv(metadata_path)
+            # Drop rows with NaN values
+            metadata = metadata.dropna()
         except FileNotFoundError:
             print(f"Error: Metadata file not found: {metadata_path}")
             if raise_error:
