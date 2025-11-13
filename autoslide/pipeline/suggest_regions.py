@@ -165,7 +165,12 @@ def main():
                 print(f"Opening slide: {data_path}")
             
             # Use slide_handler for consistent slide opening
-            slide_metadata = utils.slide_handler(data_path)
+            # Get scene_index from JSON if available (for multi-scene slides)
+            scene_index = this_json.get('scene_index', 0)
+            if verbose and 'scene_index' in this_json:
+                print(f"Using scene index: {scene_index}")
+            
+            slide_metadata = utils.slide_handler(data_path, scene_index=scene_index)
             slide = slide_metadata.slide
             scene = slide_metadata.scene
             resolution = scene.resolution[0]  # meters / pixel

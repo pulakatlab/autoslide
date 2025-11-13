@@ -19,8 +19,10 @@ from tqdm import tqdm, trange
 class slide_handler():
     def __init__(
             self,
-            slide_path):
+            slide_path,
+            scene_index=0):
         self.slide_path = slide_path
+        self.scene_index = scene_index
         
         # Automatically detect driver based on file extension
         file_ext = os.path.splitext(slide_path)[1].lower()
@@ -33,7 +35,8 @@ class slide_handler():
             driver = 'SVS'
         
         self.slide = slideio.open_slide(slide_path, driver)
-        self.scene = self.slide.get_scene(0)
+        self.num_scenes = self.slide.num_scenes
+        self.scene = self.slide.get_scene(scene_index)
         self.metadata_str = self.slide.raw_metadata
         self.metadata = {}
         for item in self.metadata_str.split('|'):
