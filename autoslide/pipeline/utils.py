@@ -37,14 +37,15 @@ class slide_handler():
         self.slide = slideio.open_slide(slide_path, driver)
         self.num_scenes = self.slide.num_scenes
         self.scene = self.slide.get_scene(scene_index)
-        self.metadata_str = self.slide.raw_metadata
-        self.metadata = {}
-        for item in self.metadata_str.split('|'):
-            key, value = item.split('=')
-            self.metadata[key.strip()] = value.strip()
-        self.og_width = int(self.metadata['OriginalWidth'])
-        self.og_height = int(self.metadata['OriginalHeight'])
-        self.magnification = int(self.metadata['AppMag'])
+        # self.metadata_str = self.slide.raw_metadata
+        # self.metadata = {}
+        # for item in self.metadata_str.split('|'):
+        #     key, value = item.split('=')
+        #     self.metadata[key.strip()] = value.strip()
+        self.og_size = self.scene.rect[2:]
+        self.og_width = int(self.og_size[0])
+        self.og_height = int(self.og_size[1])
+        self.magnification = int(self.scene.magnification)
 
 
 def gen_step_windows(
