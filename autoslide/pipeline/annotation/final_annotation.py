@@ -92,8 +92,11 @@ def main():
 
     # for this_basename in tqdm(unique_basenames):
     for this_json, json_path in tqdm(zip(json_list, json_path_list), total=len(json_list)):
-        # this_basename = unique_basenames[0]
-        this_basename = this_json['file_basename'].split('.')[0]
+        # Use scene-specific basename if available, otherwise fall back to file basename
+        if 'scene_basename_stem' in this_json:
+            this_basename = this_json['scene_basename_stem']
+        else:
+            this_basename = this_json['file_basename'].split('.')[0]
         
         # Start timing for this file
         start_time = time.time()
@@ -101,6 +104,11 @@ def main():
         if verbose:
             print(f"\nProcessing: {this_basename}")
             print(f"JSON path: {json_path}")
+            if 'scene_basename_stem' in this_json:
+                print(f"Scene-specific processing for: {this_json['scene_basename_stem']}")
+                print(f"Original file: {this_json['file_basename']}")
+                if 'scene_index' in this_json:
+                    print(f"Scene index: {this_json['scene_index']}")
 
         metadata_path = this_json['wanted_regions_frame_path']
         # metadata = pd.read_csv(os.path.join(init_annot_dir, this_basename + '.csv'))
