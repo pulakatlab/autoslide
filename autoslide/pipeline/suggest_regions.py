@@ -129,19 +129,31 @@ def main():
             print(f"Data path: {data_path}")
         
         try:
-            # data_basename = os.path.basename(data_path).split('.')[0]
-            data_basename = this_json['file_basename'].split('.')[0]
+            # Use scene-specific basename if available, otherwise fall back to file basename
+            if 'scene_basename_stem' in this_json:
+                scene_basename_stem = this_json['scene_basename_stem']
+                data_basename = this_json['file_basename'].split('.')[0]
+            else:
+                scene_basename_stem = this_json['file_basename'].split('.')[0]
+                data_basename = scene_basename_stem
+            
             # Replace spaces and dashes with underscores
+            scene_basename_proc = scene_basename_stem.replace(' ', '_').replace('-', '_')
             data_basename_proc = data_basename.replace(' ', '_').replace('-', '_')
-            this_output_dir = os.path.join(output_base_dir, data_basename_proc)
+            
+            # Create scene-specific output directory
+            this_output_dir = os.path.join(output_base_dir, data_basename_proc, scene_basename_proc)
 
             if verbose:
                 print(f"Data basename: {data_basename}")
-                print(f"Processed basename: {data_basename_proc}")
+                print(f"Scene basename stem: {scene_basename_stem}")
+                print(f"Processed scene basename: {scene_basename_proc}")
                 print(f"Output directory: {this_output_dir}")
+                if 'scene_index' in this_json:
+                    print(f"Scene index: {this_json['scene_index']}")
 
             if not os.path.exists(this_output_dir):
-                os.mkdir(this_output_dir)
+                os.makedirs(this_output_dir, exist_ok=True)
                 if verbose:
                     print(f"Created output directory: {this_output_dir}")
 
@@ -256,7 +268,7 @@ def main():
             ax.legend().set_visible(False)
             viz_path = os.path.join(
                 this_output_dir,
-                data_basename_proc + '_' + 'selected_section_visualization.png')
+                scene_basename_proc + '_' + 'selected_section_visualization.png')
             fig.savefig(
                 viz_path,
                 dpi=300,
@@ -286,10 +298,10 @@ def main():
 
             if verbose:
                 print("Generating section hashes...")
-            # Generate truly unique identifiers for each section
+            # Generate truly unique identifiers for each section using scene-specific basename
             section_frame['section_hash'] = [
                 # str(uuid.uuid4().int)[:16]
-                str_to_hash(data_basename_proc + '_' + str(section_frame.iloc[i]))
+                str_to_hash(scene_basename_proc + '_' + str(section_frame.iloc[i]))
                 for i in range(len(section_frame))
             ]
 
@@ -299,11 +311,10 @@ def main():
                 lambda x: [int(y) for y in x]
             )
 
-            # Write out section_frame
+            # Write out section_frame using scene-specific basename
             section_frame_path = os.path.join(
                 this_output_dir,
-                # file_basename_proc + '_' + 'section_frame.csv'),
-                data_basename_proc + '_' + 'section_frame.csv')
+                scene_basename_proc + '_' + 'section_frame.csv')
             section_frame.to_csv(
                 section_frame_path,
                 index=False,
@@ -341,10 +352,10 @@ def main():
             if verbose:
                 print(f"Saved images to: {out_image_dir}")
 
-            # Add path to section frame to json
+            # Add path to section frame to json using scene-specific basename
             this_json['suggested_regions_frame_path'] = os.path.join(
                 this_output_dir,
-                data_basename_proc + '_' + 'section_frame.csv')
+                scene_basename_proc + '_' + 'section_frame.csv')
 
             # Calculate and log processing time
             end_time = time.time()
@@ -357,7 +368,7 @@ def main():
             if verbose:
                 print(f"Processing time: {processing_time:.2f} seconds")
                 print(f"Updated JSON file: {json_path}")
-                print(f"Successfully processed {data_basename_proc}")
+                print(f"Successfully processed {scene_basename_proc}")
 
         except Exception as e:
             # Still log time even if there was an error
@@ -369,7 +380,7 @@ def main():
             with open(json_path, 'w') as f:
                 json.dump(this_json, f, indent=4)
             
-            print(f"Error processing {data_basename if 'data_basename' in locals() else 'unknown file'}: {e}")
+            print(f"Error processing {scene_basename_proc if 'scene_basename_proc' in locals() else 'unknown file'}: {e}")
             print(f"Processing time before error: {processing_time:.2f} seconds")
             if verbose:
                 import traceback
