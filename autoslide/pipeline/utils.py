@@ -500,8 +500,8 @@ def write_out_images(
     section_labels = section_frame['section_labels'].values
     section_hashes = section_frame['section_hash'].values
 
-    section_names = [f'{label}_{hash}' for label, hash in zip(
-        section_labels, section_hashes)]
+    section_names = [f'{label}_roi{i+1:03d}_{hash}' for i, (label, hash) in enumerate(zip(
+        section_labels, section_hashes))]
 
     for img, name in tqdm(zip(img_list, section_names)):
         img_path = os.path.join(output_dir, f'{name}.png')
