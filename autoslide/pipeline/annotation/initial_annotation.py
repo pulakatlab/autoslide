@@ -14,6 +14,7 @@ Steps:
 
 import os
 import json
+import shlex
 import pylab as plt
 import cv2 as cv
 import numpy as np
@@ -57,8 +58,13 @@ def main():
     # Get directories from config
     data_dir = config['data_dir']
     svs_dir = config['svs_dir']
-    glob_pattern = '*.svs'
-    file_list = glob(os.path.join(svs_dir, '**', glob_pattern), recursive=True)
+    glob_pattern_list = ['*.svs', '*.vsi']
+    file_list = [glob(os.path.join(svs_dir, '**', this_pattern), recursive=True)
+                 for this_pattern in glob_pattern_list]
+
+    file_list = [item for sublist in file_list for item in sublist]
+
+   ##############################
 
     if verbose:
         print(f"Configuration loaded:")
@@ -106,7 +112,8 @@ def main():
 
         if verbose:
             print(f"  Generating threshold mask...")
-        threshold_mask = utils.get_threshold_mask(scene, down_sample=down_sample)
+        threshold_mask = utils.get_threshold_mask(
+            scene, down_sample=down_sample)
 
         if verbose:
             print(f"  Applying morphological dilation...")
@@ -165,10 +172,12 @@ def main():
 
         csv_path = os.path.join(
             annot_dir, file_basename.replace('.svs', '.csv'))
+        # Ensure directory exists and handle spaces in paths
+        os.makedirs(os.path.dirname(csv_path), exist_ok=True)
         wanted_regions_frame.to_csv(csv_path, index=False)
 
         if verbose:
-            print(f"  Saved region metadata to: {csv_path}")
+            print(f"  Saved region metadata to: {shlex.quote(csv_path)}")
 
         # Drop regions that are not wanted
         fin_label_image = label_image.copy()
@@ -184,10 +193,12 @@ def main():
         # Write out image with regions labelled
         npy_path = os.path.join(
             annot_dir, file_basename.replace('.svs', '.npy'))
+        # Ensure directory exists and handle spaces in paths
+        os.makedirs(os.path.dirname(npy_path), exist_ok=True)
         np.save(npy_path, fin_label_image)
 
         if verbose:
-            print(f"  Saved label image to: {npy_path}")
+            print(f"  Saved label image to: {shlex.quote(npy_path)}")
 
         if verbose:
             print(f"  Generating visualization plots...")
@@ -230,13 +241,18 @@ def main():
         fig.suptitle(file_basename)
         plt.tight_layout()
 
+        basename_noext = os.path.splitext(file_basename)[0]
         plot_path = os.path.join(
-            annot_dir, file_basename.replace('.svs', '.png'))
+            annot_dir,  # file_basename.replace('.svs', '.png'))
+            f"{basename_noext}_annotation_visualization.png"
+        )
+        # Ensure directory exists and handle spaces in paths
+        os.makedirs(os.path.dirname(plot_path), exist_ok=True)
         fig.savefig(plot_path, bbox_inches='tight')
         plt.close(fig)
 
         if verbose:
-            print(f"  Saved visualization plot to: {plot_path}")
+            print(f"  Saved visualization plot to: {shlex.quote(plot_path)}")
 
         # Write out a json with:
         # - file_basename
@@ -247,17 +263,22 @@ def main():
         json_data = {
             'file_basename': file_basename,
             'data_path': data_path,
-            'initial_mask_path': os.path.join(annot_dir, file_basename.replace('.svs', '.npy')),
-            'wanted_regions_frame_path': os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
+            # 'initial_mask_path': os.path.join(annot_dir, file_basename.replace('.svs', '.npy')),
+            # 'wanted_regions_frame_path': os.path.join(annot_dir, file_basename.replace('.svs', '.csv')),
+            'initial_mask_path': os.path.join(annot_dir, basename_noext + '.npy'),
+            'wanted_regions_frame_path': os.path.join(annot_dir, basename_noext + '.csv'),
         }
 
         json_path = os.path.join(
-            tracking_dir, file_basename.replace('.svs', '.json'))
+            # tracking_dir, file_basename.replace('.svs', '.json'))
+            tracking_dir, f"{basename_noext}.json")
+        # Ensure directory exists and handle spaces in paths
+        os.makedirs(os.path.dirname(json_path), exist_ok=True)
         with open(json_path, 'w') as f:
             json.dump(json_data, f, indent=4)
 
         if verbose:
-            print(f"  Saved tracking JSON to: {json_path}")
+            print(f"  Saved tracking JSON to: {shlex.quote(json_path)}")
             print(f"  Completed processing {file_basename}")
             print()
 
