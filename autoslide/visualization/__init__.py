@@ -1,16 +1,11 @@
 """
 Visualization module for autoslide.
 
-This module provides functions for visualizing and comparing manual and automatic annotations.
+This module provides functions for visualizing automatic annotations from the pipeline.
 """
 
-from .compare_positivity import (
-    plot_positivity_comparison,
-    plot_all_section_overlays,
-    calculate_polygon_rectangle_overlap,
-    find_matching_sections,
-    analyze_overlap_threshold_sensitivity,
-    create_overlap_threshold_analysis_plot,
+from .visualize_annotations import (
+    plot_annotations_with_positivity,
 )
 
 from .overlay_manual_auto_annots import (
@@ -18,11 +13,6 @@ from .overlay_manual_auto_annots import (
 )
 
 __all__ = [
-    'plot_positivity_comparison',
-    'plot_all_section_overlays',
-    'calculate_polygon_rectangle_overlap',
-    'find_matching_sections',
-    'analyze_overlap_threshold_sensitivity',
-    'create_overlap_threshold_analysis_plot',
+    'plot_annotations_with_positivity',
     'plot_overlay_on_slide',
 ]
