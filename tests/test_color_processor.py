@@ -2,7 +2,7 @@
 Tests for unified color correction and normalization module.
 
 This module tests:
-- ColorProcessor with all methods (reinhard, histogram, percentile)
+- ColorProcessor with all methods (reinhard, histogram, percentile_mapping)
 - Backup and restore functionality
 - Batch processing with backup/restore
 - Directory handling patterns
@@ -72,12 +72,12 @@ class TestColorProcessor:
         assert processed.shape == sample_image.shape
         assert processed.dtype == np.uint8
     
-    def test_processor_percentile_method(self, sample_image, temp_reference_file):
-        """Test ColorProcessor with percentile method."""
+    def test_processor_percentile_mapping_method(self, sample_image, temp_reference_file):
+        """Test ColorProcessor with percentile_mapping method."""
         processor = ColorProcessor(
             temp_reference_file,
-            method='percentile',
-            percentiles=(1.0, 99.0)
+            method='percentile_mapping',
+            percentiles=np.linspace(0, 100, 101)
         )
         processed = processor.process_image(sample_image)
         
@@ -312,20 +312,20 @@ class TestBatchProcessing:
             output_files = list(Path(output_dir).glob('*.png'))
             assert len(output_files) == 3
     
-    def test_batch_process_percentile_method(self, temp_image_dir, temp_reference_file):
-        """Test batch processing with percentile method."""
+    def test_batch_process_percentile_mapping_method(self, temp_image_dir, temp_reference_file):
+        """Test batch processing with percentile_mapping method."""
         result = batch_process_directory(
             input_dir=temp_image_dir,
             reference_images=temp_reference_file,
-            method='percentile',
-            percentiles=(5.0, 95.0),
+            method='percentile_mapping',
+            percentiles=np.linspace(0, 100, 101),
             backup=True,
             replace_originals=True
         )
         
         assert result['success']
         assert result['processed'] == 3
-        assert result['method'] == 'percentile'
+        assert result['method'] == 'percentile_mapping'
 
 
 class TestDirectoryHandling:

@@ -62,11 +62,17 @@ def cmd_process(args):
     else:
         reference_images = args.reference_images
 
+    # Handle percentiles parameter
+    percentiles = None
+    if args.method == 'percentile_mapping':
+        import numpy as np
+        percentiles = np.linspace(0, 100, 101)
+    
     result = batch_process_directory(
         input_dir=args.input_dir,
         reference_images=reference_images,
         method=args.method,
-        percentiles=(args.percentile_low, args.percentile_high),
+        percentiles=percentiles,
         file_pattern=args.file_pattern,
         backup=args.backup,
         backup_root=args.backup_root,
@@ -106,10 +112,16 @@ def cmd_process_pipeline(args):
     else:
         reference_images = args.reference_images
 
+    # Handle percentiles parameter
+    percentiles = None
+    if args.method == 'percentile_mapping':
+        import numpy as np
+        percentiles = np.linspace(0, 100, 101)
+    
     result = batch_process_suggested_regions(
         reference_images=reference_images,
         method=args.method,
-        percentiles=(args.percentile_low, args.percentile_high),
+        percentiles=percentiles,
         file_pattern=args.file_pattern,
         backup=args.backup,
         replace_originals=args.replace_originals,
@@ -205,21 +217,9 @@ def main():
     )
     pipeline_parser.add_argument(
         '--method',
-        choices=['reinhard', 'histogram', 'percentile'],
+        choices=['reinhard', 'histogram', 'percentile_mapping'],
         default='reinhard',
         help='Processing method (default: reinhard)'
-    )
-    pipeline_parser.add_argument(
-        '--percentile-low',
-        type=float,
-        default=1.0,
-        help='Low percentile for percentile method (default: 1.0)'
-    )
-    pipeline_parser.add_argument(
-        '--percentile-high',
-        type=float,
-        default=99.0,
-        help='High percentile for percentile method (default: 99.0)'
     )
     pipeline_parser.add_argument(
         '--file-pattern',
@@ -264,21 +264,9 @@ def main():
     )
     process_parser.add_argument(
         '--method',
-        choices=['reinhard', 'histogram', 'percentile'],
+        choices=['reinhard', 'histogram', 'percentile_mapping'],
         default='reinhard',
         help='Processing method (default: reinhard)'
-    )
-    process_parser.add_argument(
-        '--percentile-low',
-        type=float,
-        default=1.0,
-        help='Low percentile for percentile method (default: 1.0)'
-    )
-    process_parser.add_argument(
-        '--percentile-high',
-        type=float,
-        default=99.0,
-        help='High percentile for percentile method (default: 99.0)'
     )
     process_parser.add_argument(
         '--file-pattern',

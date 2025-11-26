@@ -33,29 +33,29 @@ class ColorProcessor:
     Supports multiple methods:
     - 'reinhard': Reinhard et al. color transfer in LAB space
     - 'histogram': Histogram matching in LAB space
-    - 'percentile': Histogram percentile normalization
+    - 'percentile_mapping': Percentile-based intensity mapping across channels
     """
 
     def __init__(
         self,
         reference_images: Union[str, Path, List[Union[str, Path]]],
         method: str = 'reinhard',
-        percentiles: Tuple[float, float] = (1.0, 99.0)
+        percentiles: Optional[np.ndarray] = None
     ):
         """
         Initialize the color processor.
 
         Args:
             reference_images: Path(s) to reference image(s) from the original dataset
-            method: Processing method ('reinhard', 'histogram', 'percentile')
-            percentiles: Percentile range for percentile method (low, high)
+            method: Processing method ('reinhard', 'histogram', 'percentile_mapping')
+            percentiles: Percentile points for percentile_mapping (default: np.linspace(0, 100, 101))
         """
         if isinstance(reference_images, (str, Path)):
             reference_images = [reference_images]
 
         self.reference_images = [Path(img) for img in reference_images]
         self.method = method
-        self.percentiles = percentiles
+        self.percentiles = percentiles if percentiles is not None else np.linspace(0, 100, 101)
         self.reference_stats = None
         self._compute_reference_statistics()
 
@@ -63,8 +63,8 @@ class ColorProcessor:
         """Compute statistics from reference images based on method."""
         if self.method in ['reinhard', 'histogram']:
             self._compute_lab_statistics()
-        elif self.method == 'percentile':
-            self._compute_percentile_statistics()
+        elif self.method == 'percentile_mapping':
+            self._compute_percentile_mapping()
         else:
             raise ValueError(f"Unknown method: {self.method}")
 
@@ -97,9 +97,16 @@ class ColorProcessor:
         logger.info(
             f"Computed LAB statistics from {len(self.reference_images)} images")
 
-    def _compute_percentile_statistics(self):
-        """Compute percentile statistics for percentile normalization."""
-        all_pixels = {0: [], 1: [], 2: []}
+    def _compute_percentile_mapping(self):
+        """
+        Compute percentile mapping for percentile_mapping method.
+        
+        This computes average percentile values across all reference images
+        for each channel (BGR), which will be used as target percentiles.
+        """
+        target_percentiles_list = {'b': [], 'g': [], 'r': []}
+        
+        logger.info(f"Computing percentile mapping from {len(self.reference_images)} reference images")
 
         for img_path in self.reference_images:
             if not img_path.exists():
@@ -111,21 +118,22 @@ class ColorProcessor:
                 logger.warning(f"Failed to load reference image: {img_path}")
                 continue
 
-            for channel in range(3):
-                all_pixels[channel].append(img[:, :, channel].flatten())
+            # Compute percentiles for each channel
+            for i, color in enumerate(('b', 'g', 'r')):
+                channel_percentiles = np.percentile(img[:, :, i], self.percentiles)
+                target_percentiles_list[color].append(channel_percentiles)
 
-        if not all_pixels[0]:
+        if not target_percentiles_list['b']:
             raise ValueError("No valid reference images found")
 
+        # Average percentiles across all reference images
         self.reference_stats = {}
-        for channel in range(3):
-            combined = np.concatenate(all_pixels[channel])
-            low_val = np.percentile(combined, self.percentiles[0])
-            high_val = np.percentile(combined, self.percentiles[1])
-            self.reference_stats[channel] = (low_val, high_val)
+        for color in ('b', 'g', 'r'):
+            avg_percentiles = np.mean(target_percentiles_list[color], axis=0)
+            self.reference_stats[color] = avg_percentiles
 
         logger.info(
-            f"Computed percentile statistics from {len(self.reference_images)} images")
+            f"Computed percentile mapping from {len(self.reference_images)} images")
 
     def process_image(self, image: np.ndarray) -> np.ndarray:
         """
@@ -141,8 +149,8 @@ class ColorProcessor:
             return self._reinhard_color_transfer(image)
         elif self.method == 'histogram':
             return self._histogram_matching(image)
-        elif self.method == 'percentile':
-            return self._percentile_normalization(image)
+        elif self.method == 'percentile_mapping':
+            return self._percentile_mapping_transform(image)
         else:
             raise ValueError(f"Unknown method: {self.method}")
 
@@ -196,28 +204,37 @@ class ColorProcessor:
         matched = normalized * target_std + target_mean
         return np.clip(matched, 0, 255).astype(np.uint8)
 
-    def _percentile_normalization(self, image: np.ndarray) -> np.ndarray:
-        """Apply histogram percentile normalization."""
-        normalized = np.zeros_like(image, dtype=np.float32)
+    def _percentile_mapping_transform(self, image: np.ndarray) -> np.ndarray:
+        """
+        Apply percentile mapping to transform image.
+        
+        This method:
+        1. Computes source percentiles for each channel in the input image
+        2. Maps source percentiles to target percentiles using interpolation
+        3. Returns the transformed image
+        
+        Based on implementation from autoslide_analysis/src/color_corrections_test.py
+        """
+        corrected = np.zeros_like(image)
 
-        for channel in range(3):
-            channel_data = image[:, :, channel].astype(np.float32)
-
-            low_in = np.percentile(channel_data, self.percentiles[0])
-            high_in = np.percentile(channel_data, self.percentiles[1])
-
-            low_ref, high_ref = self.reference_stats[channel]
-
-            if high_in - low_in < 1e-6:
-                normalized[:, :, channel] = channel_data
-                continue
-
-            normalized[:, :, channel] = (
-                (channel_data - low_in) / (high_in - low_in) *
-                (high_ref - low_ref) + low_ref
+        for i, color in enumerate(('b', 'g', 'r')):
+            # Compute source percentiles for this channel
+            channel = image[:, :, i]
+            src_percentiles = np.percentile(channel, self.percentiles)
+            
+            # Get target percentiles from reference stats
+            tgt_percentiles = self.reference_stats[color]
+            
+            # Apply interpolation mapping
+            flat_channel = channel.flatten()
+            corrected_channel = np.interp(
+                flat_channel,
+                src_percentiles,
+                tgt_percentiles
             )
+            corrected[:, :, i] = corrected_channel.reshape(channel.shape)
 
-        return np.clip(normalized, 0, 255).astype(np.uint8)
+        return corrected.astype(np.uint8)
 
     def process_image_file(
         self,
@@ -419,7 +436,7 @@ def batch_process_directory(
     input_dir: Union[str, Path],
     reference_images: Union[str, Path, List[Union[str, Path]]],
     method: str = 'reinhard',
-    percentiles: Tuple[float, float] = (1.0, 99.0),
+    percentiles: Optional[np.ndarray] = None,
     file_pattern: str = '*.png',
     backup: bool = True,
     backup_root: Optional[Union[str, Path]] = None,
@@ -432,8 +449,8 @@ def batch_process_directory(
     Args:
         input_dir: Directory containing images to process
         reference_images: Path(s) to reference image(s)
-        method: Processing method ('reinhard', 'histogram', 'percentile')
-        percentiles: Percentile range for percentile method
+        method: Processing method ('reinhard', 'histogram', 'percentile_mapping')
+        percentiles: Percentile points for percentile_mapping (default: np.linspace(0, 100, 101))
         file_pattern: Glob pattern for image files
         backup: Whether to backup original images
         backup_root: Root directory for backups (defaults to input_dir/backups)
@@ -565,7 +582,7 @@ def find_svs_image_directories(
 def batch_process_suggested_regions(
     reference_images: Union[str, Path, List[Union[str, Path]]],
     method: str = 'reinhard',
-    percentiles: Tuple[float, float] = (1.0, 99.0),
+    percentiles: Optional[np.ndarray] = None,
     file_pattern: str = '*.png',
     backup: bool = True,
     replace_originals: bool = True,
@@ -580,8 +597,8 @@ def batch_process_suggested_regions(
     
     Args:
         reference_images: Path(s) to reference image(s)
-        method: Processing method ('reinhard', 'histogram', 'percentile')
-        percentiles: Percentile range for percentile method
+        method: Processing method ('reinhard', 'histogram', 'percentile_mapping')
+        percentiles: Percentile points for percentile_mapping (default: np.linspace(0, 100, 101))
         file_pattern: Glob pattern for image files
         backup: Whether to backup original images
         replace_originals: Whether to replace original images

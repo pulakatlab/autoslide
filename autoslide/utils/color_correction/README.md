@@ -4,7 +4,7 @@ Unified module for color correction and normalization of histological images wit
 
 ## Features
 
-- **Multiple Methods**: Supports Reinhard color transfer, histogram matching, and percentile normalization
+- **Multiple Methods**: Supports Reinhard color transfer, histogram matching, and percentile mapping
 - **Backup/Restore**: Automatically backup original images before processing and restore when needed
 - **Batch Processing**: Process entire directories with a single command
 - **Directory Structure Aware**: Handles nested directory structures like those in prediction.py
@@ -21,10 +21,12 @@ Matches histogram statistics in LAB color space for each channel independently.
 
 **Best for**: When you want to match overall intensity distributions.
 
-### 3. Percentile Normalization (`percentile`)
-Maps percentile ranges (e.g., 1st-99th percentile) from input images to reference percentile ranges.
+### 3. Percentile Mapping (`percentile_mapping`)
+Maps intensity values using percentile-based interpolation. Computes percentile values (0-100) for each channel in both source and target images, then uses interpolation to transform source intensities to match target distribution.
 
-**Best for**: Normalizing staining intensity variations, particularly effective for histological images.
+**Best for**: Normalizing staining intensity variations across different batches or scanning sessions. Particularly effective for histological images where overall intensity distribution matters more than absolute color values.
+
+**Implementation**: Based on the method from `autoslide_analysis/src/color_corrections_test.py`, using 101 percentile points (0, 1, 2, ..., 100) for smooth interpolation.
 
 ## Usage
 
@@ -49,13 +51,11 @@ python -m autoslide.utils.color_correction process-pipeline \
     --backup
 ```
 
-#### Process with percentile normalization (pipeline)
+#### Process with percentile mapping (pipeline)
 ```bash
 python -m autoslide.utils.color_correction process-pipeline \
     --reference-images "data/reference/*.png" \
-    --method percentile \
-    --percentile-low 1.0 \
-    --percentile-high 99.0 \
+    --method percentile_mapping \
     --backup
 ```
 
@@ -211,13 +211,11 @@ python -m autoslide.utils.color_correction restore \
     --backup-dir data/suggested_regions/SVS_001/images/backups/backup_TIMESTAMP
 ```
 
-#### 3. Try different method or parameters
+#### 3. Try different method
 ```bash
 python -m autoslide.utils.color_correction process-pipeline \
     --reference-images data/reference/*.png \
-    --method percentile \
-    --percentile-low 5.0 \
-    --percentile-high 95.0 \
+    --method percentile_mapping \
     --backup
 ```
 
@@ -248,9 +246,7 @@ python -m autoslide.utils.color_correction restore \
 python -m autoslide.utils.color_correction process \
     --input-dir data/suggested_regions/SVS_001/images \
     --reference-images data/reference/*.png \
-    --method percentile \
-    --percentile-low 5.0 \
-    --percentile-high 95.0 \
+    --method percentile_mapping \
     --backup
 ```
 
@@ -285,7 +281,6 @@ Each backup includes a `backup_metadata.json` file with:
 - `source_directory`: Original location of images
 - `file_pattern`: Pattern used to select files
 - `method`: Processing method used
-- `percentiles`: Percentile range (for percentile method)
 - `replace_originals`: Whether originals were replaced
 
 ## Integration with Existing Pipeline
@@ -379,6 +374,7 @@ normalized = normalizer.normalize_image(image)
 **After:**
 ```python
 from autoslide.utils.color_correction import ColorProcessor
-processor = ColorProcessor(reference_images, method='percentile', percentiles=(1.0, 99.0))
+import numpy as np
+processor = ColorProcessor(reference_images, method='percentile_mapping', percentiles=np.linspace(0, 100, 101))
 normalized = processor.process_image(image)
 ```
