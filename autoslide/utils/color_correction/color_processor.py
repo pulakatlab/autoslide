@@ -10,14 +10,20 @@ normalization into a single interface with support for:
 
 import numpy as np
 import cv2
+import os
 from pathlib import Path
 from typing import Union, List, Optional, Tuple, Dict
 import logging
 import shutil
 import json
 from datetime import datetime
+from autoslide import config
 
 logger = logging.getLogger(__name__)
+
+# Get directories from config
+data_dir = config['data_dir']
+suggested_regions_dir = config['suggested_regions_dir']
 
 
 class ColorProcessor:
@@ -511,3 +517,120 @@ def batch_process_directory(
         f"Processing complete: {successful} successful, {failed} failed")
 
     return result
+
+
+def find_svs_image_directories(
+    suggested_regions_dir: Optional[Union[str, Path]] = None,
+    svs_name: Optional[str] = None
+) -> List[Path]:
+    """
+    Find image directories in suggested_regions following pipeline structure.
+    
+    Structure: suggested_regions/SVS_NAME/images/*.png
+    
+    Args:
+        suggested_regions_dir: Root suggested regions directory (defaults to config)
+        svs_name: Specific SVS name to process (None = all)
+    
+    Returns:
+        List of image directory paths
+    """
+    if suggested_regions_dir is None:
+        suggested_regions_dir = Path(config['suggested_regions_dir'])
+    else:
+        suggested_regions_dir = Path(suggested_regions_dir)
+    
+    if not suggested_regions_dir.exists():
+        logger.warning(f"Suggested regions directory not found: {suggested_regions_dir}")
+        return []
+    
+    image_dirs = []
+    
+    if svs_name:
+        # Process specific SVS
+        svs_dir = suggested_regions_dir / svs_name / 'images'
+        if svs_dir.exists():
+            image_dirs.append(svs_dir)
+    else:
+        # Find all SVS image directories
+        for svs_dir in suggested_regions_dir.iterdir():
+            if svs_dir.is_dir():
+                images_dir = svs_dir / 'images'
+                if images_dir.exists():
+                    image_dirs.append(images_dir)
+    
+    return image_dirs
+
+
+def batch_process_suggested_regions(
+    reference_images: Union[str, Path, List[Union[str, Path]]],
+    method: str = 'reinhard',
+    percentiles: Tuple[float, float] = (1.0, 99.0),
+    file_pattern: str = '*.png',
+    backup: bool = True,
+    replace_originals: bool = True,
+    svs_name: Optional[str] = None,
+    suggested_regions_dir: Optional[Union[str, Path]] = None
+) -> Dict[str, any]:
+    """
+    Process all images in suggested_regions directory structure.
+    
+    This function follows the directory structure used by prediction.py:
+    suggested_regions/SVS_NAME/images/*.png
+    
+    Args:
+        reference_images: Path(s) to reference image(s)
+        method: Processing method ('reinhard', 'histogram', 'percentile')
+        percentiles: Percentile range for percentile method
+        file_pattern: Glob pattern for image files
+        backup: Whether to backup original images
+        replace_originals: Whether to replace original images
+        svs_name: Specific SVS to process (None = all)
+        suggested_regions_dir: Override default suggested_regions_dir from config
+    
+    Returns:
+        Dictionary with processing results for each SVS
+    """
+    image_dirs = find_svs_image_directories(suggested_regions_dir, svs_name)
+    
+    if not image_dirs:
+        logger.warning("No image directories found to process")
+        return {
+            'success': False,
+            'error': 'No image directories found',
+            'svs_results': {}
+        }
+    
+    logger.info(f"Found {len(image_dirs)} SVS directories to process")
+    
+    svs_results = {}
+    total_processed = 0
+    total_failed = 0
+    
+    for image_dir in image_dirs:
+        svs_name = image_dir.parent.name
+        logger.info(f"Processing SVS: {svs_name}")
+        
+        result = batch_process_directory(
+            input_dir=image_dir,
+            reference_images=reference_images,
+            method=method,
+            percentiles=percentiles,
+            file_pattern=file_pattern,
+            backup=backup,
+            backup_root=image_dir / 'backups',
+            replace_originals=replace_originals,
+            output_dir=None
+        )
+        
+        svs_results[svs_name] = result
+        total_processed += result.get('processed', 0)
+        total_failed += result.get('failed', 0)
+    
+    return {
+        'success': True,
+        'total_processed': total_processed,
+        'total_failed': total_failed,
+        'svs_count': len(image_dirs),
+        'svs_results': svs_results
+    }

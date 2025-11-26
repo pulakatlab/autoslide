@@ -3,6 +3,18 @@
 Command-line interface for color correction and normalization.
 
 Usage examples:
+    # Process all suggested_regions using config
+    python -m autoslide.utils.color_correction.cli process-pipeline \\
+        --reference-images data/reference/*.png \\
+        --method reinhard \\
+        --backup
+
+    # Process specific SVS
+    python -m autoslide.utils.color_correction.cli process-pipeline \\
+        --reference-images data/reference/*.png \\
+        --svs-name SVS_001 \\
+        --backup
+
     # Process images with backup
     python -m autoslide.utils.color_correction.cli process \\
         --input-dir data/images \\
@@ -27,6 +39,7 @@ from glob import glob
 
 from .color_processor import (
     batch_process_directory,
+    batch_process_suggested_regions,
     restore_originals,
     list_backups
 )
@@ -75,6 +88,49 @@ def cmd_process(args):
             print(f"Backup directory: {result['backup_dir']}")
             print(f"Backed up: {result['backup_count']} images")
         
+        print("="*60)
+        return 0
+    else:
+        logger.error(f"Processing failed: {result.get('error', 'Unknown error')}")
+        return 1
+
+
+def cmd_process_pipeline(args):
+    """Process images in suggested_regions directory structure."""
+    # Handle reference images glob pattern
+    if '*' in args.reference_images or '?' in args.reference_images:
+        reference_images = glob(args.reference_images)
+        if not reference_images:
+            logger.error(f"No reference images found matching: {args.reference_images}")
+            return 1
+    else:
+        reference_images = args.reference_images
+
+    result = batch_process_suggested_regions(
+        reference_images=reference_images,
+        method=args.method,
+        percentiles=(args.percentile_low, args.percentile_high),
+        file_pattern=args.file_pattern,
+        backup=args.backup,
+        replace_originals=args.replace_originals,
+        svs_name=args.svs_name,
+        suggested_regions_dir=args.suggested_regions_dir
+    )
+
+    if result['success']:
+        print("\n" + "="*60)
+        print("PIPELINE PROCESSING COMPLETE")
+        print("="*60)
+        print(f"SVS directories processed: {result['svs_count']}")
+        print(f"Total images processed: {result['total_processed']}")
+        print(f"Total failed: {result['total_failed']}")
+        print("\nPer-SVS Results:")
+        for svs_name, svs_result in result['svs_results'].items():
+            print(f"\n  {svs_name}:")
+            print(f"    Processed: {svs_result['processed']} images")
+            print(f"    Failed: {svs_result['failed']} images")
+            if args.backup:
+                print(f"    Backup: {svs_result['backup_dir']}")
         print("="*60)
         return 0
     else:
@@ -136,6 +192,60 @@ def main():
     
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
     subparsers.required = True
+
+    # Process pipeline command (uses config)
+    pipeline_parser = subparsers.add_parser(
+        'process-pipeline',
+        help='Process images in suggested_regions directory (uses autoslide config)'
+    )
+    pipeline_parser.add_argument(
+        '--reference-images',
+        required=True,
+        help='Path to reference image(s) or glob pattern (e.g., "ref/*.png")'
+    )
+    pipeline_parser.add_argument(
+        '--method',
+        choices=['reinhard', 'histogram', 'percentile'],
+        default='reinhard',
+        help='Processing method (default: reinhard)'
+    )
+    pipeline_parser.add_argument(
+        '--percentile-low',
+        type=float,
+        default=1.0,
+        help='Low percentile for percentile method (default: 1.0)'
+    )
+    pipeline_parser.add_argument(
+        '--percentile-high',
+        type=float,
+        default=99.0,
+        help='High percentile for percentile method (default: 99.0)'
+    )
+    pipeline_parser.add_argument(
+        '--file-pattern',
+        default='*.png',
+        help='Glob pattern for image files (default: *.png)'
+    )
+    pipeline_parser.add_argument(
+        '--backup',
+        action='store_true',
+        help='Backup original images before processing'
+    )
+    pipeline_parser.add_argument(
+        '--no-replace',
+        dest='replace_originals',
+        action='store_false',
+        help='Save to output directory instead of replacing originals'
+    )
+    pipeline_parser.add_argument(
+        '--svs-name',
+        help='Process only specific SVS directory (default: all)'
+    )
+    pipeline_parser.add_argument(
+        '--suggested-regions-dir',
+        help='Override suggested_regions_dir from config'
+    )
+    pipeline_parser.set_defaults(func=cmd_process_pipeline)
 
     # Process command
     process_parser = subparsers.add_parser(

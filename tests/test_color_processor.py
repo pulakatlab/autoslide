@@ -6,6 +6,7 @@ This module tests:
 - Backup and restore functionality
 - Batch processing with backup/restore
 - Directory handling patterns
+- Config integration
 """
 
 import pytest
@@ -14,9 +15,12 @@ import cv2
 import tempfile
 import json
 from pathlib import Path
+from unittest.mock import patch
 from autoslide.utils.color_correction import (
     ColorProcessor,
     batch_process_directory,
+    batch_process_suggested_regions,
+    find_svs_image_directories,
     restore_originals,
     list_backups
 )
@@ -395,6 +399,149 @@ class TestDirectoryHandling:
             # Verify files in restore location
             restored_files = list(restore_dir.glob('*.png'))
             assert len(restored_files) == 2
+
+
+class TestConfigIntegration:
+    """Test suite for autoslide config integration."""
+    
+    @pytest.fixture
+    def mock_config(self):
+        """Mock autoslide config."""
+        return {
+            'data_dir': '/tmp/test_data',
+            'suggested_regions_dir': '/tmp/test_data/suggested_regions'
+        }
+    
+    @pytest.fixture
+    def sample_images(self):
+        """Create multiple sample images."""
+        images = []
+        for i in range(2):
+            img = np.zeros((100, 100, 3), dtype=np.uint8)
+            img[:, :, 0] = 100 + i * 10
+            img[:, :, 1] = 150 + i * 10
+            img[:, :, 2] = 200 - i * 10
+            images.append(img)
+        return images
+    
+    def test_find_svs_image_directories(self, sample_images):
+        """Test finding SVS image directories."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            # Create suggested_regions structure
+            suggested_regions = tmpdir / 'suggested_regions'
+            
+            # Create multiple SVS directories
+            for svs_name in ['SVS_001', 'SVS_002']:
+                images_dir = suggested_regions / svs_name / 'images'
+                images_dir.mkdir(parents=True)
+                
+                # Add sample images
+                for i, img in enumerate(sample_images):
+                    cv2.imwrite(str(images_dir / f'image_{i}.png'), img)
+            
+            # Find all directories
+            image_dirs = find_svs_image_directories(suggested_regions)
+            
+            assert len(image_dirs) == 2
+            assert all(d.name == 'images' for d in image_dirs)
+    
+    def test_find_specific_svs(self, sample_images):
+        """Test finding specific SVS directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            suggested_regions = tmpdir / 'suggested_regions'
+            
+            # Create multiple SVS directories
+            for svs_name in ['SVS_001', 'SVS_002']:
+                images_dir = suggested_regions / svs_name / 'images'
+                images_dir.mkdir(parents=True)
+                
+                for i, img in enumerate(sample_images):
+                    cv2.imwrite(str(images_dir / f'image_{i}.png'), img)
+            
+            # Find specific SVS
+            image_dirs = find_svs_image_directories(suggested_regions, svs_name='SVS_001')
+            
+            assert len(image_dirs) == 1
+            assert image_dirs[0].parent.name == 'SVS_001'
+    
+    def test_batch_process_suggested_regions(self, sample_images):
+        """Test batch processing of suggested_regions structure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            suggested_regions = tmpdir / 'suggested_regions'
+            
+            # Create SVS directories
+            for svs_name in ['SVS_001', 'SVS_002']:
+                images_dir = suggested_regions / svs_name / 'images'
+                images_dir.mkdir(parents=True)
+                
+                for i, img in enumerate(sample_images):
+                    cv2.imwrite(str(images_dir / f'image_{i}.png'), img)
+            
+            # Create reference image
+            ref_path = tmpdir / 'reference.png'
+            cv2.imwrite(str(ref_path), sample_images[0])
+            
+            # Process all SVS directories
+            result = batch_process_suggested_regions(
+                reference_images=ref_path,
+                method='reinhard',
+                backup=True,
+                replace_originals=True,
+                suggested_regions_dir=suggested_regions
+            )
+            
+            assert result['success']
+            assert result['svs_count'] == 2
+            assert result['total_processed'] == 4  # 2 images per SVS
+            assert result['total_failed'] == 0
+            assert 'SVS_001' in result['svs_results']
+            assert 'SVS_002' in result['svs_results']
+            
+            # Verify backups were created
+            for svs_name in ['SVS_001', 'SVS_002']:
+                backup_root = suggested_regions / svs_name / 'images' / 'backups'
+                assert backup_root.exists()
+    
+    def test_batch_process_specific_svs(self, sample_images):
+        """Test processing specific SVS only."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            suggested_regions = tmpdir / 'suggested_regions'
+            
+            # Create SVS directories
+            for svs_name in ['SVS_001', 'SVS_002']:
+                images_dir = suggested_regions / svs_name / 'images'
+                images_dir.mkdir(parents=True)
+                
+                for i, img in enumerate(sample_images):
+                    cv2.imwrite(str(images_dir / f'image_{i}.png'), img)
+            
+            # Create reference image
+            ref_path = tmpdir / 'reference.png'
+            cv2.imwrite(str(ref_path), sample_images[0])
+            
+            # Process only SVS_001
+            result = batch_process_suggested_regions(
+                reference_images=ref_path,
+                method='reinhard',
+                backup=False,
+                replace_originals=True,
+                svs_name='SVS_001',
+                suggested_regions_dir=suggested_regions
+            )
+            
+            assert result['success']
+            assert result['svs_count'] == 1
+            assert result['total_processed'] == 2
+            assert 'SVS_001' in result['svs_results']
+            assert 'SVS_002' not in result['svs_results']
 
 
 if __name__ == '__main__':
