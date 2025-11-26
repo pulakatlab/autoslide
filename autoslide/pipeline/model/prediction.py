@@ -591,12 +591,17 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
     print(f"Total processed: {total_processed}")
 
 
+
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
         description='Batch prediction on suggested regions')
     parser.add_argument('--model-path', type=str, default=None,
                         help='Path to saved model (default: best_val_mask_rcnn_model.pth)')
+    parser.add_argument('--dir', type=str, default=None,
+                        help='Arbitrary directory containing images to process. If provided, uses this instead of config dir')
+    parser.add_argument('--output-dir', type=str, default=None,
+                        help='Output directory for predictions when using --dir (default: <dir>/predictions)')
     parser.add_argument('--save-visualizations', action='store_true',
                         help='Save prediction visualizations for quality control')
     parser.add_argument('--max-images', type=int, default=None,
@@ -612,13 +617,25 @@ def main():
     """Main function"""
     args = parse_args()
 
-    process_all_images(
-        model_path=args.model_path,
-        save_visualizations=args.save_visualizations,
-        max_images=args.max_images,
-        reprocess=args.reprocess,
-        verbose=args.verbose
-    )
+    if args.dir:
+        # Process arbitrary directory
+        process_arbitrary_directory(
+            input_dir=args.dir,
+            output_dir=args.output_dir,
+            model_path=args.model_path,
+            save_visualizations=args.save_visualizations,
+            max_images=args.max_images,
+            verbose=args.verbose
+        )
+    else:
+        # Process suggested regions from config
+        process_all_images(
+            model_path=args.model_path,
+            save_visualizations=args.save_visualizations,
+            max_images=args.max_images,
+            reprocess=args.reprocess,
+            verbose=args.verbose
+        )
 
 
 if __name__ == "__main__":
