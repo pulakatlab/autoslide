@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+"""
+Command-line interface for color correction and normalization.
+
+Usage examples:
+    # Process images with backup
+    python -m autoslide.utils.color_correction.cli process \\
+        --input-dir data/images \\
+        --reference-images data/reference/*.png \\
+        --method reinhard \\
+        --backup
+
+    # Restore from backup
+    python -m autoslide.utils.color_correction.cli restore \\
+        --backup-dir data/images/backups/backup_20231126_120000
+
+    # List available backups
+    python -m autoslide.utils.color_correction.cli list-backups \\
+        --backup-root data/images/backups
+"""
+
+import argparse
+import logging
+import sys
+from pathlib import Path
+from glob import glob
+
+from .color_processor import (
+    batch_process_directory,
+    restore_originals,
+    list_backups
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+def cmd_process(args):
+    """Process images with color correction/normalization."""
+    # Handle reference images glob pattern
+    if '*' in args.reference_images or '?' in args.reference_images:
+        reference_images = glob(args.reference_images)
+        if not reference_images:
+            logger.error(f"No reference images found matching: {args.reference_images}")
+            return 1
+    else:
+        reference_images = args.reference_images
+
+    result = batch_process_directory(
+        input_dir=args.input_dir,
+        reference_images=reference_images,
+        method=args.method,
+        percentiles=(args.percentile_low, args.percentile_high),
+        file_pattern=args.file_pattern,
+        backup=args.backup,
+        backup_root=args.backup_root,
+        replace_originals=args.replace_originals,
+        output_dir=args.output_dir
+    )
+
+    if result['success']:
+        print("\n" + "="*60)
+        print("PROCESSING COMPLETE")
+        print("="*60)
+        print(f"Method: {result['method']}")
+        print(f"Processed: {result['processed']} images")
+        print(f"Failed: {result['failed']} images")
+        print(f"Input directory: {result['input_dir']}")
+        print(f"Output directory: {result['output_dir']}")
+        
+        if args.backup:
+            print(f"Backup directory: {result['backup_dir']}")
+            print(f"Backed up: {result['backup_count']} images")
+        
+        print("="*60)
+        return 0
+    else:
+        logger.error(f"Processing failed: {result.get('error', 'Unknown error')}")
+        return 1
+
+
+def cmd_restore(args):
+    """Restore original images from backup."""
+    successful, failed = restore_originals(
+        backup_dir=args.backup_dir,
+        target_dir=args.target_dir,
+        verify=not args.no_verify
+    )
+
+    print("\n" + "="*60)
+    print("RESTORE COMPLETE")
+    print("="*60)
+    print(f"Restored: {successful} images")
+    print(f"Failed: {failed} images")
+    print(f"Backup directory: {args.backup_dir}")
+    if args.target_dir:
+        print(f"Target directory: {args.target_dir}")
+    print("="*60)
+
+    return 0 if failed == 0 else 1
+
+
+def cmd_list_backups(args):
+    """List available backups."""
+    backups = list_backups(args.backup_root)
+
+    if not backups:
+        print(f"No backups found in: {args.backup_root}")
+        return 0
+
+    print("\n" + "="*60)
+    print("AVAILABLE BACKUPS")
+    print("="*60)
+    
+    for i, backup in enumerate(backups, 1):
+        print(f"\n{i}. Backup: {Path(backup['backup_dir']).name}")
+        print(f"   Timestamp: {backup['timestamp']}")
+        print(f"   Source: {backup['source_directory']}")
+        print(f"   Files: {backup['file_count']}")
+        print(f"   Method: {backup['method']}")
+        print(f"   Path: {backup['backup_dir']}")
+    
+    print("\n" + "="*60)
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Color correction and normalization for histological images',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+    subparsers.required = True
+
+    # Process command
+    process_parser = subparsers.add_parser(
+        'process',
+        help='Process images with color correction/normalization'
+    )
+    process_parser.add_argument(
+        '--input-dir',
+        required=True,
+        help='Directory containing images to process'
+    )
+    process_parser.add_argument(
+        '--reference-images',
+        required=True,
+        help='Path to reference image(s) or glob pattern (e.g., "ref/*.png")'
+    )
+    process_parser.add_argument(
+        '--method',
+        choices=['reinhard', 'histogram', 'percentile'],
+        default='reinhard',
+        help='Processing method (default: reinhard)'
+    )
+    process_parser.add_argument(
+        '--percentile-low',
+        type=float,
+        default=1.0,
+        help='Low percentile for percentile method (default: 1.0)'
+    )
+    process_parser.add_argument(
+        '--percentile-high',
+        type=float,
+        default=99.0,
+        help='High percentile for percentile method (default: 99.0)'
+    )
+    process_parser.add_argument(
+        '--file-pattern',
+        default='*.png',
+        help='Glob pattern for image files (default: *.png)'
+    )
+    process_parser.add_argument(
+        '--backup',
+        action='store_true',
+        help='Backup original images before processing'
+    )
+    process_parser.add_argument(
+        '--backup-root',
+        help='Root directory for backups (default: input_dir/backups)'
+    )
+    process_parser.add_argument(
+        '--no-replace',
+        dest='replace_originals',
+        action='store_false',
+        help='Save to output directory instead of replacing originals'
+    )
+    process_parser.add_argument(
+        '--output-dir',
+        help='Output directory when not replacing originals'
+    )
+    process_parser.set_defaults(func=cmd_process)
+
+    # Restore command
+    restore_parser = subparsers.add_parser(
+        'restore',
+        help='Restore original images from backup'
+    )
+    restore_parser.add_argument(
+        '--backup-dir',
+        required=True,
+        help='Directory containing backup images'
+    )
+    restore_parser.add_argument(
+        '--target-dir',
+        help='Directory to restore images to (default: original location from metadata)'
+    )
+    restore_parser.add_argument(
+        '--no-verify',
+        action='store_true',
+        help='Skip verification of backup metadata'
+    )
+    restore_parser.set_defaults(func=cmd_restore)
+
+    # List backups command
+    list_parser = subparsers.add_parser(
+        'list-backups',
+        help='List available backups'
+    )
+    list_parser.add_argument(
+        '--backup-root',
+        required=True,
+        help='Root directory containing backup subdirectories'
+    )
+    list_parser.set_defaults(func=cmd_list_backups)
+
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == '__main__':
+    sys.exit(main())
