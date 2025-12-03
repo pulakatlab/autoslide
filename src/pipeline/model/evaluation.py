@@ -24,8 +24,8 @@ import json
 
 # Import config and utilities
 from src import config
-from src.pipeline.model.data_preprocessing import load_data, split_train_val
-from src.pipeline.model.prediction_utils import load_model, predict_single_image, setup_device
+from autoslide.src.pipeline.model.data_preprocessing import load_data, split_train_val
+from autoslide.src.pipeline.model.prediction_utils import load_model, predict_single_image, setup_device
 
 # Get directories from config
 data_dir = config['data_dir']

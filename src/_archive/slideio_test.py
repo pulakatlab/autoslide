@@ -8,7 +8,7 @@ import cv2 as cv
 import numpy as np
 import os
 from pprint import pprint
-from src.pipeline.utils import get_threshold_mask
+from autoslide.src.pipeline.utils import get_threshold_mask
 
 
 data_dir = '/media/bigdata/projects/pulakat_lab/auto_slide/data/'

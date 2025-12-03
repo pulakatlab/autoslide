@@ -22,7 +22,7 @@ import argparse
 import time
 
 # Import utilities directly
-from src.pipeline import utils
+from autoslide.src.pipeline import utils
 
 
 def remove_mask_edge(
