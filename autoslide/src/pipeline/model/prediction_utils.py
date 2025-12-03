@@ -19,8 +19,14 @@ from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 from autoslide.src import config
 
-# Get directories from config - use local artifacts directory
-artifacts_dir = os.path.join(os.path.dirname(__file__), 'artifacts')
+# Get directories from config - use project-level artifacts directory
+# Navigate from autoslide/src/pipeline/model/ to autoslide/artifacts/
+artifacts_dir = os.path.join(
+    os.path.dirname(__file__),  # autoslide/src/pipeline/model/
+    '..', '..', '..', '..',      # up to project root
+    'autoslide', 'artifacts'     # down to autoslide/artifacts/
+)
+artifacts_dir = os.path.abspath(artifacts_dir)
 
 
 def initialize_model():

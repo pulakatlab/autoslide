@@ -34,9 +34,10 @@ jobs:
         pip install -r requirements-dev.txt
         pip install -e .
     
-    - name: Create mock model
+    - name: Install Git LFS and pull models
       run: |
-        python pipeline_testing/create_mock_model.py
+        git lfs install
+        git lfs pull
     
     - name: Download test data
       run: |
