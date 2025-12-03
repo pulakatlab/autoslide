@@ -131,7 +131,7 @@ def main():
         try:
             # data_basename = os.path.basename(data_path).split('.')[0]
             data_basename = this_json['file_basename'].split('.')[0]
-            # Replace spaces and dashes with underscores
+            # Replace spaces and dashes with underscores for machine-processable filenames
             data_basename_proc = data_basename.replace(' ', '_').replace('-', '_')
             this_output_dir = os.path.join(output_base_dir, data_basename_proc)
 
