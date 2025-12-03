@@ -16,6 +16,33 @@ from scipy.stats import mode
 from tqdm import tqdm, trange
 
 
+def extract_hash_from_filename(filename):
+    """
+    Extract section hash from image filename.
+    
+    The hash is always the last underscore-separated component before the file extension.
+    Works with both old and new filename formats:
+    - Old: tissue_roi001_hash.png
+    - New: file_tissue_roi001_hash.png
+    
+    Args:
+        filename: str, the filename (with or without path)
+    
+    Returns:
+        str, the extracted hash value
+    
+    Examples:
+        >>> extract_hash_from_filename("1_heart_roi001_abc123.png")
+        'abc123'
+        >>> extract_hash_from_filename("slide_001_1_heart_roi001_abc123.png")
+        'abc123'
+        >>> extract_hash_from_filename("/path/to/file_1_heart_roi001_abc123.png")
+        'abc123'
+    """
+    basename = os.path.basename(filename)
+    return basename.split('_')[-1].split('.')[0]
+
+
 class slide_handler():
     def __init__(
             self,
