@@ -14,7 +14,7 @@ from tqdm import tqdm
 from ast import literal_eval
 from autoslide.src import config as autoslide_config
 from autoslide.src.pipeline import utils
-from autoslide.utils.get_section_from_hash import *
+from autoslide.src.utils.get_section_from_hash import *
 import cv2
 from joblib import Parallel, delayed
 
