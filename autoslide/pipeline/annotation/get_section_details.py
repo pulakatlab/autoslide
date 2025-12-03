@@ -74,7 +74,7 @@ fin_metadata_df = fin_metadata_df.drop_duplicates(subset='section_hash')
 ##############################
 og_image_path = '/media/storage/svs_tri_files/suggested_regions/TRI_130_163A_40490/images/4_heart_6988590045.png'
 sec_name = '4_heart_6988590045'
-sec_hash = int(sec_name.split('_')[-1])
+sec_hash = int(utils.extract_hash_from_filename(sec_name))
 
 sec_metadata = fin_metadata_df[fin_metadata_df['section_hash'] == sec_hash]
 

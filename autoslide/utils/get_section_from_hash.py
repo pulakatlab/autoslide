@@ -185,7 +185,7 @@ def main():
     image_path_list = []
     for x in image_dirs:
         image_path_list.extend(glob(os.path.join(x, '*.png')))
-    hash_list = [x.split('_')[-1].split('.')[0] for x in image_path_list]
+    hash_list = [utils.extract_hash_from_filename(x) for x in image_path_list]
     # Make sure all images have unique hashes
     unique_hashes = set(hash_list)
     assert len(unique_hashes) == len(

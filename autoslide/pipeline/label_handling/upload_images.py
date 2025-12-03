@@ -1,5 +1,6 @@
 import labelbox as lb
 import os
+from autoslide.pipeline import utils
 
 api_key = os.getenv("LABELBOX_API_KEY")
 client = lb.Client(api_key)
@@ -10,7 +11,7 @@ data_dir = "/media/bigdata/projects/auto_slide/data/suggested_regions/heart_sect
 file_list = os.listdir(data_dir)
 
 file_paths = [os.path.join(data_dir, file_name) for file_name in file_list]
-hash_list = [x.split('_')[-1].split('.')[0] for x in file_list]
+hash_list = [utils.extract_hash_from_filename(x) for x in file_list]
 
 assets = []
 for file_path, hash_value in zip(file_paths, hash_list):

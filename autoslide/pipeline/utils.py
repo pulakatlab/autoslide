@@ -16,6 +16,33 @@ from scipy.stats import mode
 from tqdm import tqdm, trange
 
 
+def extract_hash_from_filename(filename):
+    """
+    Extract section hash from image filename.
+    
+    The hash is always the last underscore-separated component before the file extension.
+    Works with both old and new filename formats:
+    - Old: tissue_roi001_hash.png
+    - New: file_tissue_roi001_hash.png
+    
+    Args:
+        filename: str, the filename (with or without path)
+    
+    Returns:
+        str, the extracted hash value
+    
+    Examples:
+        >>> extract_hash_from_filename("1_heart_roi001_abc123.png")
+        'abc123'
+        >>> extract_hash_from_filename("slide_001_1_heart_roi001_abc123.png")
+        'abc123'
+        >>> extract_hash_from_filename("/path/to/file_1_heart_roi001_abc123.png")
+        'abc123'
+    """
+    basename = os.path.basename(filename)
+    return basename.split('_')[-1].split('.')[0]
+
+
 class slide_handler():
     def __init__(
             self,
@@ -480,6 +507,7 @@ def write_out_images(
         img_list,
         section_frame,
         output_dir,
+        file_basename=None,
 ):
     """
     Write out images to output_dir, labelled by section_labels.
@@ -489,6 +517,7 @@ def write_out_images(
         img_list: list of images
         section_frame: dataframe with section information
         output_dir: output directory
+        file_basename: basename of the source file to prepend to filenames
         match_pattern: pattern to match section_labels
 
     Outputs:
@@ -500,8 +529,12 @@ def write_out_images(
     section_labels = section_frame['section_labels'].values
     section_hashes = section_frame['section_hash'].values
 
-    section_names = [f'{label}_{hash}' for label, hash in zip(
-        section_labels, section_hashes)]
+    if file_basename:
+        section_names = [f'{file_basename}_{label}_roi{i+1:03d}_{hash}' for i, (label, hash) in enumerate(zip(
+            section_labels, section_hashes))]
+    else:
+        section_names = [f'{label}_roi{i+1:03d}_{hash}' for i, (label, hash) in enumerate(zip(
+            section_labels, section_hashes))]
 
     for img, name in tqdm(zip(img_list, section_names)):
         img_path = os.path.join(output_dir, f'{name}.png')
