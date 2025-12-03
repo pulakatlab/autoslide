@@ -36,12 +36,12 @@ dependencies = [
     "dvc>=2.0.0",
     "dvc-s3>=2.0.0",
     "jupyter>=1.0.0",
-    "prefect>=2.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "prefect>=2.0.0",
 ]
 
 [project.urls]
