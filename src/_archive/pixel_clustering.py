@@ -11,7 +11,7 @@ from sklearn.decomposition import PCA
 from matplotlib.colors import LogNorm
 from tqdm import tqdm, trange
 from pprint import pprint as pp
-from src.pipeline.utils import get_threshold_mask
+from autoslide.src.pipeline.utils import get_threshold_mask
 from src import config
 
 # Get data directory from config
