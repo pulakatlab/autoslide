@@ -75,9 +75,9 @@
 
 **Workaround**: Skip with `--skip_training` flag
 
-### 6. Prediction ✅ WORKING (with mock model)
+### 6. Prediction ✅ WORKING (with trained model)
 
-**Status**: Completes successfully with mock model
+**Status**: Completes successfully with actual trained model
 
 **Output**:
 - 14 prediction masks in `test_data/suggested_regions/.../masks/`
@@ -85,9 +85,10 @@
 - Timing data in tracking JSON
 
 **Notes**: 
-- Mock model created with `pipeline_testing/create_mock_model.py`
-- Produces random predictions (168MB Mask R-CNN model)
-- Processing time: ~5 seconds per image on CPU
+- Uses actual trained Mask R-CNN model from `autoslide/artifacts/best_val_mask_rcnn_model.pth`
+- Model tracked via Git LFS (169MB)
+- Produces realistic vessel detection results
+- Processing time: ~4.8 seconds per image on CPU
 
 ### 7. Fibrosis Calculation ✅ WORKING
 
@@ -107,11 +108,12 @@
 
 ## Current Working Commands
 
-### Complete Pipeline with Mock Model (Recommended for Testing)
+### Complete Pipeline with Trained Model (Recommended for Testing)
 
 ```bash
-# 1. Create mock model (one-time setup)
-python pipeline_testing/create_mock_model.py
+# 1. Ensure Git LFS is installed and models are pulled (one-time setup)
+git lfs install
+git lfs pull
 
 # 2. Run complete pipeline with auto-labeling
 python pipeline_testing/prefect_pipeline.py \
@@ -135,7 +137,7 @@ This will:
 - ✅ Run final annotation (completes successfully)
 - ✅ Run region suggestion (generates 14 heart tissue sections)
 - ⚠️ Skip model training
-- ✅ Run prediction with mock model (generates masks and overlays)
+- ✅ Run prediction with trained model (generates masks and overlays)
 - ✅ Calculate fibrosis percentages (generates results and visualizations)
 
 ### Without Auto-Labeling (Manual Annotation Required)

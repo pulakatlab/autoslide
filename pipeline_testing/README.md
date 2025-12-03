@@ -19,6 +19,14 @@ Install development dependencies (includes Prefect and gdown):
 pip install -r requirements-dev.txt
 ```
 
+Install Git LFS and pull model files:
+```bash
+git lfs install
+git lfs pull
+```
+
+This will download the trained models (~338MB total) from `autoslide/artifacts/`.
+
 ## Usage
 
 ### Download Test Data

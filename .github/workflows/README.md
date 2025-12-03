@@ -18,8 +18,8 @@ Automated testing workflow for the AutoSlide pipeline.
    - System dependencies (OpenGL, GLib)
    - Python dependencies from requirements.txt and requirements-dev.txt
 
-2. **Create Mock Model**
-   - Generates a test Mask R-CNN model for prediction testing
+2. **Pull Trained Models**
+   - Installs Git LFS and pulls actual trained models from repository
 
 3. **Download Test Data**
    - Downloads SVS test file from Google Drive (~528MB)
@@ -73,4 +73,4 @@ Workflow has 30-minute timeout to prevent excessive resource usage.
 
 - Uses `continue-on-error: true` for pipeline steps to ensure artifacts are uploaded even if steps fail
 - Excludes large files (SVS, NPY) from complete-test-data artifact
-- Mock model is used for prediction (not a trained model)
+- Uses actual trained Mask R-CNN model tracked via Git LFS (169MB)
