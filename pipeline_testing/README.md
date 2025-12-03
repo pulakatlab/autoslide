@@ -44,6 +44,7 @@ python pipeline_testing/prefect_pipeline.py --test_data path/to/file.svs
 
 - `--test_data PATH` - Path to test SVS file
 - `--download_test_data` - Download test data from Google Drive
+- `--auto_label` - Automatically label largest region as heart tissue (for testing)
 - `--skip_annotation` - Skip annotation steps
 - `--skip_training` - Skip model training step
 - `--fail_fast` - Stop execution on first error
@@ -51,11 +52,19 @@ python pipeline_testing/prefect_pipeline.py --test_data path/to/file.svs
 
 **Note:** Either `--test_data` or `--download_test_data` must be provided.
 
+### Auto-Labeling for Testing
+
+The `--auto_label` flag enables automatic labeling of the largest thresholded region as heart tissue. This bypasses the manual annotation step and allows downstream processing to continue for testing purposes.
+
+```bash
+python pipeline_testing/prefect_pipeline.py --download_test_data --auto_label --verbose
+```
+
 ### Examples
 
-Download and run with all steps:
+Download and run with auto-labeling (recommended for testing):
 ```bash
-python pipeline_testing/prefect_pipeline.py --download_test_data --verbose
+python pipeline_testing/prefect_pipeline.py --download_test_data --auto_label --verbose
 ```
 
 Skip annotation steps with downloaded data:
@@ -63,12 +72,22 @@ Skip annotation steps with downloaded data:
 python pipeline_testing/prefect_pipeline.py --download_test_data --skip_annotation
 ```
 
-Use local test data with verbose output:
+Use local test data with auto-labeling:
 ```bash
 python pipeline_testing/prefect_pipeline.py \
     --test_data test_data/svs/x_8142-2021_Trichrome_426_427_37727.svs \
-    --verbose \
-    --fail_fast
+    --auto_label \
+    --verbose
+```
+
+Manual labeling (without auto-label):
+```bash
+# Run initial annotation
+python pipeline_testing/prefect_pipeline.py --download_test_data --skip_annotation
+
+# Manually edit the CSV file in test_data/initial_annotation/
+# Then run remaining steps
+python pipeline_testing/prefect_pipeline.py --test_data <path> --verbose
 ```
 
 ## Test Data

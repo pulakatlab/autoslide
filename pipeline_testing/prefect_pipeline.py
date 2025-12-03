@@ -35,6 +35,8 @@ def parse_args():
                         help='Path to test SVS file')
     parser.add_argument('--download_test_data', action='store_true',
                         help='Download test data from Google Drive')
+    parser.add_argument('--auto_label', action='store_true',
+                        help='Automatically label largest region as heart tissue for testing')
     parser.add_argument('--skip_annotation', action='store_true',
                         help='Skip annotation steps')
     parser.add_argument('--skip_training', action='store_true',
@@ -152,6 +154,28 @@ def run_initial_annotation(test_data_path, fail_fast=True, verbose=False):
 
 
 @task(log_prints=True)
+def auto_label_regions(data_dir):
+    """Automatically label largest region as heart tissue for testing"""
+    print("Auto-labeling largest region as heart tissue...")
+    script_name = os.path.join(project_root, 'pipeline_testing', 'auto_label_regions.py')
+    
+    cmd = ["python", script_name, "--data_dir", data_dir]
+    
+    process = Popen(cmd, stdout=PIPE, stderr=PIPE)
+    stdout, stderr = process.communicate()
+    
+    if process.returncode:
+        print('=== Process stdout ===')
+        print(stdout.decode('utf-8'))
+        print('\n=== Process stderr ===')
+        print(stderr.decode('utf-8'))
+        raise Exception(f"Auto-labeling failed with error:\n{stderr.decode('utf-8')}")
+    
+    print(stdout.decode('utf-8'))
+    print("Auto-labeling completed")
+
+
+@task(log_prints=True)
 def run_final_annotation(test_data_path, fail_fast=True, verbose=False):
     """Run final annotation step"""
     print("Running final annotation...")
@@ -223,6 +247,7 @@ def run_prediction(test_data_path, fail_fast=True, verbose=False):
 def autoslide_test_pipeline(
     test_data_path=None,
     download_data=False,
+    auto_label=False,
     skip_annotation=False,
     skip_training=False,
     fail_fast=True,
@@ -234,6 +259,7 @@ def autoslide_test_pipeline(
     Args:
         test_data_path: Path to test SVS file (optional if download_data=True)
         download_data: Download test data from Google Drive
+        auto_label: Automatically label largest region as heart tissue
         skip_annotation: Skip annotation steps
         skip_training: Skip model training
         fail_fast: Stop on first error
@@ -254,9 +280,21 @@ def autoslide_test_pipeline(
     # Setup environment
     test_output_dir = setup_test_environment(verified_path)
     
+    # Determine data directory from config
+    import json
+    config_path = os.path.join(project_root, 'autoslide', 'src', 'config.json')
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    data_dir = config['data_dir']
+    
     # Run pipeline steps
     if not skip_annotation:
         run_initial_annotation(verified_path, fail_fast, verbose)
+        
+        # Auto-label if requested
+        if auto_label:
+            auto_label_regions(data_dir)
+        
         run_final_annotation(verified_path, fail_fast, verbose)
     else:
         print("Skipping annotation steps")
@@ -290,6 +328,7 @@ def main():
     autoslide_test_pipeline(
         test_data_path=test_data_path,
         download_data=args.download_test_data,
+        auto_label=args.auto_label,
         skip_annotation=args.skip_annotation,
         skip_training=args.skip_training,
         fail_fast=args.fail_fast,
