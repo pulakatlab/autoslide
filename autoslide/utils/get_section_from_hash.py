@@ -185,6 +185,8 @@ def main():
     image_path_list = []
     for x in image_dirs:
         image_path_list.extend(glob(os.path.join(x, '*.png')))
+    # Extract hash from filename (last underscore-separated component before .png)
+    # Works for both old format (tissue_roi001_hash.png) and new format (file_tissue_roi001_hash.png)
     hash_list = [x.split('_')[-1].split('.')[0] for x in image_path_list]
     # Make sure all images have unique hashes
     unique_hashes = set(hash_list)

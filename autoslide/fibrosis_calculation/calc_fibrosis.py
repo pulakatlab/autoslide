@@ -189,6 +189,8 @@ def find_images_with_masks(data_dir, verbose=False):
                     break
 
             image_name = os.path.basename(image_path)
+            # Extract hash from filename (last underscore-separated component before .png)
+            # Works for both old format (tissue_roi001_hash.png) and new format (file_tissue_roi001_hash.png)
             hash_value = image_name.split(
                 '_')[-1].replace('.png', '') if '_' in image_name else None
 

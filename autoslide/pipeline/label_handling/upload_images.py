@@ -10,6 +10,8 @@ data_dir = "/media/bigdata/projects/auto_slide/data/suggested_regions/heart_sect
 file_list = os.listdir(data_dir)
 
 file_paths = [os.path.join(data_dir, file_name) for file_name in file_list]
+# Extract hash from filename (last underscore-separated component before .png)
+# Works for both old format (tissue_roi001_hash.png) and new format (file_tissue_roi001_hash.png)
 hash_list = [x.split('_')[-1].split('.')[0] for x in file_list]
 
 assets = []

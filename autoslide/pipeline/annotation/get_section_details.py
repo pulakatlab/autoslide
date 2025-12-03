@@ -74,6 +74,8 @@ fin_metadata_df = fin_metadata_df.drop_duplicates(subset='section_hash')
 ##############################
 og_image_path = '/media/storage/svs_tri_files/suggested_regions/TRI_130_163A_40490/images/4_heart_6988590045.png'
 sec_name = '4_heart_6988590045'
+# Extract hash from filename (last underscore-separated component)
+# Works for both old format (tissue_roi001_hash) and new format (file_tissue_roi001_hash)
 sec_hash = int(sec_name.split('_')[-1])
 
 sec_metadata = fin_metadata_df[fin_metadata_df['section_hash'] == sec_hash]
