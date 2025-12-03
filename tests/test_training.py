@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import shutil
 
-from autoslide import config
-from autoslide.pipeline.model.training_utils import (
+from src import config
+from src.pipeline.model.training_utils import (
     setup_directories, create_transforms, initialize_model,
     get_mask_outline, RandomRotation90, generate_negative_samples,
     generate_artificial_vessels

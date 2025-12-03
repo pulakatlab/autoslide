@@ -17,7 +17,7 @@ from torchvision import transforms as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
-from autoslide import config
+from src import config
 
 # Get directories from config - use local artifacts directory
 artifacts_dir = os.path.join(os.path.dirname(__file__), 'artifacts')

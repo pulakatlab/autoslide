@@ -8,7 +8,7 @@ This script:
 4. Saves predicted masks to corresponding mask directories
 """
 
-from autoslide.pipeline import utils
+from src.pipeline import utils
 import os
 import numpy as np
 from glob import glob
@@ -21,8 +21,8 @@ import time
 import json
 import shutil
 
-from autoslide import config
-from autoslide.pipeline.model.prediction_utils import load_model, predict_single_image
+from src import config
+from src.pipeline.model.prediction_utils import load_model, predict_single_image
 
 # Get directories from config
 data_dir = config['data_dir']

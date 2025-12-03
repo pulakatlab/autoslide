@@ -7,7 +7,7 @@ import cv2 as cv  # Alias cv2 as cv for consistency
 from torchvision.transforms import v2 as T
 from tqdm import tqdm, trange
 
-from autoslide.pipeline.model.prediction_utils import initialize_model
+from src.pipeline.model.prediction_utils import initialize_model
 
 #############################################################################
 # Directory and Data Management Functions
@@ -24,7 +24,7 @@ def setup_directories(data_dir=None):
     Returns:
         tuple: (plot_dir, artifacts_dir) - Paths to the plot and artifacts directories
     """
-    from autoslide import config
+    from src import config
 
     plot_dir = config['plot_dirs']
     artifacts_dir = os.path.join(os.path.dirname(__file__), 'artifacts')

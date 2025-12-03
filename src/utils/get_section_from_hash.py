@@ -11,8 +11,8 @@ from glob import glob
 import json
 from tqdm import tqdm
 from ast import literal_eval
-from autoslide import config
-from autoslide.pipeline import utils
+from src import config
+from src.pipeline import utils
 
 
 def get_section_details_from_hash(hash_value, df):

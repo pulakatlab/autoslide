@@ -12,9 +12,9 @@ import json
 import time
 from tqdm import tqdm
 from ast import literal_eval
-from autoslide import config as autoslide_config
-from autoslide.pipeline import utils
-from autoslide.utils.get_section_from_hash import *
+from src import config as autoslide_config
+from src.pipeline import utils
+from src.utils.get_section_from_hash import *
 import cv2
 from joblib import Parallel, delayed
 
