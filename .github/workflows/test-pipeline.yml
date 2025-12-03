@@ -1,0 +1,189 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [ main, test_merge_prs_88_86 ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install -e .
+    
+    - name: Create mock model
+      run: |
+        python pipeline_testing/create_mock_model.py
+    
+    - name: Download test data
+      run: |
+        python pipeline_testing/prefect_pipeline.py --download_test_data --skip_annotation --skip_training --verbose
+      continue-on-error: true
+    
+    - name: Run pipeline with auto-labeling
+      run: |
+        python pipeline_testing/prefect_pipeline.py \
+          --test_data test_data/svs/svs/*.svs \
+          --auto_label \
+          --skip_training \
+          --verbose
+      continue-on-error: true
+    
+    - name: Run prediction
+      run: |
+        python autoslide/src/pipeline/model/prediction.py --verbose
+      continue-on-error: true
+    
+    - name: Calculate fibrosis
+      run: |
+        python autoslide/src/fibrosis_calculation/calc_fibrosis.py --verbose
+      continue-on-error: true
+    
+    - name: Generate test summary
+      if: always()
+      run: |
+        echo "## Pipeline Test Results" > test_summary.md
+        echo "" >> test_summary.md
+        
+        # Check what was generated
+        if [ -d "test_data/initial_annotation" ]; then
+          echo "✅ Initial annotation completed" >> test_summary.md
+          echo "- Files: $(ls test_data/initial_annotation | wc -l)" >> test_summary.md
+        else
+          echo "❌ Initial annotation failed" >> test_summary.md
+        fi
+        
+        if [ -d "test_data/final_annotation" ]; then
+          echo "✅ Final annotation completed" >> test_summary.md
+          echo "- Files: $(ls test_data/final_annotation | wc -l)" >> test_summary.md
+        else
+          echo "❌ Final annotation failed" >> test_summary.md
+        fi
+        
+        if [ -d "test_data/suggested_regions" ]; then
+          echo "✅ Region suggestion completed" >> test_summary.md
+          IMAGES=$(find test_data/suggested_regions -name "*.png" -path "*/images/*" | wc -l)
+          echo "- Heart tissue sections: $IMAGES" >> test_summary.md
+        else
+          echo "❌ Region suggestion failed" >> test_summary.md
+        fi
+        
+        if [ -d "test_data/suggested_regions" ] && [ -d "$(find test_data/suggested_regions -name masks -type d | head -1)" ]; then
+          echo "✅ Prediction completed" >> test_summary.md
+          MASKS=$(find test_data/suggested_regions -name "*_mask.png" | wc -l)
+          echo "- Prediction masks: $MASKS" >> test_summary.md
+        else
+          echo "❌ Prediction failed" >> test_summary.md
+        fi
+        
+        if [ -f "test_data/fibrosis_results/summary_statistics.json" ]; then
+          echo "✅ Fibrosis calculation completed" >> test_summary.md
+          echo "- Results:" >> test_summary.md
+          cat test_data/fibrosis_results/summary_statistics.json | python -m json.tool | grep -E "(mean|total)" >> test_summary.md
+        else
+          echo "❌ Fibrosis calculation failed" >> test_summary.md
+        fi
+        
+        cat test_summary.md
+    
+    - name: Upload test summary
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-summary
+        path: test_summary.md
+        retention-days: 30
+    
+    - name: Upload initial annotation results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: initial-annotation
+        path: |
+          test_data/initial_annotation/*.png
+          test_data/initial_annotation/*.csv
+          test_data/tracking/*.json
+        retention-days: 30
+        if-no-files-found: warn
+    
+    - name: Upload final annotation results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: final-annotation
+        path: |
+          test_data/final_annotation/*.png
+          test_data/final_annotation/*.npy
+        retention-days: 30
+        if-no-files-found: warn
+    
+    - name: Upload region suggestions
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: region-suggestions
+        path: |
+          test_data/suggested_regions/**/images/*.png
+          test_data/suggested_regions/**/*_section_frame.csv
+          test_data/suggested_regions/**/*_visualization.png
+        retention-days: 30
+        if-no-files-found: warn
+    
+    - name: Upload prediction results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: prediction-results
+        path: |
+          test_data/suggested_regions/**/masks/*_mask.png
+          test_data/suggested_regions/**/overlays/*_overlay.png
+        retention-days: 30
+        if-no-files-found: warn
+    
+    - name: Upload fibrosis results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: fibrosis-results
+        path: |
+          test_data/fibrosis_results/*.csv
+          test_data/fibrosis_results/*.json
+          test_data/fibrosis_results/*.png
+          test_data/fibrosis_results/visualizations/*.png
+        retention-days: 30
+        if-no-files-found: warn
+    
+    - name: Upload complete test data
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: complete-test-data
+        path: |
+          test_data/**/*
+          !test_data/**/*.svs
+          !test_data/**/*.npy
+        retention-days: 7
+        if-no-files-found: warn
