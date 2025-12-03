@@ -48,10 +48,7 @@ dev = [
 "Bug Tracker" = "https://github.com/abuzarmahmood/autoslide/issues"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
+package-dir = {"autoslide" = "src"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
