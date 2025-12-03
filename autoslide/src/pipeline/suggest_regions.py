@@ -14,7 +14,7 @@ import pandas as pd
 from skimage import morphology as morph
 from scipy.ndimage import binary_fill_holes
 from glob import glob
-from src import config
+from autoslide.src import config
 import json
 from tqdm import tqdm
 import hashlib
@@ -22,7 +22,7 @@ import argparse
 import time
 
 # Import utilities directly
-from autoslide.pipeline import utils
+from autoslide.src.pipeline import utils
 
 
 def remove_mask_edge(

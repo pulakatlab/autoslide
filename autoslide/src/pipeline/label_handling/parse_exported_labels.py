@@ -5,7 +5,7 @@ from glob import glob
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 import numpy as np
-from src import config
+from autoslide.src import config
 
 # Get directories from config
 data_dir = config['data_dir']

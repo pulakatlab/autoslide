@@ -82,12 +82,17 @@ def download_test_data():
         gdown.download_folder(url=folder_url, output=test_data_dir, quiet=False, use_cookies=False)
         print(f"Test data downloaded to: {test_data_dir}")
         
-        # Find the first SVS file
-        svs_files = [f for f in os.listdir(test_data_dir) if f.endswith('.svs')]
+        # Find the first SVS file (recursively search subdirectories)
+        svs_files = []
+        for root, dirs, files in os.walk(test_data_dir):
+            for file in files:
+                if file.endswith('.svs'):
+                    svs_files.append(os.path.join(root, file))
+        
         if not svs_files:
             raise FileNotFoundError("No SVS files found in downloaded data")
         
-        test_file = os.path.join(test_data_dir, svs_files[0])
+        test_file = svs_files[0]
         print(f"Using test file: {test_file}")
         return test_file
         

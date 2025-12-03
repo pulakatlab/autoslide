@@ -3,7 +3,7 @@ Given a section id, this script will return the details of the section from
 the original data file.
 """
 
-from autoslide.pipeline import utils
+from autoslide.src.pipeline import utils
 import os
 from matplotlib import pyplot as plt
 import cv2 as cv
@@ -13,7 +13,7 @@ import pandas as pd
 from skimage import morphology as morph
 from scipy.ndimage import binary_fill_holes
 from glob import glob
-from src import config
+from autoslide.src import config
 
 # Get directories from config
 data_dir = config['data_dir']

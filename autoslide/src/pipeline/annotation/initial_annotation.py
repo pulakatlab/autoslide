@@ -29,9 +29,9 @@ from skimage.filters.rank import gradient
 from scipy.ndimage import binary_fill_holes
 
 # Import config
-from src import config
+from autoslide.src import config
 # Import utilities directly
-from autoslide.pipeline import utils
+from autoslide.src.pipeline import utils
 
 
 def parse_args():

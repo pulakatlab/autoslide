@@ -15,7 +15,7 @@ import pandas as pd
 from tqdm import tqdm
 from skimage.color import label2rgb
 from ast import literal_eval
-from src import config
+from autoslide.src import config
 
 
 def parse_args():
