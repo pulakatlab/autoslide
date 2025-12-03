@@ -480,6 +480,7 @@ def write_out_images(
         img_list,
         section_frame,
         output_dir,
+        file_basename=None,
 ):
     """
     Write out images to output_dir, labelled by section_labels.
@@ -489,6 +490,7 @@ def write_out_images(
         img_list: list of images
         section_frame: dataframe with section information
         output_dir: output directory
+        file_basename: basename of the source file to prepend to filenames
         match_pattern: pattern to match section_labels
 
     Outputs:
@@ -500,8 +502,12 @@ def write_out_images(
     section_labels = section_frame['section_labels'].values
     section_hashes = section_frame['section_hash'].values
 
-    section_names = [f'{label}_roi{i+1:03d}_{hash}' for i, (label, hash) in enumerate(zip(
-        section_labels, section_hashes))]
+    if file_basename:
+        section_names = [f'{file_basename}_{label}_roi{i+1:03d}_{hash}' for i, (label, hash) in enumerate(zip(
+            section_labels, section_hashes))]
+    else:
+        section_names = [f'{label}_roi{i+1:03d}_{hash}' for i, (label, hash) in enumerate(zip(
+            section_labels, section_hashes))]
 
     for img, name in tqdm(zip(img_list, section_names)):
         img_path = os.path.join(output_dir, f'{name}.png')

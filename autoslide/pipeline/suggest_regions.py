@@ -332,6 +332,7 @@ def main():
                 img_list,
                 section_frame,
                 out_image_dir,
+                file_basename=data_basename_proc,
             )
             if verbose:
                 print(f"Saved images to: {out_image_dir}")
