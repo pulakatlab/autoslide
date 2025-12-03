@@ -27,7 +27,7 @@ dynamic = ["dependencies", "optional-dependencies"]
 "Bug Tracker" = "https://github.com/abuzarmahmood/autoslide/issues"
 
 [tool.setuptools]
-package-dir = {"autoslide" = "src"}
+packages = {find = {where = ["."], include = ["autoslide*"]}}
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

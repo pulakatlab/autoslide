@@ -5,3 +5,5 @@
 .aider*
 /artifacts
 /plots
+*.egg-info/
+__pycache__/

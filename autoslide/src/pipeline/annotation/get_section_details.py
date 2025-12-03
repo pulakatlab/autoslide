@@ -3,7 +3,7 @@ Given a section id, this script will return the details of the section from
 the original data file.
 """
 
-from autoslide.src.pipeline import utils
+from autoslide.pipeline import utils
 import os
 from matplotlib import pyplot as plt
 import cv2 as cv

@@ -12,7 +12,7 @@ import json
 from tqdm import tqdm
 from ast import literal_eval
 from src import config
-from autoslide.src.pipeline import utils
+from autoslide.pipeline import utils
 
 
 def get_section_details_from_hash(hash_value, df):

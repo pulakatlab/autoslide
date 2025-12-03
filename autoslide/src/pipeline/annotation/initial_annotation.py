@@ -31,7 +31,7 @@ from scipy.ndimage import binary_fill_holes
 # Import config
 from src import config
 # Import utilities directly
-from autoslide.src.pipeline import utils
+from autoslide.pipeline import utils
 
 
 def parse_args():
