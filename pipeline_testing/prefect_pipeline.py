@@ -96,7 +96,7 @@ def setup_test_environment(test_data_path):
 def run_initial_annotation(test_data_path, fail_fast=True, verbose=False):
     """Run initial annotation step"""
     print("Running initial annotation...")
-    script_name = os.path.join(project_root, 'autoslide', 'pipeline', 
+    script_name = os.path.join(project_root, 'src', 'pipeline', 
                                'annotation', 'initial_annotation.py')
     
     cmd = ["python", script_name]
@@ -113,7 +113,7 @@ def run_initial_annotation(test_data_path, fail_fast=True, verbose=False):
 def run_final_annotation(test_data_path, fail_fast=True, verbose=False):
     """Run final annotation step"""
     print("Running final annotation...")
-    script_name = os.path.join(project_root, 'autoslide', 'pipeline',
+    script_name = os.path.join(project_root, 'src', 'pipeline',
                                'annotation', 'final_annotation.py')
     
     cmd = ["python", script_name]
@@ -130,7 +130,7 @@ def run_final_annotation(test_data_path, fail_fast=True, verbose=False):
 def run_region_suggestion(test_data_path, fail_fast=True, verbose=False):
     """Run region suggestion step"""
     print("Running region suggestion...")
-    script_name = os.path.join(project_root, 'autoslide', 'pipeline',
+    script_name = os.path.join(project_root, 'src', 'pipeline',
                                'suggest_regions.py')
     
     cmd = ["python", script_name]
@@ -147,7 +147,7 @@ def run_region_suggestion(test_data_path, fail_fast=True, verbose=False):
 def run_model_training(test_data_path, fail_fast=True, verbose=False):
     """Run model training step"""
     print("Running model training...")
-    script_name = os.path.join(project_root, 'autoslide', 'pipeline',
+    script_name = os.path.join(project_root, 'src', 'pipeline',
                                'model', 'training.py')
     
     cmd = ["python", script_name]
@@ -164,7 +164,7 @@ def run_model_training(test_data_path, fail_fast=True, verbose=False):
 def run_prediction(test_data_path, fail_fast=True, verbose=False):
     """Run prediction step"""
     print("Running prediction...")
-    script_name = os.path.join(project_root, 'autoslide', 'pipeline',
+    script_name = os.path.join(project_root, 'src', 'pipeline',
                                'model', 'prediction.py')
     
     cmd = ["python", script_name]
