@@ -16,7 +16,7 @@ import torch
 import cv2 as cv
 from torchvision.transforms import v2 as T
 from tqdm import tqdm, trange
-import src
+import autoslide.src
 from autoslide.src import config
 
 
