@@ -20,6 +20,7 @@ from subprocess import PIPE, Popen
 from pathlib import Path
 
 from prefect import flow, task
+import gdown
 
 # Add project root to path
 script_path = os.path.realpath(__file__)
@@ -30,8 +31,10 @@ sys.path.insert(0, project_root)
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Run AutoSlide pipeline tests on test data')
-    parser.add_argument('--test_data', type=str, required=True,
+    parser.add_argument('--test_data', type=str, required=False,
                         help='Path to test SVS file')
+    parser.add_argument('--download_test_data', action='store_true',
+                        help='Download test data from Google Drive')
     parser.add_argument('--skip_annotation', action='store_true',
                         help='Skip annotation steps')
     parser.add_argument('--skip_training', action='store_true',
@@ -57,6 +60,40 @@ def raise_error_if_error(process, stderr, stdout, fail_fast=True, verbose=False)
             raise Exception(f"Process failed with error:\n{decode_err}")
         else:
             print('Encountered error...fail-fast not enabled, continuing execution...\n')
+
+
+@task(log_prints=True)
+def download_test_data():
+    """Download test data from Google Drive"""
+    print("Downloading test data from Google Drive...")
+    
+    # Google Drive folder ID
+    folder_id = "165Ei63lVEtCI1aQpKYIqhNR_zE8YeG5c"
+    
+    # Create test data directory
+    test_data_dir = os.path.join(project_root, 'test_data', 'svs')
+    os.makedirs(test_data_dir, exist_ok=True)
+    
+    # Download folder contents
+    folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
+    print(f"Downloading from: {folder_url}")
+    
+    try:
+        gdown.download_folder(url=folder_url, output=test_data_dir, quiet=False, use_cookies=False)
+        print(f"Test data downloaded to: {test_data_dir}")
+        
+        # Find the first SVS file
+        svs_files = [f for f in os.listdir(test_data_dir) if f.endswith('.svs')]
+        if not svs_files:
+            raise FileNotFoundError("No SVS files found in downloaded data")
+        
+        test_file = os.path.join(test_data_dir, svs_files[0])
+        print(f"Using test file: {test_file}")
+        return test_file
+        
+    except Exception as e:
+        print(f"Error downloading test data: {e}")
+        raise
 
 
 @task(log_prints=True)
@@ -179,7 +216,8 @@ def run_prediction(test_data_path, fail_fast=True, verbose=False):
 
 @flow(name="autoslide-test-pipeline", log_prints=True)
 def autoslide_test_pipeline(
-    test_data_path,
+    test_data_path=None,
+    download_data=False,
     skip_annotation=False,
     skip_training=False,
     fail_fast=True,
@@ -189,7 +227,8 @@ def autoslide_test_pipeline(
     Main Prefect flow for testing AutoSlide pipeline
     
     Args:
-        test_data_path: Path to test SVS file
+        test_data_path: Path to test SVS file (optional if download_data=True)
+        download_data: Download test data from Google Drive
         skip_annotation: Skip annotation steps
         skip_training: Skip model training
         fail_fast: Stop on first error
@@ -199,8 +238,13 @@ def autoslide_test_pipeline(
     print("AutoSlide Test Pipeline")
     print("=" * 60)
     
-    # Verify test data
-    verified_path = verify_test_data(test_data_path)
+    # Download or verify test data
+    if download_data:
+        verified_path = download_test_data()
+    elif test_data_path:
+        verified_path = verify_test_data(test_data_path)
+    else:
+        raise ValueError("Either --test_data or --download_test_data must be provided")
     
     # Setup environment
     test_output_dir = setup_test_environment(verified_path)
@@ -230,12 +274,17 @@ def main():
     """Main entry point"""
     args = parse_args()
     
-    # Convert relative path to absolute
-    test_data_path = os.path.abspath(args.test_data)
+    # Validate arguments
+    if not args.download_test_data and not args.test_data:
+        raise ValueError("Either --test_data or --download_test_data must be provided")
+    
+    # Convert relative path to absolute if provided
+    test_data_path = os.path.abspath(args.test_data) if args.test_data else None
     
     # Run the flow
     autoslide_test_pipeline(
         test_data_path=test_data_path,
+        download_data=args.download_test_data,
         skip_annotation=args.skip_annotation,
         skip_training=args.skip_training,
         fail_fast=args.fail_fast,

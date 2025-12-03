@@ -14,43 +14,56 @@ The Prefect test pipeline (`prefect_pipeline.py`) orchestrates the main steps of
 
 ## Requirements
 
-Install Prefect:
+Install development dependencies (includes Prefect and gdown):
 ```bash
-pip install prefect>=2.0.0
-```
-
-Or install all dependencies:
-```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ## Usage
 
+### Download Test Data
+
+Download test data from Google Drive:
+```bash
+python pipeline_testing/prefect_pipeline.py --download_test_data
+```
+
 ### Basic Usage
 
-Run the full pipeline on test data:
+Run the full pipeline with downloaded test data:
 ```bash
-python pipeline_testing/prefect_pipeline.py --test_data test_data/svs/x_8142-2021_Trichrome_426_427_37727.svs
+python pipeline_testing/prefect_pipeline.py --download_test_data
+```
+
+Or use your own test data:
+```bash
+python pipeline_testing/prefect_pipeline.py --test_data path/to/file.svs
 ```
 
 ### Options
 
-- `--test_data PATH` - Path to test SVS file (required)
+- `--test_data PATH` - Path to test SVS file
+- `--download_test_data` - Download test data from Google Drive
 - `--skip_annotation` - Skip annotation steps
 - `--skip_training` - Skip model training step
 - `--fail_fast` - Stop execution on first error
 - `--verbose` - Enable verbose output
 
+**Note:** Either `--test_data` or `--download_test_data` must be provided.
+
 ### Examples
 
-Skip annotation steps:
+Download and run with all steps:
 ```bash
-python pipeline_testing/prefect_pipeline.py \
-    --test_data test_data/svs/x_8142-2021_Trichrome_426_427_37727.svs \
-    --skip_annotation
+python pipeline_testing/prefect_pipeline.py --download_test_data --verbose
 ```
 
-Run with verbose output and fail-fast:
+Skip annotation steps with downloaded data:
+```bash
+python pipeline_testing/prefect_pipeline.py --download_test_data --skip_annotation
+```
+
+Use local test data with verbose output:
 ```bash
 python pipeline_testing/prefect_pipeline.py \
     --test_data test_data/svs/x_8142-2021_Trichrome_426_427_37727.svs \
@@ -60,15 +73,19 @@ python pipeline_testing/prefect_pipeline.py \
 
 ## Test Data
 
-The pipeline expects test data in SVS format. The default test data path is:
+The pipeline can automatically download test data from Google Drive using the `--download_test_data` flag, or you can provide your own SVS file.
+
+Downloaded test data is saved to:
 ```
-<repo_root>/test_data/svs/x_8142-2021_Trichrome_426_427_37727.svs
+<repo_root>/test_data/svs/
 ```
 
 Test outputs are saved to:
 ```
 <repo_root>/pipeline_testing/test_output/
 ```
+
+Google Drive folder: [Test Data](https://drive.google.com/drive/folders/165Ei63lVEtCI1aQpKYIqhNR_zE8YeG5c)
 
 ## Pipeline Steps
 
