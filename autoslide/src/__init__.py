@@ -5,15 +5,31 @@ import json
 def load_config():
     """Load configuration from config.json file"""
     config_path = os.path.join(os.path.dirname(__file__), 'config.json')
-
-    if os.path.exists(config_path):
+    
+    # Default data directory: project_root/test_data
+    # Navigate from autoslide/src/ to project root, then to test_data
+    default_data_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        'test_data'
+    )
+    default_data_dir = os.path.abspath(default_data_dir)
+    
+    # Allow environment variable override
+    data_dir = os.environ.get('AUTOSLIDE_DATA_DIR')
+    
+    if not data_dir and os.path.exists(config_path):
         with open(config_path, 'r') as f:
             path_dict = json.load(f)
-            data_dir = path_dict.get('data_dir', os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), 'data'))
-    else:
-        data_dir = os.path.join(os.path.dirname(
-            os.path.dirname(__file__)), 'data')
+            config_data_dir = path_dict.get('data_dir', '')
+            # If config path is relative, make it absolute relative to project root
+            if config_data_dir and not os.path.isabs(config_data_dir):
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                data_dir = os.path.abspath(os.path.join(project_root, config_data_dir))
+            elif config_data_dir:
+                data_dir = config_data_dir
+    
+    if not data_dir:
+        data_dir = default_data_dir
 
     return {
         'data_dir': data_dir,
