@@ -40,11 +40,13 @@ jobs:
         git lfs pull
     
     - name: Download test data
+      id: download
       run: |
         python pipeline_testing/prefect_pipeline.py --download_test_data --skip_annotation --skip_training --verbose
       continue-on-error: true
     
     - name: Run pipeline with auto-labeling
+      id: pipeline
       run: |
         # Find the downloaded SVS file
         SVS_FILE=$(find test_data -name "*.svs" -type f | head -1)
@@ -61,11 +63,13 @@ jobs:
       continue-on-error: true
     
     - name: Run prediction
+      id: prediction
       run: |
         python autoslide/src/pipeline/model/prediction.py --verbose
       continue-on-error: true
     
     - name: Calculate fibrosis
+      id: fibrosis
       run: |
         python autoslide/src/fibrosis_calculation/calc_fibrosis.py --verbose
       continue-on-error: true
@@ -195,3 +199,46 @@ jobs:
           !test_data/**/*.npy
         retention-days: 7
         if-no-files-found: warn
+    
+    - name: Check pipeline status and fail if any step failed
+      if: always()
+      run: |
+        echo "Checking pipeline step results..."
+        FAILED=0
+        
+        if [ "${{ steps.download.outcome }}" == "failure" ]; then
+          echo "❌ Download test data failed"
+          FAILED=1
+        else
+          echo "✅ Download test data succeeded"
+        fi
+        
+        if [ "${{ steps.pipeline.outcome }}" == "failure" ]; then
+          echo "❌ Pipeline with auto-labeling failed"
+          FAILED=1
+        else
+          echo "✅ Pipeline with auto-labeling succeeded"
+        fi
+        
+        if [ "${{ steps.prediction.outcome }}" == "failure" ]; then
+          echo "❌ Prediction failed"
+          FAILED=1
+        else
+          echo "✅ Prediction succeeded"
+        fi
+        
+        if [ "${{ steps.fibrosis.outcome }}" == "failure" ]; then
+          echo "❌ Fibrosis calculation failed"
+          FAILED=1
+        else
+          echo "✅ Fibrosis calculation succeeded"
+        fi
+        
+        if [ $FAILED -eq 1 ]; then
+          echo ""
+          echo "❌ One or more pipeline steps failed. Failing workflow."
+          exit 1
+        else
+          echo ""
+          echo "✅ All pipeline steps succeeded!"
+        fi
