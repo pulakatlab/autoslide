@@ -1,10 +1,7 @@
 name: Test Pipeline
 
 on:
-  push:
-    branches: [ main, test_merge_prs_88_86 ]
   pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
