@@ -83,11 +83,11 @@ The pipeline leverages powerful Python libraries:
 ### Quick Start
 Run the complete pipeline with a single command:
 ```bash
-python autoslide/pipeline/run_pipeline.py
+python src/pipeline/run_pipeline.py
 ```
 
 ### Configuration
-Set up your data directory in `autoslide/config.json`:
+Set up your data directory in `src/config.json`:
 ```json
 {
     "data_dir": "/path/to/your/data"
@@ -99,37 +99,37 @@ Execute specific stages as needed:
 
 ```bash
 # Initial annotation only
-python autoslide/pipeline/annotation/initial_annotation.py
+python src/pipeline/annotation/initial_annotation.py
 
 # Final annotation only  
-python autoslide/pipeline/annotation/final_annotation.py
+python src/pipeline/annotation/final_annotation.py
 
 # Region suggestion
-python autoslide/pipeline/suggest_regions.py
+python src/pipeline/suggest_regions.py
 
 # Vessel detection using pre-trained model
-python autoslide/pipeline/model/prediction.py
+python src/pipeline/model/prediction.py
 
 # Fibrosis quantification
-python autoslide/fibrosis_calculation/calc_fibrosis.py
+python src/fibrosis_calculation/calc_fibrosis.py
 ```
 
 ### Command Line Options
 ```bash
 # Skip annotation steps
-python autoslide/pipeline/run_pipeline.py --skip_annotation
+python src/pipeline/run_pipeline.py --skip_annotation
 
 # Run with custom options
-python autoslide/pipeline/run_pipeline.py --skip_annotation
+python src/pipeline/run_pipeline.py --skip_annotation
 
 # Fibrosis quantification with custom parameters
-python autoslide/fibrosis_calculation/calc_fibrosis.py --hue-value 0.6785 --hue-width 0.4 --verbose
+python src/fibrosis_calculation/calc_fibrosis.py --hue-value 0.6785 --hue-width 0.4 --verbose
 ```
 
 ## 🗂️ Project Structure
 
 ```
-autoslide/
+src/
 ├── pipeline/
 │   ├── annotation/          # Tissue annotation modules
 │   ├── model/              # Deep learning training and prediction
