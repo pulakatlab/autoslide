@@ -3,3 +3,5 @@ dvc>=2.0.0
 dvc-s3>=2.0.0
 pytest
 pre-commit
+prefect>=2.0.0
+gdown>=4.6.0

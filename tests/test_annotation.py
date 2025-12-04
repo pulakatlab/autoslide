@@ -14,7 +14,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 # Import the modules we're testing
-from autoslide.pipeline.annotation import initial_annotation, final_annotation, get_section_details
+from autoslide.src.pipeline.annotation import initial_annotation, final_annotation, get_section_details
 
 
 @pytest.fixture
