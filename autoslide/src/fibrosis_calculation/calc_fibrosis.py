@@ -32,16 +32,11 @@ def gen_fibrosis_mask(
     Parameters:
     - image: The input image to analyze.
     - config: Configuration dictionary containing parameters for fibrosis detection.
-    - vessel_mask: Optional mask for blood vessels, not used in this example.
+    - vessel_mask: Optional mask for blood vessels to exclude from fibrosis detection.
 
     Returns:
     - mask: A binary mask where fibrosis is detected.
     """
-
-    # Not implemented error for vessel_mask
-    if vessel_mask is not None:
-        raise NotImplementedError(
-            "Vessel mask functionality is not implemented yet.")
 
     # OpenCV expected images in BGR format to have range [0, 255]
     if image.dtype != np.uint8:
@@ -78,6 +73,17 @@ def gen_fibrosis_mask(
         # Normalize saturation channel to [0, 1] range
         saturation_channel = saturation_channel / 255.0
         mask &= (saturation_channel >= config['color_saturation_threshold'])
+
+    # Exclude vessel areas from fibrosis mask if vessel mask is provided
+    if vessel_mask is not None:
+        # Binarize vessel mask
+        if vessel_mask.max() > 1:
+            vessel_binary = (vessel_mask > 127).astype(bool)
+        else:
+            vessel_binary = vessel_mask.astype(bool)
+        
+        # Set fibrosis mask to 0 where vessels are present
+        mask = mask & (~vessel_binary)
 
     return mask.astype(np.uint8)
 
