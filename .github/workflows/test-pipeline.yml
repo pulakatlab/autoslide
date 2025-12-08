@@ -51,7 +51,7 @@ jobs:
     - name: Download test data
       id: download
       run: |
-        python pipeline_testing/prefect_pipeline.py --download_test_data --skip_annotation --skip_training --verbose
+        python pipeline_testing/download_test_data.py
       continue-on-error: true
     
     - name: Run pipeline with auto-labeling
