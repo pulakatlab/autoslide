@@ -5,3 +5,8 @@
 .aider*
 /artifacts
 /plots
+*.egg-info/
+__pycache__/
+/test_data/
+autoslide/src/pipeline/model/artifacts/*.pth
+autoslide/src/pipeline/model/artifacts/*.pt

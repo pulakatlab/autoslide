@@ -1,0 +1,5 @@
+autoslide/artifacts/ filter=lfs diff=lfs merge=lfs -text
+autoslide/artifacts/best_val_mask_rcnn_model.pth filter=lfs diff=lfs merge=lfs -text
+autoslide/artifacts/final_mask_rcnn_model.pth filter=lfs diff=lfs merge=lfs -text
+autoslide/artifacts/train_losses.npy filter=lfs diff=lfs merge=lfs -text
+autoslide/artifacts/val_losses.npy filter=lfs diff=lfs merge=lfs -text
