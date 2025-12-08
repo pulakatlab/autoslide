@@ -67,8 +67,18 @@ def cmd_process(args):
             logger.error(
                 f"No reference images found matching: {args.reference_images}")
             return 1
+    # If it is a directory, get all images inside
+    elif Path(args.reference_images).is_dir():
+        reference_images = glob(
+            str(Path(args.reference_images) / '*'))
+        if not reference_images:
+            logger.error(
+                f"No reference images found in directory: {args.reference_images}")
+            return 1
     else:
         reference_images = args.reference_images
+
+    print(f"{len(reference_images)} reference images will be used.")
 
     # Handle percentiles parameter
     percentiles = None
