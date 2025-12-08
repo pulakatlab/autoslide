@@ -20,6 +20,8 @@ import cv2
 import time
 import json
 import shutil
+import torch
+from torch.utils.data import Dataset, DataLoader
 
 from autoslide.src import config
 from autoslide.src.pipeline.model.prediction_utils import load_model, predict_single_image
@@ -444,7 +446,83 @@ def save_prediction_visualization(image_path, mask_path, predicted_mask, plot_di
         print(f"Error creating visualization for {image_path}: {e}")
 
 
-def process_all_images(model_path=None, save_visualizations=False, max_images=None, reprocess=False, verbose=False):
+class ImageDataset(Dataset):
+    """
+    Dataset for batch loading images for prediction.
+    """
+    def __init__(self, image_items, transform):
+        """
+        Args:
+            image_items (list): List of dicts with 'image_path', 'mask_path', 'overlay_path'
+            transform (callable): Transform to apply to images
+        """
+        self.image_items = image_items
+        self.transform = transform
+    
+    def __len__(self):
+        return len(self.image_items)
+    
+    def __getitem__(self, idx):
+        item = self.image_items[idx]
+        image_path = item['image_path']
+        
+        try:
+            img = Image.open(image_path).convert("RGB")
+            img_tensor = self.transform(img)
+            return img_tensor, item
+        except Exception as e:
+            print(f"Error loading {image_path}: {e}")
+            # Return a dummy tensor and item on error
+            return torch.zeros((3, 224, 224)), item
+
+
+def predict_batch(model, images_batch, device):
+    """
+    Perform batch prediction on multiple images.
+    
+    Args:
+        model: Trained Mask R-CNN model
+        images_batch (list): List of image tensors
+        device: PyTorch device
+    
+    Returns:
+        list: List of predicted masks (numpy arrays)
+    """
+    with torch.no_grad():
+        predictions = model(images_batch)
+    
+    predicted_masks = []
+    for i, pred in enumerate(predictions):
+        if len(pred["masks"]) > 0:
+            masks = pred["masks"].cpu().numpy()
+            scores = pred["scores"].cpu().numpy()
+            
+            combined_mask = np.zeros_like(masks[0, 0])
+            total_weight = 0
+            
+            for mask, score in zip(masks, scores):
+                combined_mask += mask[0] * score
+                total_weight += score
+            
+            if total_weight > 0:
+                combined_mask = combined_mask / total_weight
+            
+            if combined_mask.max() > 0:
+                combined_mask = combined_mask / combined_mask.max()
+            
+            combined_mask = (combined_mask * 255).astype(np.uint8)
+        else:
+            # No predictions - create empty mask with same size as input image
+            img_tensor = images_batch[i]
+            h, w = img_tensor.shape[1], img_tensor.shape[2]
+            combined_mask = np.zeros((h, w), dtype=np.uint8)
+        
+        predicted_masks.append(combined_mask)
+    
+    return predicted_masks
+
+
+def process_all_images(model_path=None, save_visualizations=False, max_images=None, reprocess=False, verbose=False, batch_size=8, num_workers=4):
     """
     Process all images that need prediction, organized by SVS directory.
 
@@ -454,6 +532,8 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         max_images (int): Maximum number of images to process (for testing)
         reprocess (bool): If True, remove existing outputs and reprocess all images
         verbose (bool): Whether to print detailed information
+        batch_size (int): Batch size for GPU processing
+        num_workers (int): Number of workers for data loading
     """
     print("Starting batch prediction on suggested regions...")
 
@@ -467,6 +547,8 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         print(f"  Save visualizations: {save_visualizations}")
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
         print(f"  Reprocess existing: {reprocess}")
+        print(f"  Batch size: {batch_size}")
+        print(f"  Num workers: {num_workers}")
 
     # Load model
     if verbose:
@@ -529,67 +611,85 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         svs_start_time = time.time()
         svs_successful_count = 0
 
-        # Process all images in this SVS directory
-        for i, item in enumerate(tqdm(images_list, desc=f"Processing {svs_dir_name}", leave=False)):
-            image_path = item['image_path']
-            mask_path = item['mask_path']
-            overlay_path = item['overlay_path']
-            image_name = item['image_name']
-            total_processed += 1
+        # Create dataset and dataloader for batch processing
+        dataset = ImageDataset(images_list, transform)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=torch.cuda.is_available(),
+            collate_fn=lambda x: x  # Return list of tuples as-is
+        )
 
-            if verbose:
-                print(
-                    f"\n  Processing image {i+1}/{len(images_list)} in {svs_dir_name}: {image_name}")
+        # Process images in batches
+        batch_idx = 0
+        for batch_data in tqdm(dataloader, desc=f"Processing {svs_dir_name}"):
+            batch_start_time = time.time()
+            
+            # Separate tensors and items
+            images_batch = [item[0].to(device) for item in batch_data]
+            items_batch = [item[1] for item in batch_data]
+            
+            # Perform batch prediction
+            predicted_masks = predict_batch(model, images_batch, device)
+            batch_time = time.time() - batch_start_time
+            
+            # Process each prediction in the batch
+            for predicted_mask, item in zip(predicted_masks, items_batch):
+                image_path = item['image_path']
+                mask_path = item['mask_path']
+                overlay_path = item['overlay_path']
+                image_name = item['image_name']
+                total_processed += 1
+                
+                # Calculate per-image time (batch time divided by batch size)
+                prediction_time = batch_time / len(items_batch)
 
-            # Perform prediction
-            predicted_mask, prediction_time = predict_image_from_path(
-                model, image_path, device, transform, verbose=verbose)
-
-            if predicted_mask is not None:
-                # Save timing information to tracking JSON
-                save_timing_to_tracking_json(
-                    image_path, prediction_time, verbose=verbose)
-                try:
-                    if verbose:
-                        print(f"    Saving predicted mask...")
-
-                    # Save predicted mask
-                    mask_img = Image.fromarray(predicted_mask, mode='L')
-                    mask_img.save(mask_path)
-
-                    if verbose:
-                        print(f"    Mask saved to: {mask_path}")
-
-                    # Create and save overlay image
-                    create_overlay_image(
-                        image_path, predicted_mask, overlay_path, verbose=verbose)
-
-                    # Save visualization if requested
-                    if save_visualizations:
+                if predicted_mask is not None and predicted_mask.size > 0:
+                    # Save timing information to tracking JSON
+                    save_timing_to_tracking_json(
+                        image_path, prediction_time, verbose=verbose)
+                    try:
                         if verbose:
-                            print(f"    Creating visualization...")
-                        save_prediction_visualization(
-                            image_path, mask_path, predicted_mask, plot_dir)
+                            print(f"    Saving predicted mask for {image_name}...")
 
-                    successful_predictions += 1
-                    svs_successful_count += 1
-                    if verbose:
-                        print(
-                            f"    ✓ Successfully processed {image_name} in {prediction_time:.3f}s")
-                    else:
-                        print(
-                            f"  Saved mask and overlay for {image_name} ({prediction_time:.3f}s)")
+                        # Save predicted mask
+                        mask_img = Image.fromarray(predicted_mask, mode='L')
+                        mask_img.save(mask_path)
 
-                except Exception as e:
-                    print(f"  Error saving outputs for {image_name}: {e}")
+                        if verbose:
+                            print(f"    Mask saved to: {mask_path}")
+
+                        # Create and save overlay image
+                        create_overlay_image(
+                            image_path, predicted_mask, overlay_path, verbose=verbose)
+
+                        # Save visualization if requested
+                        if save_visualizations:
+                            if verbose:
+                                print(f"    Creating visualization...")
+                            save_prediction_visualization(
+                                image_path, mask_path, predicted_mask, plot_dir)
+
+                        successful_predictions += 1
+                        svs_successful_count += 1
+                        if verbose:
+                            print(
+                                f"    ✓ Successfully processed {image_name} in {prediction_time:.3f}s")
+
+                    except Exception as e:
+                        print(f"  Error saving outputs for {image_name}: {e}")
+                        if verbose:
+                            import traceback
+                            print(f"    Full traceback: {traceback.format_exc()}")
+                        failed_predictions += 1
+                else:
                     if verbose:
-                        import traceback
-                        print(f"    Full traceback: {traceback.format_exc()}")
+                        print(f"    ✗ Prediction failed for {image_name}")
                     failed_predictions += 1
-            else:
-                if verbose:
-                    print(f"    ✗ Prediction failed for {image_name}")
-                failed_predictions += 1
+            
+            batch_idx += 1
 
         # Calculate SVS directory processing time
         svs_processing_time = time.time() - svs_start_time
@@ -633,6 +733,10 @@ def parse_args():
                         help='Print detailed information during processing')
     parser.add_argument('--reprocess', action='store_true',
                         help='Remove existing mask and overlay directories and reprocess all images')
+    parser.add_argument('--batch-size', type=int, default=8,
+                        help='Batch size for GPU processing (default: 8)')
+    parser.add_argument('--num-workers', type=int, default=4,
+                        help='Number of workers for data loading (default: 4)')
     return parser.parse_args()
 
 
@@ -657,7 +761,9 @@ def main():
             save_visualizations=args.save_visualizations,
             max_images=args.max_images,
             reprocess=args.reprocess,
-            verbose=args.verbose
+            verbose=args.verbose,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers
         )
 
 
