@@ -36,6 +36,15 @@ jobs:
         git lfs install
         git lfs pull
     
+    - name: Clean up existing test_data directory
+      run: |
+        if [ -d "test_data" ]; then
+          echo "Removing existing test_data directory..."
+          rm -rf test_data
+        else
+          echo "No existing test_data directory found"
+        fi
+    
     - name: Download test data
       id: download
       run: |
