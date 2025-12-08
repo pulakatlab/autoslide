@@ -19,9 +19,11 @@ from tqdm import tqdm, trange
 class slide_handler():
     def __init__(
             self,
-            slide_path):
+            slide_path,
+            scene_index=0):
         self.slide_path = slide_path
-        
+        self.scene_index = scene_index
+
         # Automatically detect driver based on file extension
         file_ext = os.path.splitext(slide_path)[1].lower()
         if file_ext == '.vsi':
@@ -31,17 +33,19 @@ class slide_handler():
         else:
             # Default to SVS for backward compatibility
             driver = 'SVS'
-        
+
         self.slide = slideio.open_slide(slide_path, driver)
-        self.scene = self.slide.get_scene(0)
-        self.metadata_str = self.slide.raw_metadata
-        self.metadata = {}
-        for item in self.metadata_str.split('|'):
-            key, value = item.split('=')
-            self.metadata[key.strip()] = value.strip()
-        self.og_width = int(self.metadata['OriginalWidth'])
-        self.og_height = int(self.metadata['OriginalHeight'])
-        self.magnification = int(self.metadata['AppMag'])
+        self.num_scenes = self.slide.num_scenes
+        self.scene = self.slide.get_scene(scene_index)
+        # self.metadata_str = self.slide.raw_metadata
+        # self.metadata = {}
+        # for item in self.metadata_str.split('|'):
+        #     key, value = item.split('=')
+        #     self.metadata[key.strip()] = value.strip()
+        self.og_size = self.scene.rect[2:]
+        self.og_width = int(self.og_size[0])
+        self.og_height = int(self.og_size[1])
+        self.magnification = int(self.scene.magnification)
 
 
 def gen_step_windows(
@@ -500,8 +504,8 @@ def write_out_images(
     section_labels = section_frame['section_labels'].values
     section_hashes = section_frame['section_hash'].values
 
-    section_names = [f'{label}_{hash}' for label, hash in zip(
-        section_labels, section_hashes)]
+    section_names = [f'{label}_roi{i+1:03d}_{hash}' for i, (label, hash) in enumerate(zip(
+        section_labels, section_hashes))]
 
     for img, name in tqdm(zip(img_list, section_names)):
         img_path = os.path.join(output_dir, f'{name}.png')

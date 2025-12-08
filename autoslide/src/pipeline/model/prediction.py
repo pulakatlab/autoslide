@@ -35,28 +35,28 @@ plot_dir = config['plot_dirs']
 def remove_svs_outputs(svs_dir_path, verbose=False):
     """
     Remove mask and overlay directories for a given SVS directory.
-    
+
     Args:
         svs_dir_path (str): Path to the SVS directory
         verbose (bool): Whether to print detailed information
     """
     mask_dir = os.path.join(svs_dir_path, 'masks')
     overlay_dir = os.path.join(svs_dir_path, 'overlays')
-    
+
     dirs_removed = 0
-    
+
     if os.path.exists(mask_dir):
         if verbose:
             print(f"  Removing mask directory: {mask_dir}")
         shutil.rmtree(mask_dir)
         dirs_removed += 1
-    
+
     if os.path.exists(overlay_dir):
         if verbose:
             print(f"  Removing overlay directory: {overlay_dir}")
         shutil.rmtree(overlay_dir)
         dirs_removed += 1
-    
+
     if verbose and dirs_removed > 0:
         print(f"  Removed {dirs_removed} output directories")
     elif verbose:
@@ -112,7 +112,7 @@ def find_images_to_process(reprocess=False, verbose=False):
         path_parts = image_path.split(os.sep)
         images_idx = path_parts.index('images')
         svs_dir_name = path_parts[images_idx - 1]
-        
+
         # Determine corresponding mask path
         # Replace 'images' with 'masks' and add '_mask' suffix
         mask_path = image_path.replace('/images/', '/masks/')
@@ -132,7 +132,8 @@ def find_images_to_process(reprocess=False, verbose=False):
             os.makedirs(overlay_dir, exist_ok=True)
 
             if verbose:
-                print(f"Will process: {os.path.basename(image_path)} (SVS: {svs_dir_name})")
+                print(
+                    f"Will process: {os.path.basename(image_path)} (SVS: {svs_dir_name})")
                 print(f"  Image: {image_path}")
                 print(f"  Mask will be saved to: {mask_path}")
                 print(f"  Overlay will be saved to: {overlay_path}")
@@ -152,18 +153,20 @@ def find_images_to_process(reprocess=False, verbose=False):
         else:
             if not reprocess:
                 if verbose:
-                    print(f"Mask already exists for {os.path.basename(image_path)} (SVS: {svs_dir_name}), skipping")
+                    print(
+                        f"Mask already exists for {os.path.basename(image_path)} (SVS: {svs_dir_name}), skipping")
                     print(f"  Existing mask: {mask_path}")
                 else:
                     print(
                         f"Mask already exists for {os.path.basename(image_path)} (SVS: {svs_dir_name}), skipping")
 
-    print(f"Found {total_to_process} images that need prediction across {len(images_by_svs)} SVS directories")
+    print(
+        f"Found {total_to_process} images that need prediction across {len(images_by_svs)} SVS directories")
     if verbose and images_by_svs:
         print("Images per SVS directory:")
         for svs_dir, images in images_by_svs.items():
             print(f"  {svs_dir}: {len(images)} images")
-    
+
     return images_by_svs
 
 
@@ -186,26 +189,27 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
         if not os.path.exists(image_path):
             print(f"Image not found: {image_path}, skipping")
             return None, None
-            
+
         if verbose:
             print(f"  Loading image from: {image_path}")
             # Check image properties
             img = Image.open(image_path)
             print(f"  Image size: {img.size}, mode: {img.mode}")
             print(f"  Running prediction on device: {device}")
-        
+
         # Time the prediction
         start_time = time.time()
-        result = predict_single_image(model, image_path, device, transform, return_time=False)
+        result = predict_single_image(
+            model, image_path, device, transform, return_time=False)
         prediction_time = time.time() - start_time
-        
+
         if verbose and result is not None:
             print(f"  Prediction successful, mask shape: {result.shape}")
             print(f"  Mask value range: {result.min()} - {result.max()}")
             unique_vals = np.unique(result)
             print(f"  Unique mask values: {len(unique_vals)} values")
             print(f"  Prediction time: {prediction_time:.3f} seconds")
-        
+
         return result, prediction_time
     except Exception as e:
         print(f"Error processing {image_path}: {e}")
@@ -229,14 +233,14 @@ def create_overlay_image(image_path, predicted_mask, overlay_path, verbose=False
         if verbose:
             print(f"  Creating overlay image...")
             print(f"  Loading original image: {image_path}")
-        
+
         # Load original image
         img = Image.open(image_path).convert("RGB")
         img_array = np.array(img)
 
         # Create binary mask from prediction
         binary_mask = (predicted_mask > 127).astype(np.uint8)
-        
+
         if verbose:
             print(f"  Binary mask created with threshold 127")
             print(f"  Binary mask has {np.sum(binary_mask)} positive pixels")
@@ -264,7 +268,7 @@ def create_overlay_image(image_path, predicted_mask, overlay_path, verbose=False
         # Save overlay image
         overlay_pil = Image.fromarray(overlay_img)
         overlay_pil.save(overlay_path)
-        
+
         if verbose:
             print(f"  Overlay saved to: {overlay_path}")
 
@@ -288,10 +292,10 @@ def save_timing_to_tracking_json(image_path, prediction_time, verbose=False):
         # Get the directory containing the image
         image_dir = os.path.dirname(image_path)
         image_name = os.path.basename(image_path)
-        
+
         # Create tracking JSON filename
         tracking_json_path = os.path.join(image_dir, 'tracking.json')
-        
+
         # Load existing tracking data or create new
         tracking_data = {}
         if os.path.exists(tracking_json_path):
@@ -300,25 +304,28 @@ def save_timing_to_tracking_json(image_path, prediction_time, verbose=False):
                     tracking_data = json.load(f)
             except (json.JSONDecodeError, IOError) as e:
                 if verbose:
-                    print(f"  Warning: Could not load existing tracking.json: {e}")
+                    print(
+                        f"  Warning: Could not load existing tracking.json: {e}")
                     print(f"  Creating new tracking data")
                 tracking_data = {}
-        
+
         # Add timing information for this image
         if image_name not in tracking_data:
             tracking_data[image_name] = {}
-        
-        tracking_data[image_name]['prediction_time_seconds'] = round(prediction_time, 3)
-        tracking_data[image_name]['prediction_timestamp'] = time.strftime('%Y-%m-%d %H:%M:%S')
-        
+
+        tracking_data[image_name]['prediction_time_seconds'] = round(
+            prediction_time, 3)
+        tracking_data[image_name]['prediction_timestamp'] = time.strftime(
+            '%Y-%m-%d %H:%M:%S')
+
         # Save updated tracking data
         with open(tracking_json_path, 'w') as f:
             json.dump(tracking_data, f, indent=2, sort_keys=True)
-        
+
         if verbose:
             print(f"  Timing data saved to: {tracking_json_path}")
             print(f"  Prediction time: {prediction_time:.3f} seconds")
-            
+
     except Exception as e:
         print(f"Error saving timing data for {image_path}: {e}")
         if verbose:
@@ -339,7 +346,7 @@ def save_svs_timing_to_tracking_json(svs_dir_path, svs_processing_time, num_imag
     try:
         # Create tracking JSON filename in the SVS directory
         tracking_json_path = os.path.join(svs_dir_path, 'tracking.json')
-        
+
         # Load existing tracking data or create new
         tracking_data = {}
         if os.path.exists(tracking_json_path):
@@ -348,30 +355,36 @@ def save_svs_timing_to_tracking_json(svs_dir_path, svs_processing_time, num_imag
                     tracking_data = json.load(f)
             except (json.JSONDecodeError, IOError) as e:
                 if verbose:
-                    print(f"  Warning: Could not load existing tracking.json: {e}")
+                    print(
+                        f"  Warning: Could not load existing tracking.json: {e}")
                     print(f"  Creating new tracking data")
                 tracking_data = {}
-        
+
         # Add SVS directory timing information
         svs_key = '_svs_processing_summary'
         if svs_key not in tracking_data:
             tracking_data[svs_key] = {}
-        
-        tracking_data[svs_key]['total_processing_time_seconds'] = round(svs_processing_time, 3)
+
+        tracking_data[svs_key]['total_processing_time_seconds'] = round(
+            svs_processing_time, 3)
         tracking_data[svs_key]['num_images_processed'] = num_images
-        tracking_data[svs_key]['avg_time_per_image_seconds'] = round(svs_processing_time / num_images, 3) if num_images > 0 else 0
-        tracking_data[svs_key]['processing_timestamp'] = time.strftime('%Y-%m-%d %H:%M:%S')
-        
+        tracking_data[svs_key]['avg_time_per_image_seconds'] = round(
+            svs_processing_time / num_images, 3) if num_images > 0 else 0
+        tracking_data[svs_key]['processing_timestamp'] = time.strftime(
+            '%Y-%m-%d %H:%M:%S')
+
         # Save updated tracking data
         with open(tracking_json_path, 'w') as f:
             json.dump(tracking_data, f, indent=2, sort_keys=True)
-        
+
         if verbose:
             print(f"  SVS timing data saved to: {tracking_json_path}")
-            print(f"  Total processing time: {svs_processing_time:.3f} seconds")
+            print(
+                f"  Total processing time: {svs_processing_time:.3f} seconds")
             print(f"  Images processed: {num_images}")
-            print(f"  Average time per image: {svs_processing_time / num_images:.3f} seconds" if num_images > 0 else "  No images processed")
-            
+            print(
+                f"  Average time per image: {svs_processing_time / num_images:.3f} seconds" if num_images > 0 else "  No images processed")
+
     except Exception as e:
         print(f"Error saving SVS timing data for {svs_dir_path}: {e}")
         if verbose:
@@ -443,13 +456,14 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         verbose (bool): Whether to print detailed information
     """
     print("Starting batch prediction on suggested regions...")
-    
+
     if verbose:
         print(f"Configuration:")
         print(f"  Data directory: {data_dir}")
         print(f"  Artifacts directory: {artifacts_dir}")
         print(f"  Plot directory: {plot_dir}")
-        print(f"  Model path: {model_path if model_path else 'default best_val_mask_rcnn_model.pth'}")
+        print(
+            f"  Model path: {model_path if model_path else 'default best_val_mask_rcnn_model.pth'}")
         print(f"  Save visualizations: {save_visualizations}")
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
         print(f"  Reprocess existing: {reprocess}")
@@ -465,7 +479,8 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
     # Find images to process (grouped by SVS directory)
     if verbose:
         print("Scanning for images to process...")
-    images_by_svs = find_images_to_process(reprocess=reprocess, verbose=verbose)
+    images_by_svs = find_images_to_process(
+        reprocess=reprocess, verbose=verbose)
 
     if not images_by_svs:
         print("No images found that need prediction.")
@@ -493,18 +508,20 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
 
     # Double loop: first over SVS directories, then over images within each directory
     for svs_dir_name, images_list in images_by_svs.items():
-        print(f"\nProcessing SVS directory: {svs_dir_name} ({len(images_list)} images)")
-        
+        print(
+            f"\nProcessing SVS directory: {svs_dir_name} ({len(images_list)} images)")
+
         # Remove existing outputs if reprocessing
         if reprocess and images_list:
             # Get SVS directory path from first image
             first_image_path = images_list[0]['image_path']
-            svs_dir_path = os.path.dirname(os.path.dirname(first_image_path))  # Go up from images/ to SVS directory
-            
+            # Go up from images/ to SVS directory
+            svs_dir_path = os.path.dirname(os.path.dirname(first_image_path))
+
             if verbose:
                 print(f"  Reprocessing enabled - removing existing outputs...")
             remove_svs_outputs(svs_dir_path, verbose=verbose)
-        
+
         if verbose:
             print(f"  Directory contains {len(images_list)} images to process")
 
@@ -521,7 +538,8 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
             total_processed += 1
 
             if verbose:
-                print(f"\n  Processing image {i+1}/{len(images_list)} in {svs_dir_name}: {image_name}")
+                print(
+                    f"\n  Processing image {i+1}/{len(images_list)} in {svs_dir_name}: {image_name}")
 
             # Perform prediction
             predicted_mask, prediction_time = predict_image_from_path(
@@ -529,20 +547,22 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
 
             if predicted_mask is not None:
                 # Save timing information to tracking JSON
-                save_timing_to_tracking_json(image_path, prediction_time, verbose=verbose)
+                save_timing_to_tracking_json(
+                    image_path, prediction_time, verbose=verbose)
                 try:
                     if verbose:
                         print(f"    Saving predicted mask...")
-                    
+
                     # Save predicted mask
                     mask_img = Image.fromarray(predicted_mask, mode='L')
                     mask_img.save(mask_path)
-                    
+
                     if verbose:
                         print(f"    Mask saved to: {mask_path}")
 
                     # Create and save overlay image
-                    create_overlay_image(image_path, predicted_mask, overlay_path, verbose=verbose)
+                    create_overlay_image(
+                        image_path, predicted_mask, overlay_path, verbose=verbose)
 
                     # Save visualization if requested
                     if save_visualizations:
@@ -554,7 +574,8 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
                     successful_predictions += 1
                     svs_successful_count += 1
                     if verbose:
-                        print(f"    ✓ Successfully processed {image_name} in {prediction_time:.3f}s")
+                        print(
+                            f"    ✓ Successfully processed {image_name} in {prediction_time:.3f}s")
                     else:
                         print(
                             f"  Saved mask and overlay for {image_name} ({prediction_time:.3f}s)")
@@ -572,17 +593,20 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
 
         # Calculate SVS directory processing time
         svs_processing_time = time.time() - svs_start_time
-        
+
         # Get SVS directory path for saving timing data
         if images_list:
             # Get the parent directory of the images directory
             first_image_path = images_list[0]['image_path']
-            svs_dir_path = os.path.dirname(os.path.dirname(first_image_path))  # Go up from images/ to SVS directory
-            
-            # Save SVS timing information
-            save_svs_timing_to_tracking_json(svs_dir_path, svs_processing_time, svs_successful_count, verbose=verbose)
+            # Go up from images/ to SVS directory
+            svs_dir_path = os.path.dirname(os.path.dirname(first_image_path))
 
-        print(f"Completed SVS directory: {svs_dir_name} ({svs_processing_time:.1f}s, {svs_successful_count} successful)")
+            # Save SVS timing information
+            save_svs_timing_to_tracking_json(
+                svs_dir_path, svs_processing_time, svs_successful_count, verbose=verbose)
+
+        print(
+            f"Completed SVS directory: {svs_dir_name} ({svs_processing_time:.1f}s, {svs_successful_count} successful)")
 
     print(f"\nBatch prediction complete!")
     print(f"Processed {len(images_by_svs)} SVS directories")
@@ -597,6 +621,10 @@ def parse_args():
         description='Batch prediction on suggested regions')
     parser.add_argument('--model-path', type=str, default=None,
                         help='Path to saved model (default: best_val_mask_rcnn_model.pth)')
+    parser.add_argument('--dir', type=str, default=None,
+                        help='Arbitrary directory containing images to process. If provided, uses this instead of config dir')
+    parser.add_argument('--output-dir', type=str, default=None,
+                        help='Output directory for predictions when using --dir (default: <dir>/predictions)')
     parser.add_argument('--save-visualizations', action='store_true',
                         help='Save prediction visualizations for quality control')
     parser.add_argument('--max-images', type=int, default=None,
@@ -612,13 +640,25 @@ def main():
     """Main function"""
     args = parse_args()
 
-    process_all_images(
-        model_path=args.model_path,
-        save_visualizations=args.save_visualizations,
-        max_images=args.max_images,
-        reprocess=args.reprocess,
-        verbose=args.verbose
-    )
+    if args.dir:
+        # Process arbitrary directory
+        process_arbitrary_directory(
+            input_dir=args.dir,
+            output_dir=args.output_dir,
+            model_path=args.model_path,
+            save_visualizations=args.save_visualizations,
+            max_images=args.max_images,
+            verbose=args.verbose
+        )
+    else:
+        # Process suggested regions from config
+        process_all_images(
+            model_path=args.model_path,
+            save_visualizations=args.save_visualizations,
+            max_images=args.max_images,
+            reprocess=args.reprocess,
+            verbose=args.verbose
+        )
 
 
 if __name__ == "__main__":

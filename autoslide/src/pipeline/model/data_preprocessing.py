@@ -18,11 +18,12 @@ from torchvision.transforms import v2 as T
 from tqdm import tqdm, trange
 import autoslide.src
 from autoslide.src import config
-
+from autoslide.src.pipeline.model.color_correction import ColorCorrector
 
 #############################################################################
 # Data Loading Functions
 #############################################################################
+
 
 def load_data(data_dir=None):
     """
@@ -90,6 +91,60 @@ def split_train_val(image_names, mask_names, train_ratio=0.9):
     print(f'Validation images: {len(val_imgs)}')
 
     return train_imgs, train_masks, val_imgs, val_masks
+
+
+def apply_color_correction(
+    img_dir,
+    output_dir,
+    reference_images,
+    method='reinhard',
+    file_pattern='*.png'
+):
+    """
+    Apply color correction to images in a directory using reference images.
+
+    This function normalizes color variations in new datasets by transferring
+    color characteristics from reference images in the original dataset.
+
+    Args:
+        img_dir (str): Directory containing images to correct
+        output_dir (str): Directory to save corrected images
+        reference_images (str or list): Path(s) to reference image(s) from original dataset
+        method (str): Color correction method ('reinhard' or 'histogram')
+        file_pattern (str): Glob pattern for image files
+
+    Returns:
+        tuple: (successful_count, failed_count)
+    """
+    from pathlib import Path
+
+    img_dir = Path(img_dir)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initialize color corrector with reference images
+    corrector = ColorCorrector(reference_images)
+
+    # Process all matching files
+    image_files = list(img_dir.glob(file_pattern))
+    successful = 0
+    failed = 0
+
+    print(f"Applying color correction to {len(image_files)} images...")
+    print(f"Method: {method}")
+    print(f"Reference images: {reference_images}")
+
+    for img_path in tqdm(image_files, desc="Color correction"):
+        output_path = output_dir / img_path.name
+        if corrector.correct_image_file(img_path, output_path, method=method):
+            successful += 1
+        else:
+            failed += 1
+
+    print(
+        f"Color correction complete: {successful} successful, {failed} failed")
+
+    return successful, failed
 
 
 #############################################################################
