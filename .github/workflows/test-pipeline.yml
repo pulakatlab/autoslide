@@ -54,21 +54,28 @@ jobs:
         python pipeline_testing/download_test_data.py
       continue-on-error: true
     
-    - name: Run pipeline with auto-labeling
-      id: pipeline
+    - name: Run initial annotation
+      id: initial_annotation
       run: |
-        # Find the downloaded SVS file
-        SVS_FILE=$(find test_data -name "*.svs" -type f | head -1)
-        if [ -z "$SVS_FILE" ]; then
-          echo "No SVS file found, skipping pipeline"
-          exit 0
-        fi
-        echo "Using SVS file: $SVS_FILE"
-        python pipeline_testing/prefect_pipeline.py \
-          --test_data "$SVS_FILE" \
-          --auto_label \
-          --skip_training \
-          --verbose
+        python autoslide/src/pipeline/annotation/initial_annotation.py --verbose
+      continue-on-error: true
+    
+    - name: Auto-label regions for testing
+      id: auto_label
+      run: |
+        python pipeline_testing/auto_label_regions.py --data_dir test_data
+      continue-on-error: true
+    
+    - name: Run final annotation
+      id: final_annotation
+      run: |
+        python autoslide/src/pipeline/annotation/final_annotation.py --verbose
+      continue-on-error: true
+    
+    - name: Run region suggestion
+      id: region_suggestion
+      run: |
+        python autoslide/src/pipeline/suggest_regions.py --verbose
       continue-on-error: true
     
     - name: Run prediction
@@ -222,11 +229,32 @@ jobs:
           echo "✅ Download test data succeeded"
         fi
         
-        if [ "${{ steps.pipeline.outcome }}" == "failure" ]; then
-          echo "❌ Pipeline with auto-labeling failed"
+        if [ "${{ steps.initial_annotation.outcome }}" == "failure" ]; then
+          echo "❌ Initial annotation failed"
           FAILED=1
         else
-          echo "✅ Pipeline with auto-labeling succeeded"
+          echo "✅ Initial annotation succeeded"
+        fi
+        
+        if [ "${{ steps.auto_label.outcome }}" == "failure" ]; then
+          echo "❌ Auto-label regions failed"
+          FAILED=1
+        else
+          echo "✅ Auto-label regions succeeded"
+        fi
+        
+        if [ "${{ steps.final_annotation.outcome }}" == "failure" ]; then
+          echo "❌ Final annotation failed"
+          FAILED=1
+        else
+          echo "✅ Final annotation succeeded"
+        fi
+        
+        if [ "${{ steps.region_suggestion.outcome }}" == "failure" ]; then
+          echo "❌ Region suggestion failed"
+          FAILED=1
+        else
+          echo "✅ Region suggestion succeeded"
         fi
         
         if [ "${{ steps.prediction.outcome }}" == "failure" ]; then
