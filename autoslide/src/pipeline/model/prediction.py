@@ -274,6 +274,25 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
         return None, None
 
 
+def binarize_mask(mask):
+    """
+    Binarize mask similar to calc_fibrosis.py approach.
+    
+    Args:
+        mask (numpy.ndarray): Input mask to binarize
+        
+    Returns:
+        numpy.ndarray: Binary mask as boolean array
+    """
+    # Check mask format and binarize if necessary
+    if mask.dtype != np.uint8:
+        mask = (mask * 255).astype(np.uint8)
+    mask = mask > 0  # Convert to binary
+    binary_mask = mask.astype(bool)
+    
+    return binary_mask
+
+
 def create_overlay_image(image_path, predicted_mask, overlay_path, verbose=False):
     """
     Create an overlay image with the original image and predicted region outline.
@@ -293,16 +312,19 @@ def create_overlay_image(image_path, predicted_mask, overlay_path, verbose=False
         img = Image.open(image_path).convert("RGB")
         img_array = np.array(img)
 
-        # Create binary mask from prediction
-        binary_mask = (predicted_mask > 127).astype(np.uint8)
+        # Binarize mask using the same approach as calc_fibrosis.py
+        binary_mask = binarize_mask(predicted_mask)
+        
+        # Convert boolean mask to uint8 for contour detection
+        binary_mask_uint8 = binary_mask.astype(np.uint8)
 
         if verbose:
-            print(f"  Binary mask created with threshold 127")
+            print(f"  Binary mask created using binarize_mask function")
             print(f"  Binary mask has {np.sum(binary_mask)} positive pixels")
 
         # Find contours of the predicted regions
         contours, _ = cv2.findContours(
-            binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            binary_mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         if verbose:
             print(f"  Found {len(contours)} contours")
@@ -480,7 +502,7 @@ def save_prediction_visualization(image_path, mask_path, predicted_mask, plot_di
 
         # Overlay
         overlay = np.array(img)
-        mask_binary = predicted_mask > 127
+        mask_binary = binarize_mask(predicted_mask)
         overlay[mask_binary] = [255, 0, 0]  # Red overlay for vessels
 
         axes[2].imshow(overlay)
@@ -615,12 +637,18 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
                     if verbose:
                         print(f"    Saving predicted mask...")
 
-                    # Save predicted mask
-                    mask_img = Image.fromarray(predicted_mask, mode='L')
+                    # Binarize the mask before saving (similar to calc_fibrosis.py)
+                    binary_mask = binarize_mask(predicted_mask)
+                    # Convert boolean mask to uint8 for saving (0 or 255)
+                    binary_mask_uint8 = (binary_mask * 255).astype(np.uint8)
+                    
+                    # Save binarized mask
+                    mask_img = Image.fromarray(binary_mask_uint8, mode='L')
                     mask_img.save(mask_path)
 
                     if verbose:
-                        print(f"    Mask saved to: {mask_path}")
+                        print(f"    Binarized mask saved to: {mask_path}")
+                        print(f"    Mask contains {np.sum(binary_mask)} positive pixels")
 
                     # Create and save overlay image
                     create_overlay_image(
