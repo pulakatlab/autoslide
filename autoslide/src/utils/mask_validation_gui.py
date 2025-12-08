@@ -32,6 +32,7 @@ class MaskValidationGUI:
         self.validation_file = self.directory / "validation_results.json"
         self.unsaved_changes = False
         self.autosave_interval = 30000  # 30 seconds in milliseconds
+        self.binarize_mask = tk.BooleanVar(value=False)
         
         # Load existing validation results
         self.load_validation_results()
@@ -53,6 +54,7 @@ class MaskValidationGUI:
         self.root.bind('<Right>', lambda e: self.drop_image())
         self.root.bind('<q>', lambda e: self.quit_app())
         self.root.bind('<s>', lambda e: self.save_validation_results())
+        self.root.bind('<b>', lambda e: self.toggle_binarize())
         
         # Start autosave timer
         self.schedule_autosave()
@@ -98,6 +100,19 @@ class MaskValidationGUI:
         # Control panel at bottom
         control_frame = tk.Frame(main_frame)
         control_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        # Options frame (left side)
+        options_frame = tk.Frame(control_frame)
+        options_frame.pack(side=tk.LEFT)
+        
+        # Binarize checkbox
+        binarize_checkbox = tk.Checkbutton(
+            options_frame,
+            text="Binarize Mask (B)",
+            variable=self.binarize_mask,
+            command=self.on_binarize_changed
+        )
+        binarize_checkbox.pack(side=tk.LEFT, padx=(0, 20))
         
         # Navigation buttons
         nav_frame = tk.Frame(control_frame)
@@ -149,6 +164,7 @@ class MaskValidationGUI:
         instructions = (
             "Navigation: ↑/↓ arrows | "
             "Actions: ← drop mask, → drop entire image set | "
+            "Options: B toggle binarize | "
             "Save: S | Quit: Q"
         )
         tk.Label(
@@ -211,13 +227,34 @@ class MaskValidationGUI:
         overlay_path = overlay_path.parent / overlay_path.name.replace('.png', '_overlay.png')
         return overlay_path
     
-    def load_and_resize_image(self, path: Path, max_size: Tuple[int, int] = (400, 400), draw_x: bool = False) -> Optional[ImageTk.PhotoImage]:
+    def load_and_resize_image(self, path: Path, max_size: Tuple[int, int] = (400, 400), draw_x: bool = False, binarize: bool = False) -> Optional[ImageTk.PhotoImage]:
         """Load an image and resize it to fit the display."""
         if not path.exists():
             return None
         
         try:
             img = Image.open(path)
+            
+            # Binarize if requested (similar to calc_fibrosis.py)
+            if binarize:
+                # Convert to grayscale if needed
+                if img.mode != 'L':
+                    if len(np.array(img).shape) == 3:
+                        img_array = np.array(img)
+                        if img_array.shape[2] > 1:
+                            img_array = img_array[..., 0]  # Take first channel
+                        img = Image.fromarray(img_array, mode='L')
+                    else:
+                        img = img.convert('L')
+                
+                # Convert to numpy array and binarize
+                img_array = np.array(img)
+                if img_array.dtype != np.uint8:
+                    img_array = (img_array * 255).astype(np.uint8)
+                
+                # Binarize: convert to 0 or 255
+                binary_array = (img_array > 0).astype(np.uint8) * 255
+                img = Image.fromarray(binary_array, mode='L')
             
             # Calculate resize ratio to fit within max_size while maintaining aspect ratio
             ratio = min(max_size[0] / img.width, max_size[1] / img.height)
@@ -247,7 +284,7 @@ class MaskValidationGUI:
         
         return img_copy
     
-    def create_overlay_from_mask(self, image_path: Path, mask_path: Path, draw_x: bool = False) -> Optional[ImageTk.PhotoImage]:
+    def create_overlay_from_mask(self, image_path: Path, mask_path: Path, draw_x: bool = False, binarize_mask: bool = False) -> Optional[ImageTk.PhotoImage]:
         """Create an overlay image with mask at 0.3 alpha if overlay doesn't exist."""
         if not image_path.exists() or not mask_path.exists():
             return None
@@ -257,9 +294,16 @@ class MaskValidationGUI:
             img = Image.open(image_path).convert("RGBA")
             mask = Image.open(mask_path).convert("L")
             
+            # Binarize mask if requested (similar to calc_fibrosis.py)
+            mask_array = np.array(mask)
+            if binarize_mask:
+                if mask_array.dtype != np.uint8:
+                    mask_array = (mask_array * 255).astype(np.uint8)
+                # Binarize: convert to 0 or 255
+                mask_array = (mask_array > 0).astype(np.uint8) * 255
+            
             # Create colored mask (red with alpha)
             mask_colored = Image.new("RGBA", img.size, (255, 0, 0, 0))
-            mask_array = np.array(mask)
             
             # Apply alpha based on mask values
             mask_rgba = np.zeros((*mask_array.shape, 4), dtype=np.uint8)
@@ -322,14 +366,22 @@ class MaskValidationGUI:
         self.display_image_on_canvas(self.original_frame["canvas"], original_img, "Original not found")
         
         # Load and display mask (with X if mask or entire image dropped)
-        mask_img = self.load_and_resize_image(mask_path, draw_x=(mask_dropped or image_dropped))
+        mask_img = self.load_and_resize_image(
+            mask_path, 
+            draw_x=(mask_dropped or image_dropped),
+            binarize=self.binarize_mask.get()
+        )
         self.display_image_on_canvas(self.mask_frame["canvas"], mask_img, "Mask not found")
         
         # Load and display overlay (or create it) (with X if mask or entire image dropped)
         if overlay_path.exists():
             overlay_img = self.load_and_resize_image(overlay_path, draw_x=(mask_dropped or image_dropped))
         else:
-            overlay_img = self.create_overlay_from_mask(image_path, mask_path, draw_x=(mask_dropped or image_dropped))
+            overlay_img = self.create_overlay_from_mask(
+                image_path, mask_path, 
+                draw_x=(mask_dropped or image_dropped),
+                binarize_mask=self.binarize_mask.get()
+            )
         self.display_image_on_canvas(self.overlay_frame["canvas"], overlay_img, "Overlay not available")
     
     def display_image_on_canvas(self, canvas: tk.Canvas, photo_image: Optional[ImageTk.PhotoImage], error_msg: str):
@@ -437,6 +489,15 @@ class MaskValidationGUI:
         
         # Schedule next autosave
         self.root.after(self.autosave_interval, self.schedule_autosave)
+    
+    def toggle_binarize(self):
+        """Toggle the binarize mask option."""
+        self.binarize_mask.set(not self.binarize_mask.get())
+        self.display_current_image()
+    
+    def on_binarize_changed(self):
+        """Handle binarize checkbox change."""
+        self.display_current_image()
     
     def quit_app(self):
         """Quit the application with confirmation."""
