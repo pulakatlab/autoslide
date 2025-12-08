@@ -675,8 +675,6 @@ def parse_args():
                         help='Print detailed information during processing')
     parser.add_argument('--reprocess', action='store_true',
                         help='Remove existing mask and overlay directories and reprocess all images')
-    parser.add_argument('--dir', type=str, default=None,
-                        help='Custom directory containing images for prediction. If not provided, uses config directory')
     return parser.parse_args()
 
 
