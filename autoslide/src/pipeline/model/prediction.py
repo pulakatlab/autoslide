@@ -63,6 +63,25 @@ def remove_svs_outputs(svs_dir_path, verbose=False):
         print(f"  No output directories found to remove")
 
 
+def recreate_output_dirs(svs_dir_path, verbose=False):
+    """
+    Recreate mask and overlay directories for a given SVS directory.
+
+    Args:
+        svs_dir_path (str): Path to the SVS directory
+        verbose (bool): Whether to print detailed information
+    """
+    mask_dir = os.path.join(svs_dir_path, 'masks')
+    overlay_dir = os.path.join(svs_dir_path, 'overlays')
+
+    os.makedirs(mask_dir, exist_ok=True)
+    os.makedirs(overlay_dir, exist_ok=True)
+
+    if verbose:
+        print(f"  Created mask directory: {mask_dir}")
+        print(f"  Created overlay directory: {overlay_dir}")
+
+
 def find_images_to_process(reprocess=False, verbose=False, custom_dir=None):
     """
     Find all images that need prediction and don't already have masks.
@@ -563,6 +582,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
             if verbose:
                 print(f"  Reprocessing enabled - removing existing outputs...")
             remove_svs_outputs(svs_dir_path, verbose=verbose)
+            recreate_output_dirs(svs_dir_path, verbose=verbose)
 
         if verbose:
             print(f"  Directory contains {len(images_list)} images to process")
