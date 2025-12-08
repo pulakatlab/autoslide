@@ -4,7 +4,7 @@ Unified module for color correction and normalization of histological images wit
 
 ## Features
 
-- **Multiple Methods**: Supports Reinhard color transfer, histogram matching, and percentile normalization
+- **Multiple Methods**: Supports Reinhard color transfer, histogram matching, and percentile mapping
 - **Backup/Restore**: Automatically backup original images before processing and restore when needed
 - **Batch Processing**: Process entire directories with a single command
 - **Directory Structure Aware**: Handles nested directory structures like those in prediction.py
@@ -21,32 +21,50 @@ Matches histogram statistics in LAB color space for each channel independently.
 
 **Best for**: When you want to match overall intensity distributions.
 
-### 3. Percentile Normalization (`percentile`)
-Maps percentile ranges (e.g., 1st-99th percentile) from input images to reference percentile ranges.
+### 3. Percentile Mapping (`percentile_mapping`)
+Maps intensity values using percentile-based interpolation. Computes percentile values (0-100) for each channel in both source and target images, then uses interpolation to transform source intensities to match target distribution.
 
-**Best for**: Normalizing staining intensity variations, particularly effective for histological images.
+**Best for**: Normalizing staining intensity variations across different batches or scanning sessions. Particularly effective for histological images where overall intensity distribution matters more than absolute color values.
+
+**Implementation**: Based on the method from `autoslide_analysis/src/color_corrections_test.py`, using 101 percentile points (0, 1, 2, ..., 100) for smooth interpolation.
 
 ## Usage
 
 ### Command Line Interface
 
-#### Process images with backup
+#### Process all suggested_regions (uses autoslide config)
 ```bash
-python -m autoslide.utils.color_correction process \
-    --input-dir data/images \
+# Process all SVS directories in suggested_regions
+python -m autoslide.utils.color_correction process-pipeline \
     --reference-images data/reference/ref.png \
     --method reinhard \
     --backup
 ```
 
-#### Process with percentile normalization
+#### Process specific SVS directory
+```bash
+# Process only SVS_001
+python -m autoslide.utils.color_correction process-pipeline \
+    --reference-images data/reference/ref.png \
+    --svs-name SVS_001 \
+    --method reinhard \
+    --backup
+```
+
+#### Process with percentile mapping (pipeline)
+```bash
+python -m autoslide.utils.color_correction process-pipeline \
+    --reference-images "data/reference/*.png" \
+    --method percentile_mapping \
+    --backup
+```
+
+#### Process arbitrary directory (not using config)
 ```bash
 python -m autoslide.utils.color_correction process \
     --input-dir data/images \
-    --reference-images "data/reference/*.png" \
-    --method percentile \
-    --percentile-low 1.0 \
-    --percentile-high 99.0 \
+    --reference-images data/reference/ref.png \
+    --method reinhard \
     --backup
 ```
 
@@ -74,6 +92,41 @@ python -m autoslide.utils.color_correction list-backups \
 
 ### Python API
 
+#### Process suggested_regions (uses autoslide config)
+```python
+from autoslide.utils.color_correction import batch_process_suggested_regions
+
+# Process all SVS directories
+result = batch_process_suggested_regions(
+    reference_images='data/reference/ref.png',
+    method='reinhard',
+    backup=True,
+    replace_originals=True
+)
+
+print(f"Processed {result['svs_count']} SVS directories")
+print(f"Total images: {result['total_processed']}")
+
+# Process specific SVS
+result = batch_process_suggested_regions(
+    reference_images='data/reference/ref.png',
+    method='reinhard',
+    backup=True,
+    svs_name='SVS_001'
+)
+```
+
+#### Find SVS image directories
+```python
+from autoslide.utils.color_correction import find_svs_image_directories
+
+# Find all SVS image directories
+image_dirs = find_svs_image_directories()
+
+# Find specific SVS
+image_dirs = find_svs_image_directories(svs_name='SVS_001')
+```
+
 #### Basic usage
 ```python
 from autoslide.utils.color_correction import ColorProcessor
@@ -91,7 +144,7 @@ processed = processor.process_image(image)
 cv2.imwrite('path/to/output.png', processed)
 ```
 
-#### Batch processing with backup
+#### Batch processing arbitrary directory
 ```python
 from autoslide.utils.color_correction import batch_process_directory
 
@@ -131,7 +184,44 @@ for backup in backups:
 
 ## Workflow Example
 
-### 1. Process images with backup
+### Pipeline Workflow (Recommended)
+
+#### 1. Process all suggested_regions with backup
+```bash
+python -m autoslide.utils.color_correction process-pipeline \
+    --reference-images data/reference/*.png \
+    --method reinhard \
+    --backup
+```
+
+This will:
+- Process all SVS directories in `suggested_regions/` (from config)
+- Create backups in `suggested_regions/SVS_NAME/images/backups/backup_TIMESTAMP/`
+- Replace original images with color-corrected versions
+- Store metadata about the processing
+
+#### 2. If results are not satisfactory, restore originals
+```bash
+# Find available backups
+python -m autoslide.utils.color_correction list-backups \
+    --backup-root data/suggested_regions/SVS_001/images/backups
+
+# Restore from specific backup
+python -m autoslide.utils.color_correction restore \
+    --backup-dir data/suggested_regions/SVS_001/images/backups/backup_TIMESTAMP
+```
+
+#### 3. Try different method
+```bash
+python -m autoslide.utils.color_correction process-pipeline \
+    --reference-images data/reference/*.png \
+    --method percentile_mapping \
+    --backup
+```
+
+### Manual Workflow (Specific Directory)
+
+#### 1. Process specific directory with backup
 ```bash
 python -m autoslide.utils.color_correction process \
     --input-dir data/suggested_regions/SVS_001/images \
@@ -145,20 +235,18 @@ This will:
 - Replace original images with color-corrected versions
 - Store metadata about the processing
 
-### 2. If results are not satisfactory, restore originals
+#### 2. Restore if needed
 ```bash
 python -m autoslide.utils.color_correction restore \
     --backup-dir data/suggested_regions/SVS_001/images/backups/backup_TIMESTAMP
 ```
 
-### 3. Try different method or parameters
+#### 3. Try different method
 ```bash
 python -m autoslide.utils.color_correction process \
     --input-dir data/suggested_regions/SVS_001/images \
     --reference-images data/reference/*.png \
-    --method percentile \
-    --percentile-low 5.0 \
-    --percentile-high 95.0 \
+    --method percentile_mapping \
     --backup
 ```
 
@@ -193,16 +281,37 @@ Each backup includes a `backup_metadata.json` file with:
 - `source_directory`: Original location of images
 - `file_pattern`: Pattern used to select files
 - `method`: Processing method used
-- `percentiles`: Percentile range (for percentile method)
 - `replace_originals`: Whether originals were replaced
 
 ## Integration with Existing Pipeline
 
-This module can be integrated into the existing pipeline:
+This module integrates with the autoslide config and can be used before prediction:
+
+```python
+from autoslide.utils.color_correction import batch_process_suggested_regions
+from autoslide.pipeline.model.prediction import find_images_to_process
+
+# 1. Apply color correction to all suggested_regions
+result = batch_process_suggested_regions(
+    reference_images='data/reference/*.png',
+    method='reinhard',
+    backup=True,
+    replace_originals=True
+)
+
+print(f"Color corrected {result['total_processed']} images across {result['svs_count']} SVS directories")
+
+# 2. Continue with prediction pipeline
+images_by_svs = find_images_to_process()
+# ... existing prediction code ...
+```
+
+Or process specific SVS directories:
 
 ```python
 from autoslide.utils.color_correction import batch_process_directory
 from autoslide.pipeline.model.prediction import find_images_to_process
+from pathlib import Path
 
 # 1. Find images to process
 images_by_svs = find_images_to_process()
@@ -265,6 +374,7 @@ normalized = normalizer.normalize_image(image)
 **After:**
 ```python
 from autoslide.utils.color_correction import ColorProcessor
-processor = ColorProcessor(reference_images, method='percentile', percentiles=(1.0, 99.0))
+import numpy as np
+processor = ColorProcessor(reference_images, method='percentile_mapping', percentiles=np.linspace(0, 100, 101))
 normalized = processor.process_image(image)
 ```

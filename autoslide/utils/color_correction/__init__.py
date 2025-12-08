@@ -7,6 +7,8 @@ This module provides color correction and normalization with backup/restore func
 from .color_processor import (
     ColorProcessor,
     batch_process_directory,
+    batch_process_suggested_regions,
+    find_svs_image_directories,
     restore_originals,
     list_backups
 )
@@ -14,6 +16,8 @@ from .color_processor import (
 __all__ = [
     'ColorProcessor',
     'batch_process_directory',
+    'batch_process_suggested_regions',
+    'find_svs_image_directories',
     'restore_originals',
     'list_backups'
 ]
