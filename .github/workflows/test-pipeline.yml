@@ -38,11 +38,14 @@ jobs:
     
     - name: Clean up existing test_data directory
       run: |
+        echo "Current directory: $(pwd)"
         if [ -d "test_data" ]; then
+          echo "Found existing test_data directory at: $(pwd)/test_data"
           echo "Removing existing test_data directory..."
           rm -rf test_data
+          echo "test_data directory removed successfully"
         else
-          echo "No existing test_data directory found"
+          echo "No existing test_data directory found at: $(pwd)/test_data"
         fi
     
     - name: Download test data
