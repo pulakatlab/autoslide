@@ -57,7 +57,8 @@ def cmd_process(args):
     if '*' in args.reference_images or '?' in args.reference_images:
         reference_images = glob(args.reference_images)
         if not reference_images:
-            logger.error(f"No reference images found matching: {args.reference_images}")
+            logger.error(
+                f"No reference images found matching: {args.reference_images}")
             return 1
     else:
         reference_images = args.reference_images
@@ -67,7 +68,7 @@ def cmd_process(args):
     if args.method == 'percentile_mapping':
         import numpy as np
         percentiles = np.linspace(0, 100, 101)
-    
+
     result = batch_process_directory(
         input_dir=args.input_dir,
         reference_images=reference_images,
@@ -89,15 +90,16 @@ def cmd_process(args):
         print(f"Failed: {result['failed']} images")
         print(f"Input directory: {result['input_dir']}")
         print(f"Output directory: {result['output_dir']}")
-        
+
         if args.backup:
             print(f"Backup directory: {result['backup_dir']}")
             print(f"Backed up: {result['backup_count']} images")
-        
+
         print("="*60)
         return 0
     else:
-        logger.error(f"Processing failed: {result.get('error', 'Unknown error')}")
+        logger.error(
+            f"Processing failed: {result.get('error', 'Unknown error')}")
         return 1
 
 
@@ -107,7 +109,8 @@ def cmd_process_pipeline(args):
     if '*' in args.reference_images or '?' in args.reference_images:
         reference_images = glob(args.reference_images)
         if not reference_images:
-            logger.error(f"No reference images found matching: {args.reference_images}")
+            logger.error(
+                f"No reference images found matching: {args.reference_images}")
             return 1
     else:
         reference_images = args.reference_images
@@ -117,7 +120,7 @@ def cmd_process_pipeline(args):
     if args.method == 'percentile_mapping':
         import numpy as np
         percentiles = np.linspace(0, 100, 101)
-    
+
     result = batch_process_suggested_regions(
         reference_images=reference_images,
         method=args.method,
@@ -146,7 +149,8 @@ def cmd_process_pipeline(args):
         print("="*60)
         return 0
     else:
-        logger.error(f"Processing failed: {result.get('error', 'Unknown error')}")
+        logger.error(
+            f"Processing failed: {result.get('error', 'Unknown error')}")
         return 1
 
 
@@ -182,7 +186,7 @@ def cmd_list_backups(args):
     print("\n" + "="*60)
     print("AVAILABLE BACKUPS")
     print("="*60)
-    
+
     for i, backup in enumerate(backups, 1):
         print(f"\n{i}. Backup: {Path(backup['backup_dir']).name}")
         print(f"   Timestamp: {backup['timestamp']}")
@@ -190,7 +194,7 @@ def cmd_list_backups(args):
         print(f"   Files: {backup['file_count']}")
         print(f"   Method: {backup['method']}")
         print(f"   Path: {backup['backup_dir']}")
-    
+
     print("\n" + "="*60)
     return 0
 
@@ -201,8 +205,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
-    
-    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+
+    subparsers = parser.add_subparsers(
+        dest='command', help='Command to execute')
     subparsers.required = True
 
     # Process pipeline command (uses config)

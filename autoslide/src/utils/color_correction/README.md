@@ -320,7 +320,7 @@ images_by_svs = find_images_to_process()
 for svs_name, images in images_by_svs.items():
     if images:
         image_dir = Path(images[0]['image_path']).parent
-        
+
         result = batch_process_directory(
             input_dir=image_dir,
             reference_images='data/reference/*.png',
@@ -328,7 +328,7 @@ for svs_name, images in images_by_svs.items():
             backup=True,
             replace_originals=True
         )
-        
+
         print(f"Processed {svs_name}: {result['processed']} images")
 
 # 3. Continue with prediction pipeline
