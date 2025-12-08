@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw
 import numpy as np
 
 
@@ -30,6 +30,8 @@ class MaskValidationGUI:
         self.dropped_masks: set = set()
         self.dropped_images: set = set()
         self.validation_file = self.directory / "validation_results.json"
+        self.unsaved_changes = False
+        self.autosave_interval = 30000  # 30 seconds in milliseconds
         
         # Load existing validation results
         self.load_validation_results()
@@ -51,6 +53,9 @@ class MaskValidationGUI:
         self.root.bind('<Right>', lambda e: self.drop_image())
         self.root.bind('<q>', lambda e: self.quit_app())
         self.root.bind('<s>', lambda e: self.save_validation_results())
+        
+        # Start autosave timer
+        self.schedule_autosave()
         
         # Load first image
         self.display_current_image()
@@ -206,7 +211,7 @@ class MaskValidationGUI:
         overlay_path = overlay_path.parent / overlay_path.name.replace('.png', '_overlay.png')
         return overlay_path
     
-    def load_and_resize_image(self, path: Path, max_size: Tuple[int, int] = (400, 400)) -> Optional[ImageTk.PhotoImage]:
+    def load_and_resize_image(self, path: Path, max_size: Tuple[int, int] = (400, 400), draw_x: bool = False) -> Optional[ImageTk.PhotoImage]:
         """Load an image and resize it to fit the display."""
         if not path.exists():
             return None
@@ -220,12 +225,29 @@ class MaskValidationGUI:
                 new_size = (int(img.width * ratio), int(img.height * ratio))
                 img = img.resize(new_size, Image.Resampling.LANCZOS)
             
+            # Draw red diagonal lines if requested
+            if draw_x:
+                img = self.draw_red_x(img)
+            
             return ImageTk.PhotoImage(img)
         except Exception as e:
             print(f"Error loading image {path}: {e}")
             return None
     
-    def create_overlay_from_mask(self, image_path: Path, mask_path: Path) -> Optional[ImageTk.PhotoImage]:
+    def draw_red_x(self, img: Image.Image) -> Image.Image:
+        """Draw red diagonal lines across an image."""
+        img_copy = img.copy()
+        draw = ImageDraw.Draw(img_copy)
+        width, height = img_copy.size
+        
+        # Draw thick red diagonal lines
+        line_width = max(5, min(width, height) // 100)
+        draw.line([(0, 0), (width, height)], fill="red", width=line_width)
+        draw.line([(width, 0), (0, height)], fill="red", width=line_width)
+        
+        return img_copy
+    
+    def create_overlay_from_mask(self, image_path: Path, mask_path: Path, draw_x: bool = False) -> Optional[ImageTk.PhotoImage]:
         """Create an overlay image with mask at 0.3 alpha if overlay doesn't exist."""
         if not image_path.exists() or not mask_path.exists():
             return None
@@ -256,6 +278,10 @@ class MaskValidationGUI:
                 new_size = (int(overlay.width * ratio), int(overlay.height * ratio))
                 overlay = overlay.resize(new_size, Image.Resampling.LANCZOS)
             
+            # Draw red X if requested
+            if draw_x:
+                overlay = self.draw_red_x(overlay)
+            
             return ImageTk.PhotoImage(overlay)
         except Exception as e:
             print(f"Error creating overlay: {e}")
@@ -270,6 +296,10 @@ class MaskValidationGUI:
         mask_path = self.get_mask_path(image_path)
         overlay_path = self.get_overlay_path(image_path)
         
+        # Determine what to mark with red X
+        image_dropped = str(image_path) in self.dropped_images
+        mask_dropped = str(image_path) in self.dropped_masks
+        
         # Update info label
         self.info_label.config(
             text=f"Image {self.current_index + 1}/{len(self.image_files)}: {image_path.name}"
@@ -277,9 +307,9 @@ class MaskValidationGUI:
         
         # Update status label
         status_parts = []
-        if str(image_path) in self.dropped_images:
+        if image_dropped:
             status_parts.append("IMAGE DROPPED")
-        if str(image_path) in self.dropped_masks:
+        if mask_dropped:
             status_parts.append("MASK DROPPED")
         
         if status_parts:
@@ -287,19 +317,19 @@ class MaskValidationGUI:
         else:
             self.status_label.config(text="OK", fg="green")
         
-        # Load and display original image
-        original_img = self.load_and_resize_image(image_path)
+        # Load and display original image (with X if entire image set dropped)
+        original_img = self.load_and_resize_image(image_path, draw_x=image_dropped)
         self.display_image_on_canvas(self.original_frame["canvas"], original_img, "Original not found")
         
-        # Load and display mask
-        mask_img = self.load_and_resize_image(mask_path)
+        # Load and display mask (with X if mask or entire image dropped)
+        mask_img = self.load_and_resize_image(mask_path, draw_x=(mask_dropped or image_dropped))
         self.display_image_on_canvas(self.mask_frame["canvas"], mask_img, "Mask not found")
         
-        # Load and display overlay (or create it)
+        # Load and display overlay (or create it) (with X if mask or entire image dropped)
         if overlay_path.exists():
-            overlay_img = self.load_and_resize_image(overlay_path)
+            overlay_img = self.load_and_resize_image(overlay_path, draw_x=(mask_dropped or image_dropped))
         else:
-            overlay_img = self.create_overlay_from_mask(image_path, mask_path)
+            overlay_img = self.create_overlay_from_mask(image_path, mask_path, draw_x=(mask_dropped or image_dropped))
         self.display_image_on_canvas(self.overlay_frame["canvas"], overlay_img, "Overlay not available")
     
     def display_image_on_canvas(self, canvas: tk.Canvas, photo_image: Optional[ImageTk.PhotoImage], error_msg: str):
@@ -338,11 +368,10 @@ class MaskValidationGUI:
         
         if image_path in self.dropped_masks:
             self.dropped_masks.remove(image_path)
-            messagebox.showinfo("Mask Restored", "Mask has been restored")
         else:
             self.dropped_masks.add(image_path)
-            messagebox.showinfo("Mask Dropped", "Mask has been marked as dropped")
         
+        self.unsaved_changes = True
         self.display_current_image()
     
     def drop_image(self):
@@ -354,11 +383,10 @@ class MaskValidationGUI:
         
         if image_path in self.dropped_images:
             self.dropped_images.remove(image_path)
-            messagebox.showinfo("Image Restored", "Image set has been restored")
         else:
             self.dropped_images.add(image_path)
-            messagebox.showinfo("Image Dropped", "Entire image set has been marked as dropped")
         
+        self.unsaved_changes = True
         self.display_current_image()
     
     def load_validation_results(self):
@@ -372,7 +400,7 @@ class MaskValidationGUI:
             except Exception as e:
                 print(f"Error loading validation results: {e}")
     
-    def save_validation_results(self):
+    def save_validation_results(self, show_message: bool = True):
         """Save validation results to JSON file."""
         try:
             data = {
@@ -386,18 +414,33 @@ class MaskValidationGUI:
             with open(self.validation_file, 'w') as f:
                 json.dump(data, f, indent=2)
             
-            messagebox.showinfo(
-                "Saved",
-                f"Validation results saved to:\n{self.validation_file}\n\n"
-                f"Dropped masks: {len(self.dropped_masks)}\n"
-                f"Dropped images: {len(self.dropped_images)}"
-            )
+            self.unsaved_changes = False
+            
+            if show_message:
+                messagebox.showinfo(
+                    "Saved",
+                    f"Validation results saved to:\n{self.validation_file}\n\n"
+                    f"Dropped masks: {len(self.dropped_masks)}\n"
+                    f"Dropped images: {len(self.dropped_images)}"
+                )
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save validation results: {e}")
+            if show_message:
+                messagebox.showerror("Error", f"Failed to save validation results: {e}")
+            else:
+                print(f"Autosave error: {e}")
+    
+    def schedule_autosave(self):
+        """Schedule periodic autosave."""
+        if self.unsaved_changes:
+            self.save_validation_results(show_message=False)
+            print(f"Autosaved at {self.current_index + 1}/{len(self.image_files)}")
+        
+        # Schedule next autosave
+        self.root.after(self.autosave_interval, self.schedule_autosave)
     
     def quit_app(self):
         """Quit the application with confirmation."""
-        if self.dropped_masks or self.dropped_images:
+        if self.unsaved_changes:
             response = messagebox.askyesnocancel(
                 "Save before quit?",
                 "You have unsaved changes. Save before quitting?"
@@ -405,7 +448,7 @@ class MaskValidationGUI:
             if response is None:  # Cancel
                 return
             elif response:  # Yes
-                self.save_validation_results()
+                self.save_validation_results(show_message=False)
         
         self.root.quit()
 
