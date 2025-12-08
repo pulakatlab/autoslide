@@ -327,7 +327,7 @@ def process_single_image_fibrosis(
         # Create visualization if requested
         if save_visualizations and vis_dir:
             create_fibrosis_visualization(
-                image, raw_fibrosis_mask, vessel_mask, fibrosis_results,
+                image, raw_fibrosis_mask, binary_vessel_mask, fibrosis_results,
                 image_name, vis_dir, verbose=verbose
             )
 
@@ -598,7 +598,7 @@ def process_all_fibrosis_quantification(
     print(f"Total processed: {total_successful + total_failed}")
 
 
-def create_fibrosis_visualization(image, fibrosis_mask, vessel_mask, results, image_name, vis_dir, verbose=False):
+def create_fibrosis_visualization(image, fibrosis_mask, binary_vessel_mask, results, image_name, vis_dir, verbose=False):
     """
     Create and save a visualization of fibrosis analysis results.
     """
@@ -611,7 +611,7 @@ def create_fibrosis_visualization(image, fibrosis_mask, vessel_mask, results, im
         axes[0, 0].axis('off')
 
         # Vessel mask
-        axes[0, 1].imshow(vessel_mask, cmap='gray')
+        axes[0, 1].imshow(binary_vessel_mask, cmap='gray')
         axes[0, 1].set_title('Vessel Mask (Neural Network)')
         axes[0, 1].axis('off')
 
@@ -629,9 +629,7 @@ def create_fibrosis_visualization(image, fibrosis_mask, vessel_mask, results, im
 
         # Combined overlay
         combined_overlay = image.copy()
-        vessel_binary = (vessel_mask > 127).astype(
-            bool) if vessel_mask.max() > 1 else vessel_mask.astype(bool)
-        combined_overlay[vessel_binary] = [1, 0, 0]  # Red for vessels
+        combined_overlay[binary_vessel_mask] = [1, 0, 0]  # Red for vessels
         combined_overlay[fibrosis_mask == 1] = [0, 1, 0]  # Green for fibrosis
         axes[1, 1].imshow(combined_overlay)
         axes[1, 1].set_title('Combined Overlay\n(Red=Vessels, Green=Fibrosis)')
