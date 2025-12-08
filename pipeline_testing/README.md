@@ -1,10 +1,10 @@
 # AutoSlide Pipeline Testing
 
-This directory contains testing infrastructure for the AutoSlide pipeline using Prefect.
+This directory contains testing infrastructure for the AutoSlide pipeline.
 
 ## Overview
 
-The Prefect test pipeline (`prefect_pipeline.py`) orchestrates the main steps of the AutoSlide pipeline on test data:
+The test pipeline orchestrates the main steps of the AutoSlide pipeline on test data:
 
 1. **Initial Annotation** - Preliminary tissue delineation
 2. **Final Annotation** - Tissue labeling and segmentation
@@ -14,7 +14,7 @@ The Prefect test pipeline (`prefect_pipeline.py`) orchestrates the main steps of
 
 ## Requirements
 
-Install development dependencies (includes Prefect and gdown):
+Install development dependencies (includes gdown for downloading test data):
 ```bash
 pip install -r requirements-dev.txt
 ```
@@ -33,22 +33,50 @@ This will download the trained models (~338MB total) from `autoslide/artifacts/`
 
 Download test data from Google Drive:
 ```bash
-python pipeline_testing/prefect_pipeline.py --download_test_data
+python pipeline_testing/download_test_data.py
 ```
 
-### Basic Usage
+### Running Individual Pipeline Steps
 
-Run the full pipeline with downloaded test data:
+After downloading test data, run each pipeline step directly:
+
 ```bash
-python pipeline_testing/prefect_pipeline.py --download_test_data
+# Initial annotation
+python autoslide/src/pipeline/annotation/initial_annotation.py --verbose
+
+# Auto-label regions for testing (bypasses manual annotation)
+python pipeline_testing/auto_label_regions.py --data_dir test_data
+
+# Final annotation
+python autoslide/src/pipeline/annotation/final_annotation.py --verbose
+
+# Region suggestion
+python autoslide/src/pipeline/suggest_regions.py --verbose
+
+# Prediction
+python autoslide/src/pipeline/model/prediction.py --verbose
+
+# Fibrosis calculation
+python autoslide/src/fibrosis_calculation/calc_fibrosis.py --verbose
 ```
 
-Or use your own test data:
+### Using Prefect for Local Testing (Optional)
+
+For local development and testing, you can use the Prefect pipeline orchestrator:
+
 ```bash
-python pipeline_testing/prefect_pipeline.py --test_data path/to/file.svs
+# Run the full pipeline with downloaded test data
+python pipeline_testing/prefect_pipeline.py --download_test_data --auto_label --verbose
+
+# Or use your own test data
+python pipeline_testing/prefect_pipeline.py --test_data path/to/file.svs --auto_label --verbose
 ```
 
-### Options
+**Note:** GitHub Actions workflows run scripts directly without Prefect for simpler execution and debugging.
+
+### Prefect Pipeline Options (Local Testing Only)
+
+When using `prefect_pipeline.py` for local testing:
 
 - `--test_data PATH` - Path to test SVS file
 - `--download_test_data` - Download test data from Google Drive
@@ -62,40 +90,39 @@ python pipeline_testing/prefect_pipeline.py --test_data path/to/file.svs
 
 ### Auto-Labeling for Testing
 
-The `--auto_label` flag enables automatic labeling of the largest thresholded region as heart tissue. This bypasses the manual annotation step and allows downstream processing to continue for testing purposes.
+The auto-labeling script automatically labels the largest thresholded region as heart tissue, bypassing manual annotation for testing:
 
 ```bash
-python pipeline_testing/prefect_pipeline.py --download_test_data --auto_label --verbose
+python pipeline_testing/auto_label_regions.py --data_dir test_data
 ```
 
 ### Examples
 
-Download and run with auto-labeling (recommended for testing):
+**Direct script execution (recommended for CI/CD):**
 ```bash
+# Download and run complete pipeline
+python pipeline_testing/download_test_data.py
+python autoslide/src/pipeline/annotation/initial_annotation.py --verbose
+python pipeline_testing/auto_label_regions.py --data_dir test_data
+python autoslide/src/pipeline/annotation/final_annotation.py --verbose
+python autoslide/src/pipeline/suggest_regions.py --verbose
+python autoslide/src/pipeline/model/prediction.py --verbose
+python autoslide/src/fibrosis_calculation/calc_fibrosis.py --verbose
+```
+
+**Prefect orchestration (local testing):**
+```bash
+# Download and run with auto-labeling
 python pipeline_testing/prefect_pipeline.py --download_test_data --auto_label --verbose
-```
 
-Skip annotation steps with downloaded data:
-```bash
-python pipeline_testing/prefect_pipeline.py --download_test_data --skip_annotation
-```
-
-Use local test data with auto-labeling:
-```bash
+# Use local test data
 python pipeline_testing/prefect_pipeline.py \
     --test_data test_data/svs/x_8142-2021_Trichrome_426_427_37727.svs \
     --auto_label \
     --verbose
-```
 
-Manual labeling (without auto-label):
-```bash
-# Run initial annotation
-python pipeline_testing/prefect_pipeline.py --download_test_data --skip_annotation
-
-# Manually edit the CSV file in test_data/initial_annotation/
-# Then run remaining steps
-python pipeline_testing/prefect_pipeline.py --test_data <path> --verbose
+# Skip training for faster testing
+python pipeline_testing/prefect_pipeline.py --download_test_data --auto_label --skip_training --verbose
 ```
 
 ## Test Data
@@ -116,20 +143,30 @@ Google Drive folder: [Test Data](https://drive.google.com/drive/folders/165Ei63l
 
 ## Pipeline Steps
 
-Each step is implemented as a Prefect task:
+The pipeline consists of the following steps:
 
-- `verify_test_data()` - Validates test data file exists
-- `setup_test_environment()` - Creates output directories
-- `run_initial_annotation()` - Executes initial annotation
-- `run_final_annotation()` - Executes final annotation
-- `run_region_suggestion()` - Executes region suggestion
-- `run_model_training()` - Executes model training
-- `run_prediction()` - Executes prediction
+1. **Download Test Data** - `download_test_data.py` - Downloads test SVS files from Google Drive
+2. **Initial Annotation** - `initial_annotation.py` - Preliminary tissue delineation
+3. **Auto-Label Regions** - `auto_label_regions.py` - Automatic labeling for testing (bypasses manual annotation)
+4. **Final Annotation** - `final_annotation.py` - Tissue labeling and segmentation
+5. **Region Suggestion** - `suggest_regions.py` - Identify regions for detailed analysis
+6. **Prediction** - `prediction.py` - Run vessel detection on selected regions
+7. **Fibrosis Calculation** - `calc_fibrosis.py` - Quantify fibrotic tissue
 
-## Error Handling
+## CI/CD Integration
 
-By default, the pipeline continues on errors. Use `--fail_fast` to stop on the first error encountered.
+GitHub Actions workflows run each script directly without Prefect orchestration. This provides:
+- Simpler execution and debugging
+- Better visibility into individual step failures
+- Faster execution without orchestration overhead
+- More granular control over step execution
 
-## Monitoring
+## Local Development with Prefect
 
-Prefect provides built-in monitoring and logging. View execution details in the console output or use the Prefect UI for more detailed tracking.
+For local testing, `prefect_pipeline.py` provides orchestration with:
+- Automatic dependency management between steps
+- Built-in monitoring and logging
+- Error handling with `--fail_fast` option
+- Progress tracking through Prefect UI (optional)
+
+View execution details in console output or use the Prefect UI for detailed tracking.
