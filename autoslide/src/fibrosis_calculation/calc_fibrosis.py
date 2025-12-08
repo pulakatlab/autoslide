@@ -642,8 +642,10 @@ def create_fibrosis_visualization(image, fibrosis_mask, vessel_mask, results, im
         result_text = f"Fibrosis Analysis Results\n\n"
         result_text += f"Image: {image_name}\n\n"
 
+        if 'fibrosis_percentage_total' in results:
+            result_text += f"Raw Fibrosis %: {results['fibrosis_percentage_total']:.2f}%\n"
         if 'fibrosis_percentage' in results:
-            result_text += f"Fibrosis %: {results['fibrosis_percentage']:.2f}%\n"
+            result_text += f"Corrected Fibrosis % (after vessel removal): {results['fibrosis_percentage']:.2f}%\n"
         if 'fibrosis_area' in results:
             result_text += f"Fibrosis Area: {results['fibrosis_area']:,} px\n"
         if 'fibrosis_in_vessels_area' in results:
