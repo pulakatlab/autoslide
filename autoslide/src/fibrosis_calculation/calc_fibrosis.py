@@ -21,6 +21,7 @@ from pprint import pprint as pp
 
 ##############################
 
+
 def gen_fibrosis_mask(
         image,
         fibrosis_config,
@@ -72,7 +73,8 @@ def gen_fibrosis_mask(
         saturation_channel = hsv_image[:, :, 1]
         # Normalize saturation channel to [0, 1] range
         saturation_channel = saturation_channel / 255.0
-        mask &= (saturation_channel >= fibrosis_config['color_saturation_threshold'])
+        mask &= (saturation_channel >=
+                 fibrosis_config['color_saturation_threshold'])
 
     # Exclude vessel areas from fibrosis mask if vessel mask is provided
     if vessel_mask is not None:
@@ -81,9 +83,11 @@ def gen_fibrosis_mask(
             vessel_mask = (vessel_mask * 255).astype(np.uint8)
         vessel_mask = vessel_mask > 0  # Convert to binary
         vessel_binary = vessel_mask.astype(bool)
-        
+
         # Set fibrosis mask to 0 where vessels are present
         vessel_corrected_mask = mask & (~vessel_binary)
+
+    binary_vessel_mask = vessel_binary if vessel_mask is not None else None
 
     # fig, ax = plt.subplots(1, 4, figsize=(20, 5),
     #                       sharex=True, sharey=True)
@@ -97,7 +101,7 @@ def gen_fibrosis_mask(
     # ax[3].set_title('Combined Mask (Fibrosis + Vessels)')
     # plt.show()
     #
-    return mask.astype(np.uint8), vessel_corrected_mask.astype(np.uint8)
+    return mask.astype(np.uint8), vessel_corrected_mask.astype(np.uint8), binary_vessel_mask
 
 
 def quantify_fibrosis(
@@ -135,7 +139,7 @@ def quantify_fibrosis(
         fibrosis_area_no_vessels = np.sum(corrected_fibrosis_mask)
 
         # Calculate fibrotic pixels within vessel areas
-        fibrosis_in_vessels_area = fibrosis_area - fibrosis_area_no_vessels 
+        fibrosis_in_vessels_area = fibrosis_area - fibrosis_area_no_vessels
 
         fibrosis_percentage = (fibrosis_area_no_vessels /
                                tissue_area) * 100 if tissue_area > 0 else 0
@@ -266,7 +270,7 @@ def process_single_image_fibrosis(
 
         # Generate fibrosis mask
         # fibrosis_mask = gen_fibrosis_mask(image, fibrosis_config)
-        raw_fibrosis_mask, corrected_fibrosis_mask = gen_fibrosis_mask(
+        raw_fibrosis_mask, corrected_fibrosis_mask, binary_vessel_mask = gen_fibrosis_mask(
             image,
             fibrosis_config,
             vessel_mask=vessel_mask
@@ -283,12 +287,11 @@ def process_single_image_fibrosis(
         # ax[3].set_title('Fibrosis Mask (Excl. Vessels)')
         # plt.show()
 
-
         # Quantify fibrosis
         fibrosis_results = quantify_fibrosis(
             fibrosis_mask=raw_fibrosis_mask,
             corrected_fibrosis_mask=corrected_fibrosis_mask,
-            vessel_mask=vessel_mask,
+            vessel_mask=binary_vessel_mask,
         )
 
         # Add metadata to results
@@ -324,7 +327,7 @@ def process_single_image_fibrosis(
         # Create visualization if requested
         if save_visualizations and vis_dir:
             create_fibrosis_visualization(
-                image, fibrosis_mask, vessel_mask, fibrosis_results,
+                image, raw_fibrosis_mask, vessel_mask, fibrosis_results,
                 image_name, vis_dir, verbose=verbose
             )
 
@@ -332,6 +335,7 @@ def process_single_image_fibrosis(
 
     except Exception as e:
         error_msg = f"Error processing {image_name}: {e}"
+        print(error_msg)
         if verbose:
             import traceback
             error_msg += f"\n  Full traceback: {traceback.format_exc()}"
@@ -503,11 +507,19 @@ def process_all_fibrosis_quantification(
         svs_start_time = time.time()
 
         # Process images in parallel for this SVS
-        results = Parallel(n_jobs=n_jobs, verbose=1 if verbose else 0)(
-            delayed(process_single_image_fibrosis)(
-                item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose
-            ) for item in tqdm(svs_images, desc=f"Processing {svs_name}")
-        )
+        if n_jobs > 1:
+            results = Parallel(n_jobs=n_jobs, verbose=1 if verbose else 0)(
+                delayed(process_single_image_fibrosis)(
+                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose
+                ) for item in tqdm(svs_images, desc=f"Processing {svs_name}")
+            )
+        else:
+            results = []
+            for item in tqdm(svs_images, desc=f"Processing {svs_name}"):
+                result = process_single_image_fibrosis(
+                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose
+                )
+                results.append(result)
 
         # Calculate timing for this SVS
         svs_end_time = time.time()
