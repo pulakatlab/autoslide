@@ -111,14 +111,6 @@ def main():
     # Train model
     model, all_train_losses, all_val_losses, best_val_loss = train_model(
         model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir
-    )
-    if os.path.exists(best_model_path) and not args.retrain:
-        print('Loading model from savefile')
-        model = load_model(model, best_model_path, device)
-    else:
-        # Train model
-        model, all_train_losses, all_val_losses, best_val_loss = train_model(
-            model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir
         )
 
     # Evaluate model
@@ -133,6 +125,9 @@ if __name__ == "__main__":
     base_artifacts_dir = artifacts_dir
     n_runs = 10
     for run_num in trange(n_runs):
+        print('=============================')
+        print(f'Training for run {run_num}')
+        print('=============================')
         artifacts_dir = os.path.join(base_artifacts_dir, f'run_{run_num}')
         plot_dir = os.path.join(base_plot_dir, f'run_{run_num}')
         os.makedirs(artifacts_dir, exist_ok=True)
