@@ -17,7 +17,7 @@ import logging
 import shutil
 import json
 from datetime import datetime
-from autoslide import config
+from autoslide.src import config
 
 logger = logging.getLogger(__name__)
 

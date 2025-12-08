@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 from glob import glob
 
-from .color_processor import (
+from autoslide.src.utils.color_correction.color_processor import (
     batch_process_directory,
     batch_process_suggested_regions,
     restore_originals,
