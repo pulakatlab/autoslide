@@ -70,7 +70,8 @@ def str_to_hash(s):
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Suggest regions for classification')
+    parser = argparse.ArgumentParser(
+        description='Suggest regions for classification')
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Enable verbose output')
     return parser.parse_args()
@@ -79,28 +80,28 @@ def parse_args():
 def main():
     args = parse_args()
     verbose = args.verbose
-    
+
     if verbose:
         print("Starting region suggestion pipeline...")
         print(f"Verbose mode enabled")
-    
+
     # Get directories from config
     data_dir = config['data_dir']
     mask_dir = config['final_annotation_dir']
     metadata_dir = config['initial_annotation_dir']
     output_base_dir = config['suggested_regions_dir']
-    
+
     if verbose:
         print(f"Data directory: {data_dir}")
         print(f"Mask directory: {mask_dir}")
         print(f"Metadata directory: {metadata_dir}")
         print(f"Output base directory: {output_base_dir}")
-    
+
     if not os.path.exists(output_base_dir):
         os.makedirs(output_base_dir, exist_ok=True)
         if verbose:
             print(f"Created output directory: {output_base_dir}")
-    
+
     tracking_dir = config['tracking_dir']
     if verbose:
         print(f"Tracking directory: {tracking_dir}")
@@ -108,7 +109,7 @@ def main():
     file_list = os.listdir(tracking_dir)
     json_path_list = glob(os.path.join(tracking_dir, '*.json'))
     json_list = [json.load(open(x, 'r')) for x in json_path_list]
-    
+
     if verbose:
         print(f"Found {len(json_path_list)} JSON files to process")
         for i, json_path in enumerate(json_path_list):
@@ -119,29 +120,45 @@ def main():
     # for data_path in data_path_list:
     for i, (this_json, json_path) in enumerate(tqdm(zip(json_list, json_path_list), total=len(json_list))):
         data_path = this_json['data_path']
-        
+
         # Start timing for this file
         start_time = time.time()
-        
+
         if verbose:
             print(f"\n{'='*60}")
-            print(f"Processing file {i+1}/{len(json_list)}: {os.path.basename(json_path)}")
+            print(
+                f"Processing file {i+1}/{len(json_list)}: {os.path.basename(json_path)}")
             print(f"Data path: {data_path}")
-        
+
         try:
-            # data_basename = os.path.basename(data_path).split('.')[0]
-            data_basename = this_json['file_basename'].split('.')[0]
+            # Use scene-specific basename if available, otherwise fall back to file basename
+            if 'scene_basename_stem' in this_json:
+                scene_basename_stem = this_json['scene_basename_stem']
+                data_basename = this_json['file_basename'].split('.')[0]
+            else:
+                scene_basename_stem = this_json['file_basename'].split('.')[0]
+                data_basename = scene_basename_stem
+
             # Replace spaces and dashes with underscores
-            data_basename_proc = data_basename.replace(' ', '_').replace('-', '_')
-            this_output_dir = os.path.join(output_base_dir, data_basename_proc)
+            scene_basename_proc = scene_basename_stem.replace(
+                ' ', '_').replace('-', '_')
+            data_basename_proc = data_basename.replace(
+                ' ', '_').replace('-', '_')
+
+            # Create scene-specific output directory
+            this_output_dir = os.path.join(
+                output_base_dir, data_basename_proc, scene_basename_proc)
 
             if verbose:
                 print(f"Data basename: {data_basename}")
-                print(f"Processed basename: {data_basename_proc}")
+                print(f"Scene basename stem: {scene_basename_stem}")
+                print(f"Processed scene basename: {scene_basename_proc}")
                 print(f"Output directory: {this_output_dir}")
+                if 'scene_index' in this_json:
+                    print(f"Scene index: {this_json['scene_index']}")
 
             if not os.path.exists(this_output_dir):
-                os.mkdir(this_output_dir)
+                os.makedirs(this_output_dir, exist_ok=True)
                 if verbose:
                     print(f"Created output directory: {this_output_dir}")
 
@@ -151,7 +168,7 @@ def main():
             label_mask = np.load(label_mask_path)
             if verbose:
                 print(f"Label mask shape: {label_mask.shape}")
-            
+
             # metadata_path = os.path.join(metadata_dir, file_basename + '.csv')
             metadata_path = this_json['wanted_regions_frame_path']
             if verbose:
@@ -163,9 +180,15 @@ def main():
             mask = label_mask.copy()
             if verbose:
                 print(f"Opening slide: {data_path}")
-            
+
             # Use slide_handler for consistent slide opening
-            slide_metadata = utils.slide_handler(data_path)
+            # Get scene_index from JSON if available (for multi-scene slides)
+            scene_index = this_json.get('scene_index', 0)
+            if verbose and 'scene_index' in this_json:
+                print(f"Using scene index: {scene_index}")
+
+            slide_metadata = utils.slide_handler(
+                data_path, scene_index=scene_index)
             slide = slide_metadata.slide
             scene = slide_metadata.scene
             resolution = scene.resolution[0]  # meters / pixel
@@ -186,11 +209,12 @@ def main():
                                          == 'heart']['tissue_num'].values
             if verbose:
                 print(f"Heart tissue labels found: {wanted_labels}")
-            
+
             # wanted_mask = mask == wanted_label
             wanted_mask = np.isin(mask, wanted_labels)
             if verbose:
-                print(f"Heart tissue pixels: {np.sum(wanted_mask)} / {wanted_mask.size} ({100*np.sum(wanted_mask)/wanted_mask.size:.1f}%)")
+                print(
+                    f"Heart tissue pixels: {np.sum(wanted_mask)} / {wanted_mask.size} ({100*np.sum(wanted_mask)/wanted_mask.size:.1f}%)")
 
         # tissue_props = metadata.loc[metadata['tissue_num'] == wanted_label]
         # major_len = tissue_props['axis_major_length'].values[0]
@@ -209,7 +233,8 @@ def main():
                 edge_len=100e-6,
             )
             if verbose:
-                print(f"Eroded mask pixels: {np.sum(eroded_mask)} / {eroded_mask.size} ({100*np.sum(eroded_mask)/eroded_mask.size:.1f}%)")
+                print(
+                    f"Eroded mask pixels: {np.sum(eroded_mask)} / {eroded_mask.size} ({100*np.sum(eroded_mask)/eroded_mask.size:.1f}%)")
 
             window_len = 7e-4  # meters
             window_shape_pixels = int(window_len / resolution)
@@ -251,7 +276,7 @@ def main():
             ax.legend().set_visible(False)
             viz_path = os.path.join(
                 this_output_dir,
-                data_basename_proc + '_' + 'selected_section_visualization.png')
+                scene_basename_proc + '_' + 'selected_section_visualization.png')
             fig.savefig(
                 viz_path,
                 dpi=300,
@@ -281,10 +306,11 @@ def main():
 
             if verbose:
                 print("Generating section hashes...")
-            # Generate truly unique identifiers for each section
+            # Generate truly unique identifiers for each section using scene-specific basename
             section_frame['section_hash'] = [
                 # str(uuid.uuid4().int)[:16]
-                str_to_hash(data_basename_proc + '_' + str(section_frame.iloc[i]))
+                str_to_hash(scene_basename_proc + '_' +
+                            str(section_frame.iloc[i]))
                 for i in range(len(section_frame))
             ]
 
@@ -294,11 +320,10 @@ def main():
                 lambda x: [int(y) for y in x]
             )
 
-            # Write out section_frame
+            # Write out section_frame using scene-specific basename
             section_frame_path = os.path.join(
                 this_output_dir,
-                # file_basename_proc + '_' + 'section_frame.csv'),
-                data_basename_proc + '_' + 'section_frame.csv')
+                scene_basename_proc + '_' + 'section_frame.csv')
             section_frame.to_csv(
                 section_frame_path,
                 index=False,
@@ -325,7 +350,7 @@ def main():
                 os.mkdir(out_image_dir)
                 if verbose:
                     print(f"Created image output directory: {out_image_dir}")
-            
+
             if verbose:
                 print("Writing out images...")
             utils.write_out_images(
@@ -336,10 +361,10 @@ def main():
             if verbose:
                 print(f"Saved images to: {out_image_dir}")
 
-            # Add path to section frame to json
+            # Add path to section frame to json using scene-specific basename
             this_json['suggested_regions_frame_path'] = os.path.join(
                 this_output_dir,
-                data_basename_proc + '_' + 'section_frame.csv')
+                scene_basename_proc + '_' + 'section_frame.csv')
 
             # Calculate and log processing time
             end_time = time.time()
@@ -348,11 +373,11 @@ def main():
 
             with open(json_path, 'w') as f:
                 json.dump(this_json, f, indent=4)
-            
+
             if verbose:
                 print(f"Processing time: {processing_time:.2f} seconds")
                 print(f"Updated JSON file: {json_path}")
-                print(f"Successfully processed {data_basename_proc}")
+                print(f"Successfully processed {scene_basename_proc}")
 
         except Exception as e:
             # Still log time even if there was an error
@@ -360,16 +385,18 @@ def main():
             processing_time = end_time - start_time
             this_json['suggest_regions_processing_time_seconds'] = processing_time
             this_json['suggest_regions_error'] = str(e)
-            
+
             with open(json_path, 'w') as f:
                 json.dump(this_json, f, indent=4)
-            
-            print(f"Error processing {data_basename if 'data_basename' in locals() else 'unknown file'}: {e}")
-            print(f"Processing time before error: {processing_time:.2f} seconds")
+
+            print(
+                f"Error processing {scene_basename_proc if 'scene_basename_proc' in locals() else 'unknown file'}: {e}")
+            print(
+                f"Processing time before error: {processing_time:.2f} seconds")
             if verbose:
                 import traceback
                 traceback.print_exc()
-    
+
     if verbose:
         print(f"\n{'='*60}")
         print("Region suggestion pipeline completed!")

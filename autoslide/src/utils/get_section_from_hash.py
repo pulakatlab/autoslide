@@ -47,7 +47,10 @@ def get_section_from_hash(hash_value, df, down_sample=1):
     section_details = get_section_details_from_hash(hash_value, df)
 
     section_bounds = literal_eval(section_details['section_bounds'])
-    slide_handler = utils.slide_handler(section_details['data_path'])
+    # Get scene_index if available (for multi-scene slides)
+    scene_index = section_details.get('scene_index', 0)
+    slide_handler = utils.slide_handler(
+        section_details['data_path'], scene_index=scene_index)
     scene = slide_handler.scene
 
     section = utils.get_section(scene, section_bounds,
@@ -67,6 +70,7 @@ def load_tracking_data(tracking_dir):
         suggested_regions_paths: list, paths to suggested regions CSV files.
         basename_list: list, basenames of the files.
         data_path_list: list, paths to the data files.
+        scene_index_list: list, scene indices for multi-scene slides.
     """
     json_path_list = glob(os.path.join(tracking_dir, '*.json'))
     json_list = [json.load(open(x, 'r')) for x in json_path_list]
@@ -74,20 +78,22 @@ def load_tracking_data(tracking_dir):
     suggested_regions_paths = []
     basename_list = []
     data_path_list = []
+    scene_index_list = []
 
     for x in json_list:
         try:
             suggested_regions_paths.append(x['suggested_regions_frame_path'])
             basename_list.append(x['file_basename'].split('.')[0])
             data_path_list.append(x['data_path'])
+            scene_index_list.append(x.get('scene_index', 0))
         except KeyError:
             print(f"KeyError in {x['file_basename']}, skipping...")
             continue
 
-    return suggested_regions_paths, basename_list, data_path_list
+    return suggested_regions_paths, basename_list, data_path_list, scene_index_list
 
 
-def load_suggested_regions(suggested_regions_paths, basename_list, data_path_list):
+def load_suggested_regions(suggested_regions_paths, basename_list, data_path_list, scene_index_list):
     """
     Load suggested regions from CSV files.
 
@@ -95,6 +101,7 @@ def load_suggested_regions(suggested_regions_paths, basename_list, data_path_lis
         suggested_regions_paths: list, paths to suggested regions CSV files.
         basename_list: list, basenames of the files.
         data_path_list: list, paths to the data files.
+        scene_index_list: list, scene indices for multi-scene slides.
 
     Returns:
         final_df: pd.DataFrame, concatenated dataframe of all suggested regions.
@@ -105,10 +112,12 @@ def load_suggested_regions(suggested_regions_paths, basename_list, data_path_lis
         path = suggested_regions_paths[i]
         basename = basename_list[i]
         data_path = data_path_list[i]
+        scene_index = scene_index_list[i]
         try:
             df = pd.read_csv(path)
             df['basename'] = basename
             df['data_path'] = data_path
+            df['scene_index'] = scene_index
             suggested_regions_list.append(df)
         except FileNotFoundError:
             print(f"FileNotFoundError: {path}, skipping...")
@@ -130,7 +139,10 @@ def visualize_section(section, utils):
     """
     section_bounds = literal_eval(section['section_bounds'])
 
-    slide_handler = utils.slide_handler(section['data_path'])
+    # Get scene_index if available (for multi-scene slides)
+    scene_index = section.get('scene_index', 0)
+    slide_handler = utils.slide_handler(
+        section['data_path'], scene_index=scene_index)
     scene = slide_handler.scene
 
     fig, ax = utils.visualize_sections(
@@ -157,12 +169,12 @@ def main():
     tracking_dir = config['tracking_dir']
 
     # Load tracking data
-    suggested_regions_paths, basename_list, data_path_list = load_tracking_data(
+    suggested_regions_paths, basename_list, data_path_list, scene_index_list = load_tracking_data(
         tracking_dir)
 
     # Load suggested regions
     final_df = load_suggested_regions(
-        suggested_regions_paths, basename_list, data_path_list)
+        suggested_regions_paths, basename_list, data_path_list, scene_index_list)
 
     # Test with a specific hash
     test_hash = '0cb8cf88e2d3c22d'

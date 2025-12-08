@@ -19,10 +19,10 @@ from tqdm import tqdm, trange
 import autoslide.src
 from autoslide.src import config
 
-
 #############################################################################
 # Data Loading Functions
 #############################################################################
+
 
 def load_data(data_dir=None):
     """
@@ -91,10 +91,10 @@ def split_train_val(image_names, mask_names, train_ratio=0.9):
 
     return train_imgs, train_masks, val_imgs, val_masks
 
-
 #############################################################################
 # Data Augmentation Functions
 #############################################################################
+
 
 def get_mask_outline(mask):
     """
