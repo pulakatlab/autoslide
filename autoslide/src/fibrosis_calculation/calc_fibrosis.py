@@ -17,13 +17,13 @@ from autoslide.src.pipeline import utils
 from autoslide.src.utils.get_section_from_hash import *
 import cv2
 from joblib import Parallel, delayed
+from pprint import pprint as pp
 
 ##############################
 
-
 def gen_fibrosis_mask(
         image,
-        config,
+        fibrosis_config,
         vessel_mask=None,
 ):
     """
@@ -54,8 +54,8 @@ def gen_fibrosis_mask(
     hue_channel = hue_channel / 180.0  # OpenCV uses [0, 180] for hue
 
     # Create a mask based on the hue value and width from the config
-    mask = ((hue_channel >= config['hue_value'] - config['hue_width'] / 2) &
-            (hue_channel <= config['hue_value'] + config['hue_width'] / 2))
+    mask = ((hue_channel >= fibrosis_config['hue_value'] - fibrosis_config['hue_width'] / 2) &
+            (hue_channel <= fibrosis_config['hue_value'] + fibrosis_config['hue_width'] / 2))
 
     # figure, ax = plt.subplots(1, 3, figsize=(15, 5),
     #                           sharex=True, sharey=True)
@@ -68,70 +68,74 @@ def gen_fibrosis_mask(
     # plt.show()
 
     # Apply color saturation threshold if specified
-    if 'color_saturation_threshold' in config:
+    if 'color_saturation_threshold' in fibrosis_config:
         saturation_channel = hsv_image[:, :, 1]
         # Normalize saturation channel to [0, 1] range
         saturation_channel = saturation_channel / 255.0
-        mask &= (saturation_channel >= config['color_saturation_threshold'])
+        mask &= (saturation_channel >= fibrosis_config['color_saturation_threshold'])
 
     # Exclude vessel areas from fibrosis mask if vessel mask is provided
     if vessel_mask is not None:
-        # Binarize vessel mask
-        if vessel_mask.max() > 1:
-            vessel_binary = (vessel_mask > 127).astype(bool)
-        else:
-            vessel_binary = vessel_mask.astype(bool)
+        # Check vessel mask format and binarize if necessary
+        if vessel_mask.dtype != np.uint8:
+            vessel_mask = (vessel_mask * 255).astype(np.uint8)
+        vessel_mask = vessel_mask > 0  # Convert to binary
+        vessel_binary = vessel_mask.astype(bool)
         
         # Set fibrosis mask to 0 where vessels are present
-        mask = mask & (~vessel_binary)
+        vessel_corrected_mask = mask & (~vessel_binary)
 
-    return mask.astype(np.uint8)
+    # fig, ax = plt.subplots(1, 4, figsize=(20, 5),
+    #                       sharex=True, sharey=True)
+    # ax[0].imshow(image)
+    # ax[0].set_title('Original Image')
+    # ax[1].imshow(vessel_mask, cmap='gray')
+    # ax[1].set_title('Vessel Mask (Neural Network)')
+    # ax[2].imshow(mask, cmap='gray')
+    # ax[2].set_title('Raw Fibrosis Mask')
+    # ax[3].imshow(vessel_corrected_mask, cmap='gray')
+    # ax[3].set_title('Combined Mask (Fibrosis + Vessels)')
+    # plt.show()
+    #
+    return mask.astype(np.uint8), vessel_corrected_mask.astype(np.uint8)
 
 
 def quantify_fibrosis(
-        image,
-        mask=None,
-        config=None,
+        fibrosis_mask=None,
+        corrected_fibrosis_mask=None,
         vessel_mask=None,
 ):
     """
     Quantify fibrosis in an image using a mask if provided.
 
     Parameters:
-        - image: The input image to analyze.
-        - mask: Optional binary mask where fibrosis is detected.
         - config: Configuration dictionary containing parameters for fibrosis detection.
-        - vessel_mask: Optional mask for blood vessels to exclude from analysis.
+        - fibrosis_mask: Binary mask where fibrosis is detected.
+        - vessel_mask: Optional mask for blood vessels to exclude from fibrosis detection.
+        - corrected_fibrosis_mask: Binary mask where fibrosis is detected excluding vessels.
+
 
     Returns:
         - A dictionary containing the fibrosis area, total area, and fibrosis percentage.
 
     """
-    if mask is None:
-        mask = gen_fibrosis_mask(image, config, vessel_mask=vessel_mask)
 
     # Calculate areas
-    fibrosis_area = np.sum(mask)
-    total_area = image.shape[0] * image.shape[1]
+    fibrosis_area = np.sum(fibrosis_mask)
+    total_area = fibrosis_mask.size
 
     # If vessel mask is provided, exclude vessel areas from total area
-    if vessel_mask is not None:
-        # Convert vessel mask to binary if needed
-        if vessel_mask.max() > 1:
-            vessel_binary = (vessel_mask > 127).astype(np.uint8)
-        else:
-            vessel_binary = vessel_mask.astype(np.uint8)
-
-        vessel_area = np.sum(vessel_binary)
+    if vessel_mask is not None and corrected_fibrosis_mask is not None:
+        # Assert dtype is boolean
+        assert vessel_mask.dtype == bool, "Vessel mask must be of boolean dtype"
+        vessel_area = np.sum(vessel_mask)
         tissue_area = total_area - vessel_area
 
         # Also exclude vessels from fibrosis area
-        fibrosis_mask_no_vessels = mask & (~vessel_binary.astype(bool))
-        fibrosis_area_no_vessels = np.sum(fibrosis_mask_no_vessels)
+        fibrosis_area_no_vessels = np.sum(corrected_fibrosis_mask)
 
         # Calculate fibrotic pixels within vessel areas
-        fibrosis_in_vessels = mask & vessel_binary.astype(bool)
-        fibrosis_in_vessels_area = np.sum(fibrosis_in_vessels)
+        fibrosis_in_vessels_area = fibrosis_area - fibrosis_area_no_vessels 
 
         fibrosis_percentage = (fibrosis_area_no_vessels /
                                tissue_area) * 100 if tissue_area > 0 else 0
@@ -261,14 +265,30 @@ def process_single_image_fibrosis(
                 f"  Vessel mask range: {vessel_mask.min()} - {vessel_mask.max()}")
 
         # Generate fibrosis mask
-        fibrosis_mask = gen_fibrosis_mask(image, fibrosis_config)
+        # fibrosis_mask = gen_fibrosis_mask(image, fibrosis_config)
+        raw_fibrosis_mask, corrected_fibrosis_mask = gen_fibrosis_mask(
+            image,
+            fibrosis_config,
+            vessel_mask=vessel_mask
+        )
+
+        # fig, ax = plt.subplots(1, 4, figsize=(15, 5))
+        # ax[0].imshow(image)
+        # ax[0].set_title('Original Image')
+        # ax[1].imshow(vessel_mask, cmap='gray')
+        # ax[1].set_title('Vessel Mask (Neural Network)')
+        # ax[2].imshow(raw_fibrosis_mask, cmap='gray')
+        # ax[2].set_title('Fibrosis Mask')
+        # ax[3].imshow(corrected_fibrosis_mask, cmap='gray')
+        # ax[3].set_title('Fibrosis Mask (Excl. Vessels)')
+        # plt.show()
+
 
         # Quantify fibrosis
         fibrosis_results = quantify_fibrosis(
-            image,
-            mask=fibrosis_mask,
-            config=fibrosis_config,
-            vessel_mask=vessel_mask
+            fibrosis_mask=raw_fibrosis_mask,
+            corrected_fibrosis_mask=corrected_fibrosis_mask,
+            vessel_mask=vessel_mask,
         )
 
         # Add metadata to results
@@ -821,7 +841,24 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    args = parse_args()
+
+    test_bool = False
+    if test_bool:
+        import argparse
+        args = argparse.Namespace(
+            data_dir='/home/abuzarmahmood/projects/pulakat_lab/histology/Keith_Heart_Slides/all_images_corrected',
+            max_images=10,
+            no_visualizations=False,
+            verbose=True,
+            hue_value=0.6785,
+            hue_width=0.4,
+            saturation_threshold=0.0,
+            n_jobs=4,
+            force_run=False
+        )
+
+    else:
+        args = parse_args()
 
     # Create fibrosis configuration from arguments
     fibrosis_config = {
