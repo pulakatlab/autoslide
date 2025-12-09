@@ -358,9 +358,9 @@ Potential improvements:
 
 ## Related Documentation
 
-- [Histogram Percentile Normalization](HISTOGRAM_PERCENTILE_NORMALIZATION.md)
-- [Color Correction](COLOR_CORRECTION.md)
-- [Model Training](../autoslide/pipeline/model/training.py)
+- [Histogram Percentile Normalization](histogram-normalization.md)
+- [Color Correction](color-correction.md)
+- [Vessel Detection](../pipeline/vessel-detection.md)
 
 ## Contributing
 
