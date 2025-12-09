@@ -313,12 +313,12 @@ class MaskValidationGUI:
                 # Binarize: convert to 0 or 255
                 mask_array = (mask_array > 0).astype(np.uint8) * 255
             
-            # Create colored mask (red with alpha)
-            mask_colored = Image.new("RGBA", img.size, (255, 0, 0, 0))
+            # Create colored mask (green with alpha)
+            mask_colored = Image.new("RGBA", img.size, (0, 255, 0, 0))
             
             # Apply alpha based on mask values
             mask_rgba = np.zeros((*mask_array.shape, 4), dtype=np.uint8)
-            mask_rgba[..., 0] = 255  # Red channel
+            mask_rgba[..., 1] = 255  # Green channel
             mask_rgba[..., 3] = (mask_array * 0.3).astype(np.uint8)  # Alpha at 0.3
             
             mask_colored = Image.fromarray(mask_rgba, "RGBA")
