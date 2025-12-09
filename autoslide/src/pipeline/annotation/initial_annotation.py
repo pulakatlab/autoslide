@@ -19,6 +19,7 @@ import pylab as plt
 import cv2 as cv
 import numpy as np
 import argparse
+import re
 from pprint import pprint
 from glob import glob
 import pandas as pd
@@ -191,6 +192,12 @@ def main():
             wanted_regions_frame['tissue_type'] = np.nan
             wanted_regions_frame['tissue_num'] = np.nan
 
+            # Extract animal number from filename (5-digit number)
+            animal_number_match = re.search(r'(\d{5})', file_basename)
+            animal_number = animal_number_match.group(
+                1) if animal_number_match else None
+            wanted_regions_frame['animal_number'] = animal_number
+
             csv_path = os.path.join(
                 annot_dir, f"{scene_basename_stem}.csv")
             wanted_regions_frame.to_csv(csv_path, index=False)
@@ -274,6 +281,12 @@ def main():
             # - num_scenes
             # - fin_label_image path
             # - wanted_regions_frame path
+            # - animal_number (extracted from filename)
+
+            # Extract animal number from filename (5-digit number)
+            animal_number_match = re.search(r'(\d{5})', file_basename)
+            animal_number = animal_number_match.group(
+                1) if animal_number_match else None
 
             json_data = {
                 'file_basename': file_basename,
@@ -281,6 +294,7 @@ def main():
                 'data_path': data_path,
                 'scene_index': scene_idx,
                 'num_scenes': num_scenes,
+                'animal_number': animal_number,
                 'initial_mask_path': os.path.join(annot_dir, f"{scene_basename_stem}.npy"),
                 'wanted_regions_frame_path': os.path.join(annot_dir, f"{scene_basename_stem}.csv"),
             }

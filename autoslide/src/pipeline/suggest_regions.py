@@ -20,6 +20,7 @@ from tqdm import tqdm
 import hashlib
 import argparse
 import time
+import re
 
 # Import utilities directly
 from autoslide.src.pipeline import utils
@@ -304,7 +305,13 @@ def main():
 
             section_frame['section_labels'] = section_labels
 
+            # Add animal number from tracking JSON
+            animal_number = this_json.get('animal_number', None)
+            section_frame['animal_number'] = animal_number
+            section_frame['file_basename'] = this_json['file_basename']
+
             if verbose:
+                print(f"Animal number: {animal_number}")
                 print("Generating section hashes...")
             # Generate unique identifiers based on section properties only (not row index)
             # Hash is based on: scene name, section bounds, label value, and tissue type
