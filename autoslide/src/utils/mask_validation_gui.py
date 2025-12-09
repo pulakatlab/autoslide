@@ -33,6 +33,7 @@ class MaskValidationGUI:
         self.unsaved_changes = False
         self.autosave_interval = 30000  # 30 seconds in milliseconds
         self.binarize_mask = tk.BooleanVar(value=False)
+        self.force_recreate_overlay = tk.BooleanVar(value=False)
         
         # Load existing validation results
         self.load_validation_results()
@@ -55,6 +56,7 @@ class MaskValidationGUI:
         self.root.bind('<q>', lambda e: self.quit_app())
         self.root.bind('<s>', lambda e: self.save_validation_results())
         self.root.bind('<b>', lambda e: self.toggle_binarize())
+        self.root.bind('<o>', lambda e: self.toggle_force_recreate_overlay())
         
         # Start autosave timer
         self.schedule_autosave()
@@ -112,7 +114,16 @@ class MaskValidationGUI:
             variable=self.binarize_mask,
             command=self.on_binarize_changed
         )
-        binarize_checkbox.pack(side=tk.LEFT, padx=(0, 20))
+        binarize_checkbox.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Force recreate overlay checkbox
+        recreate_overlay_checkbox = tk.Checkbutton(
+            options_frame,
+            text="Force Recreate Overlay (O)",
+            variable=self.force_recreate_overlay,
+            command=self.on_force_recreate_overlay_changed
+        )
+        recreate_overlay_checkbox.pack(side=tk.LEFT, padx=(0, 20))
         
         # Navigation buttons
         nav_frame = tk.Frame(control_frame)
@@ -164,7 +175,7 @@ class MaskValidationGUI:
         instructions = (
             "Navigation: ↑/↓ arrows | "
             "Actions: ← drop mask, → drop entire image set | "
-            "Options: B toggle binarize | "
+            "Options: B toggle binarize, O toggle recreate overlay | "
             "Save: S | Quit: Q"
         )
         tk.Label(
@@ -374,7 +385,7 @@ class MaskValidationGUI:
         self.display_image_on_canvas(self.mask_frame["canvas"], mask_img, "Mask not found")
         
         # Load and display overlay (or create it) (with X if mask or entire image dropped)
-        if overlay_path.exists():
+        if overlay_path.exists() and not self.force_recreate_overlay.get():
             overlay_img = self.load_and_resize_image(overlay_path, draw_x=(mask_dropped or image_dropped))
         else:
             overlay_img = self.create_overlay_from_mask(
@@ -497,6 +508,15 @@ class MaskValidationGUI:
     
     def on_binarize_changed(self):
         """Handle binarize checkbox change."""
+        self.display_current_image()
+    
+    def toggle_force_recreate_overlay(self):
+        """Toggle the force recreate overlay option."""
+        self.force_recreate_overlay.set(not self.force_recreate_overlay.get())
+        self.display_current_image()
+    
+    def on_force_recreate_overlay_changed(self):
+        """Handle force recreate overlay checkbox change."""
         self.display_current_image()
     
     def quit_app(self):
