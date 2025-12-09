@@ -33,6 +33,7 @@ class MaskValidationGUI:
         self.unsaved_changes = False
         self.autosave_interval = 30000  # 30 seconds in milliseconds
         self.binarize_mask = tk.BooleanVar(value=False)
+        self.binarize_threshold = tk.StringVar(value="0")
         self.force_recreate_overlay = tk.BooleanVar(value=False)
         
         # Load existing validation results
@@ -110,14 +111,28 @@ class MaskValidationGUI:
         options_frame = tk.Frame(control_frame)
         options_frame.pack(side=tk.LEFT)
         
-        # Binarize checkbox
+        # Binarize checkbox and threshold
+        binarize_frame = tk.Frame(options_frame)
+        binarize_frame.pack(side=tk.LEFT, padx=(0, 10))
+        
         binarize_checkbox = tk.Checkbutton(
-            options_frame,
+            binarize_frame,
             text="Binarize Mask (B)",
             variable=self.binarize_mask,
             command=self.on_binarize_changed
         )
-        binarize_checkbox.pack(side=tk.LEFT, padx=(0, 10))
+        binarize_checkbox.pack(side=tk.LEFT)
+        
+        tk.Label(binarize_frame, text="Threshold:").pack(side=tk.LEFT, padx=(5, 2))
+        
+        threshold_entry = tk.Entry(
+            binarize_frame,
+            textvariable=self.binarize_threshold,
+            width=6
+        )
+        threshold_entry.pack(side=tk.LEFT, padx=(0, 5))
+        threshold_entry.bind('<Return>', lambda e: self.on_threshold_changed())
+        threshold_entry.bind('<FocusOut>', lambda e: self.on_threshold_changed())
         
         # Force recreate overlay checkbox
         recreate_overlay_checkbox = tk.Checkbutton(
@@ -258,7 +273,7 @@ class MaskValidationGUI:
         overlay_path = overlay_path.parent / overlay_path.name.replace('.png', '_overlay.png')
         return overlay_path
     
-    def load_and_resize_image(self, path: Path, max_size: Tuple[int, int] = (400, 400), draw_x: bool = False, binarize: bool = False) -> Optional[ImageTk.PhotoImage]:
+    def load_and_resize_image(self, path: Path, max_size: Tuple[int, int] = (400, 400), draw_x: bool = False, binarize: bool = False, threshold: float = 0) -> Optional[ImageTk.PhotoImage]:
         """Load an image and resize it to fit the display."""
         if not path.exists():
             return None
@@ -283,8 +298,8 @@ class MaskValidationGUI:
                 if img_array.dtype != np.uint8:
                     img_array = (img_array * 255).astype(np.uint8)
                 
-                # Binarize: convert to 0 or 255
-                binary_array = (img_array > 0).astype(np.uint8) * 255
+                # Binarize: convert to 0 or 255 based on threshold
+                binary_array = (img_array > threshold).astype(np.uint8) * 255
                 img = Image.fromarray(binary_array, mode='L')
             
             # Calculate resize ratio to fit within max_size while maintaining aspect ratio
@@ -315,7 +330,7 @@ class MaskValidationGUI:
         
         return img_copy
     
-    def create_overlay_from_mask(self, image_path: Path, mask_path: Path, draw_x: bool = False, binarize_mask: bool = False) -> Optional[ImageTk.PhotoImage]:
+    def create_overlay_from_mask(self, image_path: Path, mask_path: Path, draw_x: bool = False, binarize_mask: bool = False, threshold: float = 0) -> Optional[ImageTk.PhotoImage]:
         """Create an overlay image with mask at 0.3 alpha if overlay doesn't exist."""
         if not image_path.exists() or not mask_path.exists():
             return None
@@ -330,8 +345,8 @@ class MaskValidationGUI:
             if binarize_mask:
                 if mask_array.dtype != np.uint8:
                     mask_array = (mask_array * 255).astype(np.uint8)
-                # Binarize: convert to 0 or 255
-                mask_array = (mask_array > 0).astype(np.uint8) * 255
+                # Binarize: convert to 0 or 255 based on threshold
+                mask_array = (mask_array > threshold).astype(np.uint8) * 255
             
             # Create colored mask (green with alpha)
             mask_colored = Image.new("RGBA", img.size, (0, 255, 0, 0))
@@ -396,11 +411,18 @@ class MaskValidationGUI:
         original_img = self.load_and_resize_image(image_path, draw_x=image_dropped)
         self.display_image_on_canvas(self.original_frame["canvas"], original_img, "Original not found")
         
+        # Get threshold value
+        try:
+            threshold = float(self.binarize_threshold.get())
+        except ValueError:
+            threshold = 0
+        
         # Load and display mask (with X if mask or entire image dropped)
         mask_img = self.load_and_resize_image(
             mask_path, 
             draw_x=(mask_dropped or image_dropped),
-            binarize=self.binarize_mask.get()
+            binarize=self.binarize_mask.get(),
+            threshold=threshold
         )
         self.display_image_on_canvas(self.mask_frame["canvas"], mask_img, "Mask not found")
         
@@ -411,7 +433,8 @@ class MaskValidationGUI:
             overlay_img = self.create_overlay_from_mask(
                 image_path, mask_path, 
                 draw_x=(mask_dropped or image_dropped),
-                binarize_mask=self.binarize_mask.get()
+                binarize_mask=self.binarize_mask.get(),
+                threshold=threshold
             )
         self.display_image_on_canvas(self.overlay_frame["canvas"], overlay_img, "Overlay not available")
     
@@ -528,6 +551,19 @@ class MaskValidationGUI:
     
     def on_binarize_changed(self):
         """Handle binarize checkbox change."""
+        self.display_current_image()
+    
+    def on_threshold_changed(self):
+        """Handle threshold textbox change."""
+        try:
+            threshold = float(self.binarize_threshold.get())
+            if threshold < 0:
+                self.binarize_threshold.set("0")
+            elif threshold > 255:
+                self.binarize_threshold.set("255")
+        except ValueError:
+            self.binarize_threshold.set("0")
+        
         self.display_current_image()
     
     def toggle_force_recreate_overlay(self):
