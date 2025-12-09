@@ -306,13 +306,14 @@ def main():
 
             if verbose:
                 print("Generating section hashes...")
-            # Generate truly unique identifiers for each section using scene-specific basename
-            section_frame['section_hash'] = [
-                # str(uuid.uuid4().int)[:16]
-                str_to_hash(scene_basename_proc + '_' +
-                            str(section_frame.iloc[i]))
-                for i in range(len(section_frame))
-            ]
+            # Generate unique identifiers based on section properties only (not row index)
+            # Hash is based on: scene name, section bounds, label value, and tissue type
+            section_frame['section_hash'] = section_frame.apply(
+                lambda row: str_to_hash(
+                    f"{scene_basename_proc}_{row['section_bounds']}_{row['label_values']}_{row['tissue_type']}"
+                ),
+                axis=1
+            )
 
             # Make sure section_bounds are a list (otherwise they are converted weirdly to np.int64)
             # This way they are easier to load
