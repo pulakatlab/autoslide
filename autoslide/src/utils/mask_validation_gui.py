@@ -59,6 +59,7 @@ class MaskValidationGUI:
         self.root.bind('<s>', lambda e: self.save_validation_results())
         self.root.bind('<b>', lambda e: self.toggle_binarize())
         self.root.bind('<o>', lambda e: self.toggle_force_recreate_overlay())
+        self.root.bind('<g>', lambda e: self.focus_jump_entry())
         
         # Start autosave timer
         self.schedule_autosave()
@@ -145,6 +146,23 @@ class MaskValidationGUI:
             width=15
         ).pack(side=tk.LEFT, padx=2)
         
+        # Jump to image number
+        jump_frame = tk.Frame(nav_frame)
+        jump_frame.pack(side=tk.LEFT, padx=(10, 0))
+        
+        tk.Label(jump_frame, text="Go to:").pack(side=tk.LEFT)
+        
+        self.jump_entry = tk.Entry(jump_frame, width=6)
+        self.jump_entry.pack(side=tk.LEFT, padx=(5, 2))
+        self.jump_entry.bind('<Return>', self.jump_to_image)
+        
+        tk.Button(
+            jump_frame,
+            text="Jump",
+            command=self.jump_to_image,
+            width=6
+        ).pack(side=tk.LEFT, padx=2)
+        
         # Action buttons
         action_frame = tk.Frame(control_frame)
         action_frame.pack(side=tk.RIGHT)
@@ -175,7 +193,7 @@ class MaskValidationGUI:
         
         # Instructions at bottom
         instructions = (
-            "Navigation: ↑/↓ arrows | "
+            "Navigation: ↑/↓ arrows, G focus jump box | "
             "Actions: ← or M drop mask, → or A drop entire image set | "
             "Options: B toggle binarize, O toggle recreate overlay | "
             "Save: S | Quit: Q"
@@ -520,6 +538,30 @@ class MaskValidationGUI:
     def on_force_recreate_overlay_changed(self):
         """Handle force recreate overlay checkbox change."""
         self.display_current_image()
+    
+    def jump_to_image(self, event=None):
+        """Jump to a specific image number."""
+        try:
+            image_num = int(self.jump_entry.get())
+            if 1 <= image_num <= len(self.image_files):
+                self.current_index = image_num - 1
+                self.display_current_image()
+                self.jump_entry.delete(0, tk.END)
+            else:
+                messagebox.showerror(
+                    "Invalid Image Number",
+                    f"Please enter a number between 1 and {len(self.image_files)}"
+                )
+        except ValueError:
+            messagebox.showerror(
+                "Invalid Input",
+                "Please enter a valid number"
+            )
+    
+    def focus_jump_entry(self):
+        """Focus the jump entry textbox."""
+        self.jump_entry.focus_set()
+        self.jump_entry.select_range(0, tk.END)
     
     def quit_app(self):
         """Quit the application with confirmation."""
