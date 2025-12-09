@@ -26,6 +26,7 @@ def gen_fibrosis_mask(
         image,
         fibrosis_config,
         vessel_mask=None,
+        binarization_threshold=0,
 ):
     """
     Generate a mask for fibrosis in the image based on the provided configuration.
@@ -34,6 +35,11 @@ def gen_fibrosis_mask(
     - image: The input image to analyze.
     - config: Configuration dictionary containing parameters for fibrosis detection.
     - vessel_mask: Optional mask for blood vessels to exclude from fibrosis detection.
+    - binarization_threshold: Threshold for binarizing vessel_mask in uint8 format (0-255).
+                             Pixels with values > threshold are considered vessels.
+                             This threshold is applied to vessel_mask before exclusion from
+                             fibrosis detection and affects output files and visualizations.
+                             Default: 0 (any non-zero pixel is considered a vessel).
 
     Returns:
     - mask: A binary mask where fibrosis is detected.
@@ -81,7 +87,7 @@ def gen_fibrosis_mask(
         # Check vessel mask format and binarize if necessary
         if vessel_mask.dtype != np.uint8:
             vessel_mask = (vessel_mask * 255).astype(np.uint8)
-        vessel_mask = vessel_mask > 0  # Convert to binary
+        vessel_mask = vessel_mask > binarization_threshold  # Convert to binary using threshold
         vessel_binary = vessel_mask.astype(bool)
 
         # Set fibrosis mask to 0 where vessels are present
@@ -231,7 +237,8 @@ def process_single_image_fibrosis(
         save_visualizations,
         vis_dir,
         results_dir,
-        verbose
+        verbose,
+        binarization_threshold=0
 ):
     """
     Process a single image for fibrosis quantification.
@@ -243,6 +250,8 @@ def process_single_image_fibrosis(
         vis_dir (str): Directory to save visualizations
         results_dir (str): Directory to save individual CSV results
         verbose (bool): Whether to print detailed information
+        binarization_threshold (int): Threshold for binarizing vessel_mask in uint8 format (0-255).
+                                     Default: 0
 
     Returns:
         tuple: (success_flag, result_entry_or_error_message)
@@ -273,7 +282,8 @@ def process_single_image_fibrosis(
         raw_fibrosis_mask, corrected_fibrosis_mask, binary_vessel_mask = gen_fibrosis_mask(
             image,
             fibrosis_config,
-            vessel_mask=vessel_mask
+            vessel_mask=vessel_mask,
+            binarization_threshold=binarization_threshold
         )
 
         # fig, ax = plt.subplots(1, 4, figsize=(15, 5))
@@ -301,6 +311,7 @@ def process_single_image_fibrosis(
             'mask_path': mask_path,
             'region_type': item['region_type'],
             'hash_value': item['hash_value'],
+            'binarization_threshold': binarization_threshold,
             **fibrosis_results
         }
 
@@ -328,7 +339,7 @@ def process_single_image_fibrosis(
         if save_visualizations and vis_dir:
             create_fibrosis_visualization(
                 image, raw_fibrosis_mask, binary_vessel_mask, fibrosis_results,
-                image_name, vis_dir, verbose=verbose
+                image_name, vis_dir, binarization_threshold=binarization_threshold, verbose=verbose
             )
 
         return True, result_entry
@@ -404,7 +415,8 @@ def process_all_fibrosis_quantification(
         max_images=None,
         verbose=False,
         n_jobs=-1,
-        force_run=False
+        force_run=False,
+        binarization_threshold=0
 ):
     """
     Process all images with neural network masks for fibrosis quantification.
@@ -417,6 +429,8 @@ def process_all_fibrosis_quantification(
         verbose (bool): Whether to print detailed information
         n_jobs (int): Number of parallel jobs (-1 for all available cores)
         force_run (bool): If True, process all images regardless of existing outputs
+        binarization_threshold (int): Threshold for binarizing vessel_mask in uint8 format (0-255).
+                                     Default: 0
     """
     if data_dir is None:
         data_dir = config['data_dir']
@@ -436,6 +450,7 @@ def process_all_fibrosis_quantification(
         print(f"Configuration:")
         print(f"  Data directory: {data_dir}")
         print(f"  Fibrosis config: {fibrosis_config}")
+        print(f"  Binarization threshold: {binarization_threshold} (uint8 format, 0-255)")
         print(f"  Save visualizations: {save_visualizations}")
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
         print(
@@ -510,14 +525,14 @@ def process_all_fibrosis_quantification(
         if n_jobs > 1:
             results = Parallel(n_jobs=n_jobs, verbose=1 if verbose else 0)(
                 delayed(process_single_image_fibrosis)(
-                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose
+                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose, binarization_threshold
                 ) for item in tqdm(svs_images, desc=f"Processing {svs_name}")
             )
         else:
             results = []
             for item in tqdm(svs_images, desc=f"Processing {svs_name}"):
                 result = process_single_image_fibrosis(
-                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose
+                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose, binarization_threshold
                 )
                 results.append(result)
 
@@ -598,9 +613,12 @@ def process_all_fibrosis_quantification(
     print(f"Total processed: {total_successful + total_failed}")
 
 
-def create_fibrosis_visualization(image, fibrosis_mask, binary_vessel_mask, results, image_name, vis_dir, verbose=False):
+def create_fibrosis_visualization(image, fibrosis_mask, binary_vessel_mask, results, image_name, vis_dir, binarization_threshold=0, verbose=False):
     """
     Create and save a visualization of fibrosis analysis results.
+    
+    Args:
+        binarization_threshold (int): Threshold used for binarizing vessel mask (0-255)
     """
     try:
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
@@ -638,7 +656,8 @@ def create_fibrosis_visualization(image, fibrosis_mask, binary_vessel_mask, resu
         # Results text
         axes[1, 2].axis('off')
         result_text = f"Fibrosis Analysis Results\n\n"
-        result_text += f"Image: {image_name}\n\n"
+        result_text += f"Image: {image_name}\n"
+        result_text += f"Binarization Threshold: {binarization_threshold}\n\n"
 
         if 'fibrosis_percentage_total' in results:
             result_text += f"Raw Fibrosis %: {results['fibrosis_percentage_total']:.2f}%\n"
@@ -845,6 +864,11 @@ def parse_args():
                         help='Hue width for fibrosis detection (default: 0.4)')
     parser.add_argument('--saturation-threshold', type=float, default=0.0,
                         help='Color saturation threshold (default: 0.0)')
+    parser.add_argument('--binarization-threshold', type=int, default=0,
+                        help='Threshold for binarizing vessel_mask in uint8 format (0-255). '
+                             'Pixels with values > threshold are considered vessels. '
+                             'This threshold is applied to vessel_mask and affects output files and visualizations. '
+                             '(default: 0)')
     parser.add_argument('--n-jobs', type=int, default=-1,
                         help='Number of parallel jobs (-1 for all available cores, default: -1)')
     parser.add_argument('--force-run', action='store_true',
@@ -865,6 +889,7 @@ if __name__ == "__main__":
             hue_value=0.6785,
             hue_width=0.4,
             saturation_threshold=0.0,
+            binarization_threshold=0,
             n_jobs=4,
             force_run=False
         )
@@ -886,5 +911,6 @@ if __name__ == "__main__":
         max_images=args.max_images,
         verbose=args.verbose,
         n_jobs=args.n_jobs,
-        force_run=args.force_run
+        force_run=args.force_run,
+        binarization_threshold=args.binarization_threshold
     )
