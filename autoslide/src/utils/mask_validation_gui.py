@@ -53,6 +53,8 @@ class MaskValidationGUI:
         self.root.bind('<Down>', lambda e: self.navigate(1))
         self.root.bind('<Left>', lambda e: self.drop_mask())
         self.root.bind('<Right>', lambda e: self.drop_image())
+        self.root.bind('<m>', lambda e: self.drop_mask())
+        self.root.bind('<a>', lambda e: self.drop_image())
         self.root.bind('<q>', lambda e: self.quit_app())
         self.root.bind('<s>', lambda e: self.save_validation_results())
         self.root.bind('<b>', lambda e: self.toggle_binarize())
@@ -174,7 +176,7 @@ class MaskValidationGUI:
         # Instructions at bottom
         instructions = (
             "Navigation: ↑/↓ arrows | "
-            "Actions: ← drop mask, → drop entire image set | "
+            "Actions: ← or M drop mask, → or A drop entire image set | "
             "Options: B toggle binarize, O toggle recreate overlay | "
             "Save: S | Quit: Q"
         )
