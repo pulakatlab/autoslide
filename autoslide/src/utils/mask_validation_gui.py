@@ -428,7 +428,12 @@ class MaskValidationGUI:
         
         # Load and display overlay (or create it) (with X if mask or entire image dropped)
         if overlay_path.exists() and not self.force_recreate_overlay.get():
-            overlay_img = self.load_and_resize_image(overlay_path, draw_x=(mask_dropped or image_dropped))
+            overlay_img = self.load_and_resize_image(
+                overlay_path, 
+                draw_x=(mask_dropped or image_dropped),
+                binarize=self.binarize_mask.get(),
+                threshold=threshold
+            )
         else:
             overlay_img = self.create_overlay_from_mask(
                 image_path, mask_path, 
