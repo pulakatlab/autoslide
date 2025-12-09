@@ -63,7 +63,26 @@ def remove_svs_outputs(svs_dir_path, verbose=False):
         print(f"  No output directories found to remove")
 
 
-def find_images_to_process(reprocess=False, verbose=False):
+def recreate_output_dirs(svs_dir_path, verbose=False):
+    """
+    Recreate mask and overlay directories for a given SVS directory.
+
+    Args:
+        svs_dir_path (str): Path to the SVS directory
+        verbose (bool): Whether to print detailed information
+    """
+    mask_dir = os.path.join(svs_dir_path, 'masks')
+    overlay_dir = os.path.join(svs_dir_path, 'overlays')
+
+    os.makedirs(mask_dir, exist_ok=True)
+    os.makedirs(overlay_dir, exist_ok=True)
+
+    if verbose:
+        print(f"  Created mask directory: {mask_dir}")
+        print(f"  Created overlay directory: {overlay_dir}")
+
+
+def find_images_to_process(reprocess=False, verbose=False, custom_dir=None):
     """
     Find all images that need prediction and don't already have masks.
     Groups images by their parent SVS directory.
@@ -71,28 +90,53 @@ def find_images_to_process(reprocess=False, verbose=False):
     Args:
         reprocess (bool): If True, process all images regardless of existing masks
         verbose (bool): Whether to print detailed information
+        custom_dir (str): Custom directory to search for images. If provided, uses this instead of config dir
 
     Returns:
         dict: Dictionary mapping SVS directory names to lists of image dictionaries
     """
-    suggested_regions_dir = config['suggested_regions_dir']
+    # Use custom directory if provided, otherwise use config directory
+    if custom_dir:
+        suggested_regions_dir = custom_dir
+        if verbose:
+            print(f"Using custom directory: {suggested_regions_dir}")
+    else:
+        suggested_regions_dir = config['suggested_regions_dir']
+        if verbose:
+            print(f"Using config directory: {suggested_regions_dir}")
 
     if verbose:
-        print(f"Looking for suggested regions in: {suggested_regions_dir}")
+        print(f"Looking for images in: {suggested_regions_dir}")
 
     if not os.path.exists(suggested_regions_dir):
         print(
-            f"Suggested regions directory not found: {suggested_regions_dir}")
+            f"Directory not found: {suggested_regions_dir}")
         return {}
 
     # Find all image files
-    image_pattern = os.path.join(
+    # Support both structured (with 'images' subdirectory) and flat directory structures
+    image_pattern_structured = os.path.join(
         suggested_regions_dir, '**', 'images', '*.png')
-    image_paths = glob(image_pattern, recursive=True)
+    image_pattern_flat = os.path.join(
+        suggested_regions_dir, '*.png')
+
+    image_paths_structured = glob(image_pattern_structured, recursive=True)
+    image_paths_flat = glob(image_pattern_flat, recursive=False)
+
+    # Use structured if found, otherwise use flat
+    if image_paths_structured:
+        image_paths = image_paths_structured
+        is_flat_structure = False
+    else:
+        image_paths = image_paths_flat
+        is_flat_structure = True
 
     if verbose:
-        print(f"Search pattern: {image_pattern}")
-        print(f"Found {len(image_paths)} images in suggested_regions")
+        if is_flat_structure:
+            print(f"Search pattern (flat): {image_pattern_flat}")
+        else:
+            print(f"Search pattern (structured): {image_pattern_structured}")
+        print(f"Found {len(image_paths)} images")
         if image_paths:
             print("Sample image paths:")
             for i, path in enumerate(image_paths[:3]):
@@ -100,28 +144,39 @@ def find_images_to_process(reprocess=False, verbose=False):
             if len(image_paths) > 3:
                 print(f"  ... and {len(image_paths) - 3} more")
     else:
-        print(f"Found {len(image_paths)} images in suggested_regions")
+        print(f"Found {len(image_paths)} images")
 
     # Group images by SVS directory
     images_by_svs = {}
     total_to_process = 0
 
     for image_path in image_paths:
-        # Extract SVS directory name (parent of 'images' directory)
-        # Path structure: .../suggested_regions/SVS_NAME/images/image.png
-        path_parts = image_path.split(os.sep)
-        images_idx = path_parts.index('images')
-        svs_dir_name = path_parts[images_idx - 1]
+        if is_flat_structure:
+            # For flat structure, use the directory name as SVS name
+            svs_dir_name = os.path.basename(suggested_regions_dir)
 
-        # Determine corresponding mask path
-        # Replace 'images' with 'masks' and add '_mask' suffix
-        mask_path = image_path.replace('/images/', '/masks/')
-        mask_path = mask_path.replace('.png', '_mask.png')
+            # Create masks and overlays subdirectories in the same directory
+            base_dir = os.path.dirname(image_path)
+            mask_path = os.path.join(base_dir, 'masks', os.path.basename(
+                image_path).replace('.png', '_mask.png'))
+            overlay_path = os.path.join(base_dir, 'overlays', os.path.basename(
+                image_path).replace('.png', '_overlay.png'))
+        else:
+            # Extract SVS directory name (parent of 'images' directory)
+            # Path structure: .../suggested_regions/SVS_NAME/images/image.png
+            path_parts = image_path.split(os.sep)
+            images_idx = path_parts.index('images')
+            svs_dir_name = path_parts[images_idx - 1]
 
-        # Determine corresponding overlay path
-        # Replace 'images' with 'overlays' and add '_overlay' suffix
-        overlay_path = image_path.replace('/images/', '/overlays/')
-        overlay_path = overlay_path.replace('.png', '_overlay.png')
+            # Determine corresponding mask path
+            # Replace 'images' with 'masks' and add '_mask' suffix
+            mask_path = image_path.replace('/images/', '/masks/')
+            mask_path = mask_path.replace('.png', '_mask.png')
+
+            # Determine corresponding overlay path
+            # Replace 'images' with 'overlays' and add '_overlay' suffix
+            overlay_path = image_path.replace('/images/', '/overlays/')
+            overlay_path = overlay_path.replace('.png', '_overlay.png')
 
         # Check if mask already exists (or if we're reprocessing)
         if reprocess or not os.path.exists(mask_path):
@@ -219,6 +274,25 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
         return None, None
 
 
+def binarize_mask(mask):
+    """
+    Binarize mask similar to calc_fibrosis.py approach.
+    
+    Args:
+        mask (numpy.ndarray): Input mask to binarize
+        
+    Returns:
+        numpy.ndarray: Binary mask as boolean array
+    """
+    # Check mask format and binarize if necessary
+    if mask.dtype != np.uint8:
+        mask = (mask * 255).astype(np.uint8)
+    mask = mask > 0  # Convert to binary
+    binary_mask = mask.astype(bool)
+    
+    return binary_mask
+
+
 def create_overlay_image(image_path, predicted_mask, overlay_path, verbose=False):
     """
     Create an overlay image with the original image and predicted region outline.
@@ -238,16 +312,19 @@ def create_overlay_image(image_path, predicted_mask, overlay_path, verbose=False
         img = Image.open(image_path).convert("RGB")
         img_array = np.array(img)
 
-        # Create binary mask from prediction
-        binary_mask = (predicted_mask > 127).astype(np.uint8)
+        # Binarize mask using the same approach as calc_fibrosis.py
+        binary_mask = binarize_mask(predicted_mask)
+        
+        # Convert boolean mask to uint8 for contour detection
+        binary_mask_uint8 = binary_mask.astype(np.uint8)
 
         if verbose:
-            print(f"  Binary mask created with threshold 127")
+            print(f"  Binary mask created using binarize_mask function")
             print(f"  Binary mask has {np.sum(binary_mask)} positive pixels")
 
         # Find contours of the predicted regions
         contours, _ = cv2.findContours(
-            binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            binary_mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         if verbose:
             print(f"  Found {len(contours)} contours")
@@ -425,7 +502,7 @@ def save_prediction_visualization(image_path, mask_path, predicted_mask, plot_di
 
         # Overlay
         overlay = np.array(img)
-        mask_binary = predicted_mask > 127
+        mask_binary = binarize_mask(predicted_mask)
         overlay[mask_binary] = [255, 0, 0]  # Red overlay for vessels
 
         axes[2].imshow(overlay)
@@ -444,7 +521,7 @@ def save_prediction_visualization(image_path, mask_path, predicted_mask, plot_di
         print(f"Error creating visualization for {image_path}: {e}")
 
 
-def process_all_images(model_path=None, save_visualizations=False, max_images=None, reprocess=False, verbose=False):
+def process_all_images(model_path=None, save_visualizations=False, max_images=None, reprocess=False, verbose=False, custom_dir=None):
     """
     Process all images that need prediction, organized by SVS directory.
 
@@ -454,8 +531,12 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         max_images (int): Maximum number of images to process (for testing)
         reprocess (bool): If True, remove existing outputs and reprocess all images
         verbose (bool): Whether to print detailed information
+        custom_dir (str): Custom directory to search for images. If provided, uses this instead of config dir
     """
-    print("Starting batch prediction on suggested regions...")
+    if custom_dir:
+        print(f"Starting batch prediction on custom directory: {custom_dir}")
+    else:
+        print("Starting batch prediction on suggested regions...")
 
     if verbose:
         print(f"Configuration:")
@@ -467,6 +548,8 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         print(f"  Save visualizations: {save_visualizations}")
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
         print(f"  Reprocess existing: {reprocess}")
+        print(
+            f"  Custom directory: {custom_dir if custom_dir else 'None (using config)'}")
 
     # Load model
     if verbose:
@@ -480,7 +563,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
     if verbose:
         print("Scanning for images to process...")
     images_by_svs = find_images_to_process(
-        reprocess=reprocess, verbose=verbose)
+        reprocess=reprocess, verbose=verbose, custom_dir=custom_dir)
 
     if not images_by_svs:
         print("No images found that need prediction.")
@@ -521,6 +604,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
             if verbose:
                 print(f"  Reprocessing enabled - removing existing outputs...")
             remove_svs_outputs(svs_dir_path, verbose=verbose)
+            recreate_output_dirs(svs_dir_path, verbose=verbose)
 
         if verbose:
             print(f"  Directory contains {len(images_list)} images to process")
@@ -553,12 +637,18 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
                     if verbose:
                         print(f"    Saving predicted mask...")
 
-                    # Save predicted mask
-                    mask_img = Image.fromarray(predicted_mask, mode='L')
+                    # Binarize the mask before saving (similar to calc_fibrosis.py)
+                    binary_mask = binarize_mask(predicted_mask)
+                    # Convert boolean mask to uint8 for saving (0 or 255)
+                    binary_mask_uint8 = (binary_mask * 255).astype(np.uint8)
+                    
+                    # Save binarized mask
+                    mask_img = Image.fromarray(binary_mask_uint8, mode='L')
                     mask_img.save(mask_path)
 
                     if verbose:
-                        print(f"    Mask saved to: {mask_path}")
+                        print(f"    Binarized mask saved to: {mask_path}")
+                        print(f"    Mask contains {np.sum(binary_mask)} positive pixels")
 
                     # Create and save overlay image
                     create_overlay_image(
@@ -618,7 +708,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description='Batch prediction on suggested regions')
+        description='Batch prediction on suggested regions or custom directory')
     parser.add_argument('--model-path', type=str, default=None,
                         help='Path to saved model (default: best_val_mask_rcnn_model.pth)')
     parser.add_argument('--dir', type=str, default=None,
@@ -640,25 +730,14 @@ def main():
     """Main function"""
     args = parse_args()
 
-    if args.dir:
-        # Process arbitrary directory
-        process_arbitrary_directory(
-            input_dir=args.dir,
-            output_dir=args.output_dir,
-            model_path=args.model_path,
-            save_visualizations=args.save_visualizations,
-            max_images=args.max_images,
-            verbose=args.verbose
-        )
-    else:
-        # Process suggested regions from config
-        process_all_images(
-            model_path=args.model_path,
-            save_visualizations=args.save_visualizations,
-            max_images=args.max_images,
-            reprocess=args.reprocess,
-            verbose=args.verbose
-        )
+    process_all_images(
+        model_path=args.model_path,
+        save_visualizations=args.save_visualizations,
+        max_images=args.max_images,
+        reprocess=args.reprocess,
+        verbose=args.verbose,
+        custom_dir=args.dir
+    )
 
 
 if __name__ == "__main__":
