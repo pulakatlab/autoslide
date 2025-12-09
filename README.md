@@ -136,6 +136,7 @@ src/
 │   ├── label_handling/     # Label import/export utilities
 │   └── utils.py           # Core utility functions
 ├── utils/                  # Additional utilities
+│   └── mask_validation_gui.py  # GUI for mask quality control
 ├── fibrosis_calculation/   # Fibrosis quantification tools
 │   └── calc_fibrosis.py   # Main fibrosis analysis module
 └── config.json            # Configuration file
