@@ -311,6 +311,7 @@ def process_single_image_fibrosis(
             'mask_path': mask_path,
             'region_type': item['region_type'],
             'hash_value': item['hash_value'],
+            'binarization_threshold': binarization_threshold,
             **fibrosis_results
         }
 
@@ -338,7 +339,7 @@ def process_single_image_fibrosis(
         if save_visualizations and vis_dir:
             create_fibrosis_visualization(
                 image, raw_fibrosis_mask, binary_vessel_mask, fibrosis_results,
-                image_name, vis_dir, verbose=verbose
+                image_name, vis_dir, binarization_threshold=binarization_threshold, verbose=verbose
             )
 
         return True, result_entry
@@ -449,6 +450,7 @@ def process_all_fibrosis_quantification(
         print(f"Configuration:")
         print(f"  Data directory: {data_dir}")
         print(f"  Fibrosis config: {fibrosis_config}")
+        print(f"  Binarization threshold: {binarization_threshold} (uint8 format, 0-255)")
         print(f"  Save visualizations: {save_visualizations}")
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
         print(
@@ -611,9 +613,12 @@ def process_all_fibrosis_quantification(
     print(f"Total processed: {total_successful + total_failed}")
 
 
-def create_fibrosis_visualization(image, fibrosis_mask, binary_vessel_mask, results, image_name, vis_dir, verbose=False):
+def create_fibrosis_visualization(image, fibrosis_mask, binary_vessel_mask, results, image_name, vis_dir, binarization_threshold=0, verbose=False):
     """
     Create and save a visualization of fibrosis analysis results.
+    
+    Args:
+        binarization_threshold (int): Threshold used for binarizing vessel mask (0-255)
     """
     try:
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
@@ -651,7 +656,8 @@ def create_fibrosis_visualization(image, fibrosis_mask, binary_vessel_mask, resu
         # Results text
         axes[1, 2].axis('off')
         result_text = f"Fibrosis Analysis Results\n\n"
-        result_text += f"Image: {image_name}\n\n"
+        result_text += f"Image: {image_name}\n"
+        result_text += f"Binarization Threshold: {binarization_threshold}\n\n"
 
         if 'fibrosis_percentage_total' in results:
             result_text += f"Raw Fibrosis %: {results['fibrosis_percentage_total']:.2f}%\n"
