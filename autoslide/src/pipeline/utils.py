@@ -477,6 +477,12 @@ def annotate_sections(
 
     fin_frame.dropna(inplace=True)
 
+    # Remove duplicate sections that may result from metadata with duplicate tissue_num values
+    # Convert section_bounds to string for comparison since lists are unhashable
+    fin_frame['_section_bounds_str'] = fin_frame['section_bounds'].astype(str)
+    fin_frame = fin_frame.drop_duplicates(subset=['_section_bounds_str'], keep='first')
+    fin_frame = fin_frame.drop(columns=['_section_bounds_str']).reset_index(drop=True)
+
     return fin_frame
 
 
