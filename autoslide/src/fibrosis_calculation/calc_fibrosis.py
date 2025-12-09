@@ -18,6 +18,7 @@ from autoslide.src.utils.get_section_from_hash import *
 import cv2
 from joblib import Parallel, delayed
 from pprint import pprint as pp
+import re
 
 ##############################
 
@@ -172,6 +173,49 @@ def quantify_fibrosis(
 ##############################
 
 
+def load_animal_number_mapping(data_dir, verbose=False):
+    """
+    Load animal number mapping from section_frame CSV files.
+    
+    Args:
+        data_dir: str, path to the data directory
+        verbose: bool, whether to print verbose output
+        
+    Returns:
+        dict: mapping from hash_value to animal_number
+    """
+    animal_number_map = {}
+    
+    # Find all section_frame CSV files
+    section_frame_files = glob(os.path.join(
+        data_dir, 'suggested_regions', '**', '*section_frame.csv'), recursive=True)
+    
+    if verbose:
+        print(f"Loading animal numbers from {len(section_frame_files)} section_frame files...")
+    
+    for csv_file in section_frame_files:
+        try:
+            df = pd.read_csv(csv_file)
+            if 'section_hash' in df.columns and 'animal_number' in df.columns:
+                for _, row in df.iterrows():
+                    animal_number_map[row['section_hash']] = row['animal_number']
+            elif 'section_hash' in df.columns and 'file_basename' in df.columns:
+                # Fallback: extract from file_basename if animal_number column doesn't exist
+                for _, row in df.iterrows():
+                    file_basename = row['file_basename']
+                    animal_number_match = re.search(r'(\d{5})', file_basename)
+                    animal_number = animal_number_match.group(1) if animal_number_match else None
+                    animal_number_map[row['section_hash']] = animal_number
+        except Exception as e:
+            if verbose:
+                print(f"Error loading {csv_file}: {e}")
+    
+    if verbose:
+        print(f"Loaded animal numbers for {len(animal_number_map)} sections")
+    
+    return animal_number_map
+
+
 def find_images_with_masks(data_dir, verbose=False):
     """
     Find all images in suggested_regions that have corresponding neural network predicted masks.
@@ -238,7 +282,8 @@ def process_single_image_fibrosis(
         vis_dir,
         results_dir,
         verbose,
-        binarization_threshold=0
+        binarization_threshold=0,
+        animal_number_map=None
 ):
     """
     Process a single image for fibrosis quantification.
@@ -304,6 +349,11 @@ def process_single_image_fibrosis(
             vessel_mask=binary_vessel_mask,
         )
 
+        # Get animal number from mapping
+        animal_number = None
+        if animal_number_map and item['hash_value']:
+            animal_number = animal_number_map.get(item['hash_value'], None)
+
         # Add metadata to results
         result_entry = {
             'image_name': image_name,
@@ -311,6 +361,7 @@ def process_single_image_fibrosis(
             'mask_path': mask_path,
             'region_type': item['region_type'],
             'hash_value': item['hash_value'],
+            'animal_number': animal_number,
             'binarization_threshold': binarization_threshold,
             **fibrosis_results
         }
@@ -464,6 +515,9 @@ def process_all_fibrosis_quantification(
         print("No images found with corresponding neural network masks.")
         return
 
+    # Load animal number mapping
+    animal_number_map = load_animal_number_mapping(data_dir, verbose=verbose)
+
     # Create output directories
     results_dir = os.path.join(data_dir, 'fibrosis_results')
     os.makedirs(results_dir, exist_ok=True)
@@ -525,14 +579,14 @@ def process_all_fibrosis_quantification(
         if n_jobs > 1:
             results = Parallel(n_jobs=n_jobs, verbose=1 if verbose else 0)(
                 delayed(process_single_image_fibrosis)(
-                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose, binarization_threshold
+                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose, binarization_threshold, animal_number_map
                 ) for item in tqdm(svs_images, desc=f"Processing {svs_name}")
             )
         else:
             results = []
             for item in tqdm(svs_images, desc=f"Processing {svs_name}"):
                 result = process_single_image_fibrosis(
-                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose, binarization_threshold
+                    item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose, binarization_threshold, animal_number_map
                 )
                 results.append(result)
 
