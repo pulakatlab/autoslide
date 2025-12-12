@@ -36,6 +36,12 @@ optional-dependencies.dev = {file = ["requirements-dev.txt"]}
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "maskrcnn: tests that require Mask R-CNN model",
+    "unet: tests that require UNet model",
+    "both_models: tests that require both models",
+]
 
 [tool.black]
 line-length = 88
