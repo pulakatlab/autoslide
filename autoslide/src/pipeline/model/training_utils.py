@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
+import torch.nn as nn
 import cv2 as cv  # Alias cv2 as cv for consistency
 from torchvision.transforms import v2 as T
 from tqdm import tqdm, trange
@@ -48,7 +49,7 @@ def setup_directories(data_dir=None):
 #############################################################################
 
 
-def setup_training(model, device):
+def setup_training(model, device, model_type='maskrcnn'):
     """
     Set up optimizer and other training parameters.
 
@@ -56,8 +57,9 @@ def setup_training(model, device):
     configures the optimizer with appropriate learning rate and momentum.
 
     Args:
-        model (torch.nn.Module): The Mask R-CNN model
+        model (torch.nn.Module): The segmentation model
         device (torch.device): Device to run the model on (CPU or GPU)
+        model_type (str): Type of model ('maskrcnn' or 'unet')
 
     Returns:
         torch.optim.Optimizer: Configured optimizer for training
@@ -75,22 +77,28 @@ def setup_training(model, device):
     print(f'Total parameters: {total_params:,}')
     print(f'Trainable parameters: {trainable_params:,}')
 
-    lr = 0.005
-    momentum = 0.9
-    weight_decay = 0.0005
+    if model_type.lower() == 'unet':
+        lr = 0.001
+        optimizer = torch.optim.Adam(params, lr=lr)
+        print(f'Optimizer configuration (Adam):')
+        print(f'  Learning rate: {lr}')
+    else:
+        lr = 0.005
+        momentum = 0.9
+        weight_decay = 0.0005
 
-    print(f'Optimizer configuration:')
-    print(f'  Learning rate: {lr}')
-    print(f'  Momentum: {momentum}')
-    print(f'  Weight decay: {weight_decay}')
+        print(f'Optimizer configuration (SGD):')
+        print(f'  Learning rate: {lr}')
+        print(f'  Momentum: {momentum}')
+        print(f'  Weight decay: {weight_decay}')
 
-    optimizer = torch.optim.SGD(
-        params, lr=lr, momentum=momentum, weight_decay=weight_decay)
+        optimizer = torch.optim.SGD(
+            params, lr=lr, momentum=momentum, weight_decay=weight_decay)
 
     return optimizer
 
 
-def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir, n_epochs=90):
+def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir, n_epochs=90, model_type='maskrcnn'):
     """
     Train the model and evaluate on validation set.
 
@@ -102,7 +110,7 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
     5. Saves model checkpoints and loss histories
 
     Args:
-        model (torch.nn.Module): The Mask R-CNN model
+        model (torch.nn.Module): The segmentation model
         train_dl (torch.utils.data.DataLoader): DataLoader for training data
         val_dl (torch.utils.data.DataLoader): DataLoader for validation data
         optimizer (torch.optim.Optimizer): Optimizer for training
@@ -110,6 +118,7 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
         plot_dir (str): Directory to save plots
         artifacts_dir (str): Directory to save model checkpoints
         n_epochs (int): Number of epochs to train for
+        model_type (str): Type of model ('maskrcnn' or 'unet')
 
     Returns:
         tuple: (model, all_train_losses, all_val_losses, best_val_loss) -
@@ -118,13 +127,18 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
     run_test_plot_dir = os.path.join(plot_dir, 'run_test_plot')
     os.makedirs(run_test_plot_dir, exist_ok=True)
 
-    best_model_path = os.path.join(
-        artifacts_dir, 'best_val_mask_rcnn_model.pth')
-    fin_model_path = os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth')
+    if model_type.lower() == 'unet':
+        best_model_path = os.path.join(artifacts_dir, 'best_val_unet_model.pth')
+        fin_model_path = os.path.join(artifacts_dir, 'final_unet_model.pth')
+        criterion = nn.BCEWithLogitsLoss()
+    else:
+        best_model_path = os.path.join(artifacts_dir, 'best_val_mask_rcnn_model.pth')
+        fin_model_path = os.path.join(artifacts_dir, 'final_mask_rcnn_model.pth')
+        criterion = None
 
     all_train_losses = []
     all_val_losses = []
-    best_val_loss = float('inf')  # Track the best validation loss
+    best_val_loss = float('inf')
     best_model = None
     flag = False
 
@@ -135,57 +149,78 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
         n_train = len(train_dl)
         pbar = tqdm(train_dl)
 
-        for i, dt in enumerate(pbar):
-            pbar.set_description(
-                f"Epoch {epoch}/{n_epochs}, Batch {i}/{n_train}")
-            imgs = [dt[0][0].to(device), dt[1][0].to(device)]
-            targ = [dt[0][1], dt[1][1]]
-
-            # Plot example image and mask to make sure augmentation is working
-            if i == 0:
-                fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-                ax[0].imshow(imgs[0].cpu().detach().numpy().transpose(1, 2, 0))
-                ax[1].imshow(
-                    np.sum(targ[0]['masks'].cpu().detach().numpy(), axis=0))
-                # Plot boxes
-                for box in targ[0]['boxes']:
-                    ax[0].add_patch(
-                        plt.Rectangle((box[0], box[1]), box[2]-box[0], box[3]-box[1],
-                                      fill=False, color="y", linewidth=2))
-                fig.savefig(run_test_plot_dir + f'/{epoch}_{i}_train.png')
-                plt.close(fig)
-
-            targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
-            loss = model(imgs, targets)
-            if not flag:
-                print(loss)
-                flag = True
-            losses = sum([l for l in loss.values()])
-            train_epoch_loss += losses.cpu().detach().numpy()
-            if np.isnan(train_epoch_loss):
-                # raise Exception('Loss is Nan')
-                print('Loss is NaN, skipping batch')
-                continue
-            optimizer.zero_grad()
-            losses.backward()
-            optimizer.step()
-
-        all_train_losses.append(train_epoch_loss)
-
-        # Validation loop
-        with torch.no_grad():
-            for j, dt in enumerate(val_dl):
-                if len(dt) < 2:
-                    continue
+        if model_type.lower() == 'unet':
+            # UNet training loop
+            for i, (images, masks) in enumerate(pbar):
+                pbar.set_description(f"Epoch {epoch}/{n_epochs}, Batch {i}/{n_train}")
+                images = images.to(device)
+                masks = masks.to(device)
+                
+                optimizer.zero_grad()
+                outputs = model(images)
+                loss = criterion(outputs, masks)
+                loss.backward()
+                optimizer.step()
+                
+                train_epoch_loss += loss.item()
+            
+            # UNet validation loop
+            model.eval()
+            with torch.no_grad():
+                for images, masks in val_dl:
+                    images = images.to(device)
+                    masks = masks.to(device)
+                    outputs = model(images)
+                    loss = criterion(outputs, masks)
+                    val_epoch_loss += loss.item()
+        else:
+            # Mask R-CNN training loop
+            for i, dt in enumerate(pbar):
+                pbar.set_description(f"Epoch {epoch}/{n_epochs}, Batch {i}/{n_train}")
                 imgs = [dt[0][0].to(device), dt[1][0].to(device)]
                 targ = [dt[0][1], dt[1][1]]
-                targets = [{k: v.to(device) for k, v in t.items()}
-                           for t in targ]
-                loss = model(imgs, targets)
-                losses = sum([l for l in loss.values()])
-                val_epoch_loss += losses.cpu().detach().numpy()
-            all_val_losses.append(val_epoch_loss)
 
+                # Plot example image and mask to make sure augmentation is working
+                if i == 0:
+                    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+                    ax[0].imshow(imgs[0].cpu().detach().numpy().transpose(1, 2, 0))
+                    ax[1].imshow(np.sum(targ[0]['masks'].cpu().detach().numpy(), axis=0))
+                    # Plot boxes
+                    for box in targ[0]['boxes']:
+                        ax[0].add_patch(
+                            plt.Rectangle((box[0], box[1]), box[2]-box[0], box[3]-box[1],
+                                          fill=False, color="y", linewidth=2))
+                    fig.savefig(run_test_plot_dir + f'/{epoch}_{i}_train.png')
+                    plt.close(fig)
+
+                targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
+                loss = model(imgs, targets)
+                if not flag:
+                    print(loss)
+                    flag = True
+                losses = sum([l for l in loss.values()])
+                train_epoch_loss += losses.cpu().detach().numpy()
+                if np.isnan(train_epoch_loss):
+                    print('Loss is NaN, skipping batch')
+                    continue
+                optimizer.zero_grad()
+                losses.backward()
+                optimizer.step()
+
+            # Mask R-CNN validation loop
+            with torch.no_grad():
+                for j, dt in enumerate(val_dl):
+                    if len(dt) < 2:
+                        continue
+                    imgs = [dt[0][0].to(device), dt[1][0].to(device)]
+                    targ = [dt[0][1], dt[1][1]]
+                    targets = [{k: v.to(device) for k, v in t.items()} for t in targ]
+                    loss = model(imgs, targets)
+                    losses = sum([l for l in loss.values()])
+                    val_epoch_loss += losses.cpu().detach().numpy()
+
+        all_train_losses.append(train_epoch_loss)
+        all_val_losses.append(val_epoch_loss)
         print(epoch, "  ", train_epoch_loss, "  ", val_epoch_loss)
 
         # Save model only if validation loss improves
@@ -231,7 +266,7 @@ def plot_losses(all_train_losses, all_val_losses, plot_dir, best_val_loss):
 
 
 def evaluate_model(model, val_img_paths, val_mask_paths,
-                   device, plot_dir):
+                   device, plot_dir, model_type='maskrcnn'):
     """
     Evaluate the model on validation data and generate prediction visualizations.
 
@@ -239,11 +274,12 @@ def evaluate_model(model, val_img_paths, val_mask_paths,
     of the predictions compared to ground truth masks.
 
     Args:
-        model (torch.nn.Module): The trained Mask R-CNN model
+        model (torch.nn.Module): The trained segmentation model
         val_img_paths (list): List of validation image file names
         val_mask_paths (list): List of validation mask file names
         device (torch.device): Device to run the model on (CPU or GPU)
         plot_dir (str): Directory to save the visualizations
+        model_type (str): Type of model ('maskrcnn' or 'unet')
     """
     print('Starting model evaluation...')
     model.eval()
@@ -268,45 +304,66 @@ def evaluate_model(model, val_img_paths, val_mask_paths,
         img = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path)
 
-        # Use the base transform for prediction to match training
         ig = transform(img)
-        with torch.no_grad():
-            pred = model([ig.to(device)])
-
-        n_preds = len(pred[0]["masks"])
-        if n_preds > 0:
-            fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds, 5))
+        
+        if model_type.lower() == 'unet':
+            # UNet prediction
+            with torch.no_grad():
+                output = model(ig.unsqueeze(0).to(device))
+                probs = torch.sigmoid(output)
+                pred_mask = (probs > 0.5).float()
+                pred_mask = pred_mask.squeeze().cpu().numpy()
+            
+            fig, ax = plt.subplots(1, 3, figsize=(15, 5))
             ax[0].imshow(img)
-            for i in range(n_preds):
-                ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy()
-                               * 255).astype("uint8").squeeze())
-            fig.savefig(pred_out_path +
-                        f'/{img_basename.split(".")[0]}example_masks.png')
-            plt.close(fig)
-
-            all_preds = np.stack(
-                [
-                    (pred[0]["masks"][i].cpu().detach().numpy()
-                     * 255).astype("uint8").squeeze()
-                    for i in range(n_preds)
-                ]
-            )
-
-            fig, ax = plt.subplots(1, 3, figsize=(10, 5))
-            ax[0].imshow(img)
-            ax[1].imshow(all_preds.mean(axis=0))
-            ax[2].imshow(np.array(mask))
-            plt.savefig(pred_out_path +
-                        f'/{img_basename.split(".")[0]}mean_example_mask.png')
+            ax[0].set_title('Input Image')
+            ax[1].imshow(pred_mask, cmap='gray')
+            ax[1].set_title('Predicted Mask')
+            ax[2].imshow(np.array(mask), cmap='gray')
+            ax[2].set_title('Ground Truth')
+            plt.savefig(pred_out_path + f'/{img_basename.split(".")[0]}_prediction.png')
             plt.close()
+            predictions_with_masks += 1
         else:
-            fig, ax = plt.subplots(1, 1, figsize=(10, 5))
-            ax.imshow(img)
-            ax.set_title('No predicted mask')
-            plt.savefig(pred_out_path +
-                        f'/{img_basename.split(".")[0]}_mean_example_mask.png')
-            plt.close()
-            predictions_without_masks += 1
+            # Mask R-CNN prediction
+            with torch.no_grad():
+                pred = model([ig.to(device)])
+
+            n_preds = len(pred[0]["masks"])
+            if n_preds > 0:
+                fig, ax = plt.subplots(1, n_preds+1, figsize=(5*n_preds, 5))
+                ax[0].imshow(img)
+                for i in range(n_preds):
+                    ax[i+1].imshow((pred[0]["masks"][i].cpu().detach().numpy()
+                                   * 255).astype("uint8").squeeze())
+                fig.savefig(pred_out_path +
+                            f'/{img_basename.split(".")[0]}example_masks.png')
+                plt.close(fig)
+
+                all_preds = np.stack(
+                    [
+                        (pred[0]["masks"][i].cpu().detach().numpy()
+                         * 255).astype("uint8").squeeze()
+                        for i in range(n_preds)
+                    ]
+                )
+
+                fig, ax = plt.subplots(1, 3, figsize=(10, 5))
+                ax[0].imshow(img)
+                ax[1].imshow(all_preds.mean(axis=0))
+                ax[2].imshow(np.array(mask))
+                plt.savefig(pred_out_path +
+                            f'/{img_basename.split(".")[0]}mean_example_mask.png')
+                plt.close()
+                predictions_with_masks += 1
+            else:
+                fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+                ax.imshow(img)
+                ax.set_title('No predicted mask')
+                plt.savefig(pred_out_path +
+                            f'/{img_basename.split(".")[0]}_mean_example_mask.png')
+                plt.close()
+                predictions_without_masks += 1
 
     print(f'Validation evaluation complete:')
     print(f'  Images with predicted masks: {predictions_with_masks}')
