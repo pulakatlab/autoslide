@@ -225,15 +225,16 @@ def find_images_to_process(reprocess=False, verbose=False, custom_dir=None):
     return images_by_svs
 
 
-def predict_image_from_path(model, image_path, device, transform, verbose=False):
+def predict_image_from_path(model, image_path, device, transform, model_type='maskrcnn', verbose=False):
     """
     Perform prediction on a single image from file path.
 
     Args:
-        model: Trained Mask R-CNN model
+        model: Trained segmentation model
         image_path (str): Path to the input image
         device: PyTorch device
         transform: Image transformation function
+        model_type (str): Type of model ('maskrcnn' or 'unet')
         verbose (bool): Whether to print detailed information
 
     Returns:
@@ -255,7 +256,7 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
         # Time the prediction
         start_time = time.time()
         result = predict_single_image(
-            model, image_path, device, transform, return_time=False)
+            model, image_path, device, transform, return_time=False, model_type=model_type)
         prediction_time = time.time() - start_time
 
         if verbose and result is not None:
@@ -521,12 +522,13 @@ def save_prediction_visualization(image_path, mask_path, predicted_mask, plot_di
         print(f"Error creating visualization for {image_path}: {e}")
 
 
-def process_all_images(model_path=None, save_visualizations=False, max_images=None, reprocess=False, verbose=False, custom_dir=None):
+def process_all_images(model_path=None, model_type='maskrcnn', save_visualizations=False, max_images=None, reprocess=False, verbose=False, custom_dir=None):
     """
     Process all images that need prediction, organized by SVS directory.
 
     Args:
         model_path (str): Path to saved model
+        model_type (str): Type of model to use ('maskrcnn' or 'unet')
         save_visualizations (bool): Whether to save prediction visualizations
         max_images (int): Maximum number of images to process (for testing)
         reprocess (bool): If True, remove existing outputs and reprocess all images
@@ -543,20 +545,18 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         print(f"  Data directory: {data_dir}")
         print(f"  Artifacts directory: {artifacts_dir}")
         print(f"  Plot directory: {plot_dir}")
-        print(
-            f"  Model path: {model_path if model_path else 'default best_val_mask_rcnn_model.pth'}")
+        print(f"  Model type: {model_type}")
+        print(f"  Model path: {model_path if model_path else f'default best_val_{model_type}_model.pth'}")
         print(f"  Save visualizations: {save_visualizations}")
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
         print(f"  Reprocess existing: {reprocess}")
-        print(
-            f"  Custom directory: {custom_dir if custom_dir else 'None (using config)'}")
+        print(f"  Custom directory: {custom_dir if custom_dir else 'None (using config)'}")
 
     # Load model
     if verbose:
         print("Loading model...")
-    model, device, transform = load_model(model_path)
-    print(
-        f"Model loaded successfully from {model_path if model_path else 'default best_val_mask_rcnn_model.pth'}")
+    model, device, transform = load_model(model_path, model_type=model_type)
+    print(f"Model loaded successfully from {model_path if model_path else f'default best_val_{model_type}_model.pth'}")
     print(f"Using device: {device}")
 
     # Find images to process (grouped by SVS directory)
@@ -627,7 +627,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
 
             # Perform prediction
             predicted_mask, prediction_time = predict_image_from_path(
-                model, image_path, device, transform, verbose=verbose)
+                model, image_path, device, transform, model_type=model_type, verbose=verbose)
 
             if predicted_mask is not None:
                 # Save timing information to tracking JSON
@@ -710,7 +710,10 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Batch prediction on suggested regions or custom directory')
     parser.add_argument('--model-path', type=str, default=None,
-                        help='Path to saved model (default: best_val_mask_rcnn_model.pth)')
+                        help='Path to saved model (default: best model based on type)')
+    parser.add_argument('--model-type', type=str, default='maskrcnn',
+                        choices=['maskrcnn', 'unet'],
+                        help='Type of model to use (maskrcnn or unet)')
     parser.add_argument('--dir', type=str, default=None,
                         help='Arbitrary directory containing images to process. If provided, uses this instead of config dir')
     parser.add_argument('--output-dir', type=str, default=None,
@@ -732,6 +735,7 @@ def main():
 
     process_all_images(
         model_path=args.model_path,
+        model_type=args.model_type,
         save_visualizations=args.save_visualizations,
         max_images=args.max_images,
         reprocess=args.reprocess,

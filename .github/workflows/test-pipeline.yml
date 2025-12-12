@@ -59,11 +59,60 @@ jobs:
           --verbose
       continue-on-error: true
     
-    - name: Run prediction
-      id: prediction
+    - name: Check available models
+      id: check_models
       run: |
-        python autoslide/src/pipeline/model/prediction.py --verbose
-      continue-on-error: true
+        echo "Checking for available models..."
+        MASKRCNN_MODEL="autoslide/artifacts/best_val_mask_rcnn_model.pth"
+        UNET_MODEL="autoslide/artifacts/best_val_unet_model.pth"
+        
+        MODELS_FOUND=0
+        if [ -f "$MASKRCNN_MODEL" ]; then
+          echo "✅ Mask R-CNN model found"
+          echo "has_maskrcnn=true" >> $GITHUB_OUTPUT
+          MODELS_FOUND=$((MODELS_FOUND + 1))
+        else
+          echo "❌ Mask R-CNN model not found"
+          echo "has_maskrcnn=false" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ -f "$UNET_MODEL" ]; then
+          echo "✅ UNet model found"
+          echo "has_unet=true" >> $GITHUB_OUTPUT
+          MODELS_FOUND=$((MODELS_FOUND + 1))
+        else
+          echo "❌ UNet model not found"
+          echo "has_unet=false" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "models_found=$MODELS_FOUND" >> $GITHUB_OUTPUT
+        
+        if [ $MODELS_FOUND -eq 0 ]; then
+          echo "❌ No models found! At least one model must be present."
+          exit 1
+        fi
+    
+    - name: Run prediction with Mask R-CNN
+      id: prediction_maskrcnn
+      if: steps.check_models.outputs.has_maskrcnn == 'true'
+      run: |
+        echo "Running prediction with Mask R-CNN..."
+        python autoslide/src/pipeline/model/prediction.py --model-type maskrcnn --verbose
+      continue-on-error: false
+    
+    - name: Run prediction with UNet
+      id: prediction_unet
+      if: steps.check_models.outputs.has_unet == 'true'
+      run: |
+        echo "Running prediction with UNet..."
+        # Clear previous predictions if Mask R-CNN ran
+        if [ "${{ steps.check_models.outputs.has_maskrcnn }}" == "true" ]; then
+          echo "Clearing previous predictions..."
+          find test_data/suggested_regions -type d -name "masks" -exec rm -rf {} + 2>/dev/null || true
+          find test_data/suggested_regions -type d -name "overlays" -exec rm -rf {} + 2>/dev/null || true
+        fi
+        python autoslide/src/pipeline/model/prediction.py --model-type unet --verbose
+      continue-on-error: false
     
     - name: Calculate fibrosis
       id: fibrosis
@@ -100,12 +149,33 @@ jobs:
           echo "❌ Region suggestion failed" >> test_summary.md
         fi
         
-        if [ -d "test_data/suggested_regions" ] && [ -d "$(find test_data/suggested_regions -name masks -type d | head -1)" ]; then
-          echo "✅ Prediction completed" >> test_summary.md
-          MASKS=$(find test_data/suggested_regions -name "*_mask.png" | wc -l)
-          echo "- Prediction masks: $MASKS" >> test_summary.md
+        # Check prediction results
+        echo "" >> test_summary.md
+        echo "### Prediction Results" >> test_summary.md
+        
+        if [ "${{ steps.check_models.outputs.has_maskrcnn }}" == "true" ]; then
+          if [ "${{ steps.prediction_maskrcnn.outcome }}" == "success" ]; then
+            echo "✅ Mask R-CNN prediction completed" >> test_summary.md
+          else
+            echo "❌ Mask R-CNN prediction failed" >> test_summary.md
+          fi
         else
-          echo "❌ Prediction failed" >> test_summary.md
+          echo "⚠️  Mask R-CNN model not available" >> test_summary.md
+        fi
+        
+        if [ "${{ steps.check_models.outputs.has_unet }}" == "true" ]; then
+          if [ "${{ steps.prediction_unet.outcome }}" == "success" ]; then
+            echo "✅ UNet prediction completed" >> test_summary.md
+          else
+            echo "❌ UNet prediction failed" >> test_summary.md
+          fi
+        else
+          echo "⚠️  UNet model not available" >> test_summary.md
+        fi
+        
+        if [ -d "test_data/suggested_regions" ] && [ -d "$(find test_data/suggested_regions -name masks -type d | head -1)" ]; then
+          MASKS=$(find test_data/suggested_regions -name "*_mask.png" | wc -l)
+          echo "- Total prediction masks: $MASKS" >> test_summary.md
         fi
         
         if [ -f "test_data/fibrosis_results/summary_statistics.json" ]; then
@@ -217,11 +287,40 @@ jobs:
           echo "✅ Pipeline with auto-labeling succeeded"
         fi
         
-        if [ "${{ steps.prediction.outcome }}" == "failure" ]; then
-          echo "❌ Prediction failed"
+        # Check prediction outcomes
+        PREDICTION_FAILED=0
+        if [ "${{ steps.check_models.outcome }}" == "failure" ]; then
+          echo "❌ Model check failed (no models found)"
           FAILED=1
+          PREDICTION_FAILED=1
+        fi
+        
+        if [ "${{ steps.check_models.outputs.has_maskrcnn }}" == "true" ]; then
+          if [ "${{ steps.prediction_maskrcnn.outcome }}" == "failure" ]; then
+            echo "❌ Mask R-CNN prediction failed"
+            FAILED=1
+            PREDICTION_FAILED=1
+          else
+            echo "✅ Mask R-CNN prediction succeeded"
+          fi
         else
-          echo "✅ Prediction succeeded"
+          echo "⚠️  Mask R-CNN model not available (skipped)"
+        fi
+        
+        if [ "${{ steps.check_models.outputs.has_unet }}" == "true" ]; then
+          if [ "${{ steps.prediction_unet.outcome }}" == "failure" ]; then
+            echo "❌ UNet prediction failed"
+            FAILED=1
+            PREDICTION_FAILED=1
+          else
+            echo "✅ UNet prediction succeeded"
+          fi
+        else
+          echo "⚠️  UNet model not available (skipped)"
+        fi
+        
+        if [ $PREDICTION_FAILED -eq 0 ] && [ "${{ steps.check_models.outputs.models_found }}" -gt 0 ]; then
+          echo "✅ All available model predictions succeeded"
         fi
         
         if [ "${{ steps.fibrosis.outcome }}" == "failure" ]; then

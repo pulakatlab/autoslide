@@ -43,9 +43,12 @@ plot_dir = config['plot_dirs']
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description='Train Mask R-CNN model for vessel detection')
+        description='Train segmentation model for vessel detection')
     parser.add_argument('--retrain', action='store_true',
                         help='Force retraining even if a saved model exists')
+    parser.add_argument('--model', type=str, default='maskrcnn',
+                        choices=['maskrcnn', 'unet'],
+                        help='Model type to train (maskrcnn or unet)')
     return parser.parse_args()
 
 
@@ -58,21 +61,39 @@ def main():
     plot_dir, artifacts_dir = setup_directories(data_dir)
 
     # Prepare all data using the preprocessing pipeline
-    data_components = prepare_data(data_dir, use_augmentation=True)
+    if model_type == 'unet':
+        # For UNet, use simpler data loading
+        from autoslide.src.pipeline.model.data_preprocessing import load_data, split_train_val
+        from autoslide.src.pipeline.model.unet_utils import create_unet_dataloaders
+        
+        labelled_data_dir, img_dir, mask_dir, image_names, mask_names = load_data(data_dir)
+        train_imgs, train_masks, val_imgs, val_masks = split_train_val(image_names, mask_names)
+        
+        train_dl, val_dl = create_unet_dataloaders(
+            train_imgs, train_masks, val_imgs, val_masks,
+            img_dir, mask_dir, batch_size=4
+        )
+        
+        aug_img_names = []
+        aug_mask_names = []
+        aug_img_dir = None
+        aug_mask_dir = None
+    else:
+        data_components = prepare_data(data_dir, use_augmentation=True)
 
-    # Extract components
-    train_dl = data_components['train_dl']
-    val_dl = data_components['val_dl']
-    train_imgs = data_components['train_imgs']
-    train_masks = data_components['train_masks']
-    val_imgs = data_components['val_imgs']
-    val_masks = data_components['val_masks']
-    img_dir = data_components['img_dir']
-    mask_dir = data_components['mask_dir']
-    aug_img_dir = data_components['aug_img_dir']
-    aug_mask_dir = data_components['aug_mask_dir']
-    aug_img_names = data_components['aug_img_names']
-    aug_mask_names = data_components['aug_mask_names']
+        # Extract components
+        train_dl = data_components['train_dl']
+        val_dl = data_components['val_dl']
+        train_imgs = data_components['train_imgs']
+        train_masks = data_components['train_masks']
+        val_imgs = data_components['val_imgs']
+        val_masks = data_components['val_masks']
+        img_dir = data_components['img_dir']
+        mask_dir = data_components['mask_dir']
+        aug_img_dir = data_components['aug_img_dir']
+        aug_mask_dir = data_components['aug_mask_dir']
+        aug_img_names = data_components['aug_img_names']
+        aug_mask_names = data_components['aug_mask_names']
 
     val_img_paths = [os.path.join(img_dir, name) for name in val_imgs]
     val_mask_paths = [os.path.join(mask_dir, name) for name in val_masks]
@@ -89,18 +110,22 @@ def main():
     )
 
     # Initialize model
-    model = initialize_model()
+    model_type = args.model
+    print(f'Using model type: {model_type}')
+    model = initialize_model(model_type=model_type)
 
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f'Using device: {device}')
 
     # Setup training
-    optimizer = setup_training(model, device)
+    optimizer = setup_training(model, device, model_type=model_type)
 
     # Model paths
-    best_model_path = os.path.join(
-        artifacts_dir, 'best_val_mask_rcnn_model.pth')
+    if model_type == 'unet':
+        best_model_path = os.path.join(artifacts_dir, 'best_val_unet_model.pth')
+    else:
+        best_model_path = os.path.join(artifacts_dir, 'best_val_mask_rcnn_model.pth')
 
     # Load existing model or train new one
     if os.path.exists(best_model_path) and not args.retrain:
@@ -109,13 +134,14 @@ def main():
     else:
         # Train model
         model, all_train_losses, all_val_losses, best_val_loss = train_model(
-            model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir
+            model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir,
+            model_type=model_type
         )
 
     # Evaluate model
     evaluate_model(
         model, val_img_paths, val_mask_paths,
-        device, plot_dir
+        device, plot_dir, model_type=model_type
     )
 
 
