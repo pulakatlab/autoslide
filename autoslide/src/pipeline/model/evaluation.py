@@ -395,7 +395,7 @@ def evaluate_model_accuracy_and_speed(model, val_imgs, val_masks, img_dir, mask_
                                       num_warmup=10,
                                       use_cache=True,
                                       model_path=None,
-                                      score_threshold=0.5,
+                                      score_threshold=0.3,
                                       ):
     """
     Evaluate model accuracy and speed on validation set.
@@ -803,7 +803,7 @@ def sweep_thresholds(model, val_imgs, val_masks, img_dir, mask_dir,
 
 def benchmark_prediction_speed(model, val_imgs, img_dir, aug_img_dir,
                                device, transform, num_warmup=10, num_benchmark=100,
-                               use_cache=True, model_path=None, score_threshold=0.5):
+                               use_cache=True, model_path=None, score_threshold=0.3):
     """
     Benchmark prediction speed on a subset of validation images.
 
@@ -1420,7 +1420,7 @@ def plot_evaluation_results(accuracy_results, speed_results, plot_dir):
 def create_sample_predictions_plot(model, val_imgs, val_masks, img_dir, mask_dir,
                                    aug_img_dir, aug_mask_dir, device, transform,
                                    plot_dir, num_samples=6, use_cache=True, model_path=None,
-                                   score_threshold=0.5):
+                                   score_threshold=0.3):
     """
     Create a plot showing sample predictions vs ground truth.
 
@@ -1666,7 +1666,7 @@ def parse_args():
                         help='Disable prediction caching')
     parser.add_argument('--clear-cache', action='store_true',
                         help='Clear prediction cache before running')
-    parser.add_argument('--score-threshold', type=float, default=0.5,
+    parser.add_argument('--score-threshold', type=float, default=0.3,
                         help='Minimum confidence score for a predicted instance '
                              'to be included in the combined mask')
     parser.add_argument('--threshold-sweep', action='store_true',

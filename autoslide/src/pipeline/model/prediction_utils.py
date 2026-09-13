@@ -88,13 +88,18 @@ def load_model(model_path=None, device=None):
     return model, device, transform
 
 
-def combine_prediction_masks(masks, scores, mask_shape, score_threshold=0.5):
+def combine_prediction_masks(masks, scores, mask_shape, score_threshold=0.3):
     """
     Combine per-instance predicted masks into a single confidence-weighted mask.
 
     Instances scoring at or below `score_threshold` are dropped before
     combining, so a single low-confidence spurious detection can no longer
     dominate the output once it's renormalized to 0-255.
+
+    The default of 0.3 is the empirical optimum from a full 407-image
+    score_threshold x mask_threshold grid sweep (see
+    evaluation.sweep_thresholds / --threshold-sweep, issue #101): mean IoU
+    0.590 vs. 0.553 for the old unfiltered (score_threshold=0.0) behavior.
 
     Args:
         masks (numpy.ndarray): Raw predicted masks, shape (N, 1, H, W)
@@ -135,7 +140,7 @@ def combine_prediction_masks(masks, scores, mask_shape, score_threshold=0.5):
 
 
 def predict_single_image(model, image, device, transform, return_time=False,
-                         score_threshold=0.5):
+                         score_threshold=0.3):
     """
     Perform prediction on a single image.
 
