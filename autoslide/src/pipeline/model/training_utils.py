@@ -161,13 +161,25 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
                 print(loss)
                 flag = True
             losses = sum([l for l in loss.values()])
-            train_epoch_loss += losses.cpu().detach().numpy()
-            if np.isnan(train_epoch_loss):
-                # raise Exception('Loss is Nan')
-                print('Loss is NaN, skipping batch')
+
+            # Check the per-batch loss, not the running epoch total - the old
+            # check tested train_epoch_loss *after* accumulating into it, so
+            # once that running total went NaN it stayed NaN for the rest of
+            # the epoch (nan + x == nan), silently skipping optimizer.step()
+            # for every remaining batch (issue #119).
+            if not torch.isfinite(losses):
+                print(f'Non-finite loss at batch {i}, skipping')
+                optimizer.zero_grad(set_to_none=True)
                 continue
+
+            train_epoch_loss += losses.cpu().detach().numpy()
             optimizer.zero_grad()
             losses.backward()
+            # lr=0.005 at batch size 2 with no warmup is exactly the regime
+            # where detection losses spike early in training - clip
+            # regardless of whether this batch's loss was finite.
+            torch.nn.utils.clip_grad_norm_(
+                [p for p in model.parameters() if p.requires_grad], max_norm=10.0)
             optimizer.step()
 
         all_train_losses.append(train_epoch_loss)
