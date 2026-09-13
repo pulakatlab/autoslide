@@ -95,18 +95,29 @@ def load_model(model_path=None, device=None):
     return model, device, transform
 
 
-def combine_prediction_masks(masks, scores, mask_shape, score_threshold=0.3):
+def combine_prediction_masks(masks, scores, mask_shape, score_threshold=0.3,
+                             instance_mask_threshold=0.5):
     """
-    Combine per-instance predicted masks into a single confidence-weighted mask.
+    Combine per-instance predicted masks into a single mask via union.
 
-    Instances scoring at or below `score_threshold` are dropped before
-    combining, so a single low-confidence spurious detection can no longer
-    dominate the output once it's renormalized to 0-255.
+    Instances scoring at or below `score_threshold` are dropped, then each
+    surviving instance's own soft mask is binarized independently at
+    `instance_mask_threshold` (the standard Mask R-CNN convention, since
+    the mask head is trained per-pixel against this decision boundary -
+    not a free parameter to sweep) before taking the pixel-wise union
+    across instances.
 
-    The default of 0.3 is the empirical optimum from a full 407-image
-    score_threshold x mask_threshold grid sweep (see
-    evaluation.sweep_thresholds / --threshold-sweep, issue #101): mean IoU
-    0.590 vs. 0.553 for the old unfiltered (score_threshold=0.0) behavior.
+    Previously this combined instances via a confidence-weighted average
+    followed by rescaling the result to its own max (see issue #39):
+    that's the wrong combination strategy for *disjoint* instances -
+    `total_weight` summed the score across every kept instance globally,
+    so each vessel's own mask value got diluted by however many other,
+    unrelated vessels happened to be in the same image, and the
+    per-image max-rescale then made the effective confidence bar float
+    depending on each image's score distribution (see #39/#101). Union of
+    independently-thresholded instance masks avoids both: each instance
+    contributes independently regardless of how many others are present,
+    and the output is already binary so no rescaling is needed.
 
     Args:
         masks (numpy.ndarray): Raw predicted masks, shape (N, 1, H, W)
@@ -114,31 +125,18 @@ def combine_prediction_masks(masks, scores, mask_shape, score_threshold=0.3):
         mask_shape (tuple): (H, W) to use for the empty-mask fallback
         score_threshold (float): Minimum confidence score for an instance to
             be included in the combination
+        instance_mask_threshold (float): Threshold used to binarize each
+            surviving instance's own soft mask before the union
 
     Returns:
-        numpy.ndarray: Combined mask, uint8, 0-255
+        numpy.ndarray: Combined binary mask, uint8, values 0 or 255
     """
     keep = scores > score_threshold
     masks = masks[keep]
-    scores = scores[keep]
 
     if len(masks) > 0:
-        # Weight masks by their confidence scores
-        combined_mask = np.zeros_like(masks[0, 0])
-        total_weight = 0
-
-        for mask, score in zip(masks, scores):
-            combined_mask += mask[0] * score
-            total_weight += score
-
-        # Normalize to 0-1 range, then convert to 0-255
-        if total_weight > 0:
-            combined_mask = combined_mask / total_weight
-
-        if combined_mask.max() > 0:
-            combined_mask = combined_mask / combined_mask.max()
-
-        # Convert to uint8 (0-255 range)
+        instance_binary = masks[:, 0] > instance_mask_threshold
+        combined_mask = np.any(instance_binary, axis=0)
         combined_mask = (combined_mask * 255).astype(np.uint8)
     else:
         combined_mask = np.zeros(mask_shape, dtype=np.uint8)
