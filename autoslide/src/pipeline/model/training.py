@@ -11,7 +11,8 @@ Resources
 
 
 from autoslide.src.pipeline.model.training_utils import (
-    setup_directories, setup_training, train_model, plot_losses, evaluate_model, load_model
+    setup_directories, setup_training, setup_lr_scheduler, train_model,
+    plot_losses, evaluate_model, load_model
 )
 from autoslide.src.pipeline.model.prediction_utils import initialize_model
 from autoslide.src.pipeline.model.data_preprocessing import (
@@ -46,6 +47,11 @@ def parse_args():
         description='Train Mask R-CNN model for vessel detection')
     parser.add_argument('--retrain', action='store_true',
                         help='Force retraining even if a saved model exists')
+    parser.add_argument('--batch-size', type=int, default=4,
+                        help='DataLoader batch size (#122 - previously '
+                             'hardcoded to 2)')
+    parser.add_argument('--n-epochs', type=int, default=90,
+                        help='Number of training epochs')
     return parser.parse_args()
 
 
@@ -58,7 +64,8 @@ def main():
     plot_dir, artifacts_dir = setup_directories(data_dir)
 
     # Prepare all data using the preprocessing pipeline
-    data_components = prepare_data(data_dir, use_augmentation=True)
+    data_components = prepare_data(
+        data_dir, use_augmentation=True, batch_size=args.batch_size)
 
     # Extract components
     train_dl = data_components['train_dl']
@@ -96,7 +103,9 @@ def main():
     print(f'Using device: {device}')
 
     # Setup training
-    optimizer = setup_training(model, device)
+    optimizer = setup_training(model, device, batch_size=args.batch_size)
+    scheduler = setup_lr_scheduler(
+        optimizer, n_epochs=args.n_epochs, n_batches_per_epoch=len(train_dl))
 
     # Model paths
     best_model_path = os.path.join(
@@ -109,7 +118,8 @@ def main():
     else:
         # Train model
         model, all_train_losses, all_val_losses, best_val_loss = train_model(
-            model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir
+            model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir,
+            n_epochs=args.n_epochs, scheduler=scheduler,
         )
 
     # Evaluate model
