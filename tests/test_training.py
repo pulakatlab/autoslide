@@ -8,11 +8,14 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import shutil
 
-from src import config
-from autoslide.src.pipeline.model.training_utils import (
-    setup_directories, create_transforms, initialize_model,
-    get_mask_outline, RandomRotation90, generate_negative_samples,
-    generate_artificial_vessels
+from autoslide.src import config
+from autoslide.src.pipeline.model.training_utils import setup_directories
+from autoslide.src.pipeline.model.prediction_utils import (
+    initialize_model, combine_prediction_masks
+)
+from autoslide.src.pipeline.model.data_preprocessing import (
+    create_transforms, get_mask_outline, RandomRotation90, RandomShear,
+    generate_negative_samples, generate_artificial_vessels
 )
 
 # Fixtures for testing
@@ -82,13 +85,15 @@ def test_setup_directories(test_dirs):
     """Test that setup_directories creates the necessary directories"""
     test_root, _, _ = test_dirs
 
-    # Test with the test_root as data_dir
+    # setup_directories derives plot_dir from global config and artifacts_dir
+    # from its own module location; the data_dir argument is not used for
+    # either path, so assert against those actual sources instead of test_root.
     plot_dir, artifacts_dir = setup_directories(test_root)
 
     assert os.path.exists(plot_dir)
     assert os.path.exists(artifacts_dir)
-    assert plot_dir == os.path.join(test_root, 'plots')
-    assert artifacts_dir == os.path.join(test_root, 'artifacts')
+    assert plot_dir == config['plot_dirs']
+    assert artifacts_dir.endswith(os.path.join('model', 'artifacts'))
 
 
 def test_get_mask_outline(sample_image_mask):
@@ -160,9 +165,10 @@ def test_create_transforms():
     """Test that create_transforms returns a valid transform"""
     transform = create_transforms()
 
-    # Create a simple test image and mask
-    img = Image.new('RGB', (100, 100), color='red')
-    mask = Image.new('L', (100, 100), 0)
+    # ElasticTransform(sigma=30) pads internally by ~120px per side, so the
+    # fixture must be larger than that (real training images are 706x706).
+    img = Image.new('RGB', (512, 512), color='red')
+    mask = Image.new('L', (512, 512), 0)
 
     # Apply transform
     img_tensor, mask_tensor = transform(img, mask)
@@ -258,3 +264,21 @@ def test_model_forward_pass():
     assert 'labels' in predictions[0]
     assert 'scores' in predictions[0]
     assert 'masks' in predictions[0]
+
+
+def test_combine_prediction_masks_score_threshold():
+    """A low-confidence stray detection should be dropped by score_threshold,
+    while a confident detection survives (regression test for issue #39)."""
+    masks = np.zeros((2, 1, 10, 10), dtype=np.float32)
+    masks[0, 0, 2:5, 2:5] = 1.0  # confident detection
+    masks[1, 0, 8, 8] = 1.0      # low-confidence stray pixel
+    scores = np.array([0.9, 0.2])
+
+    filtered = combine_prediction_masks(
+        masks, scores, (10, 10), score_threshold=0.5)
+    unfiltered = combine_prediction_masks(
+        masks, scores, (10, 10), score_threshold=0.0)
+
+    assert filtered[8, 8] == 0
+    assert filtered[3, 3] > 0
+    assert unfiltered[8, 8] > 0
