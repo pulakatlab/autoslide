@@ -691,12 +691,13 @@ class AugmentedCustDat(torch.utils.data.Dataset):
         # Convert mask back to numpy array
         mask = mask_tensor.numpy().astype(np.uint8)
 
-        # Reject only degenerate (zero-area) boxes. Previously this filtered
-        # out any instance covering <0.5% of the image area, which silently
-        # dropped 27% of hand-drawn vessel annotations from the training
-        # target (see issue #117) while evaluation scored against all of
-        # them - a train/eval mismatch that tracked with the "model can't
-        # find small vessels" result.
+        # #117's removal of the <0.5% area filter measured *worse* on the
+        # full 407-image eval (mean IoU 0.566 vs 0.590 baseline, best
+        # operating point shifted to score_threshold=0.9 and still
+        # climbing) - training on every hand-drawn instance apparently let
+        # more annotation noise into the training target than it recovered
+        # in genuine small-vessel recall. Reinstated here; #120's
+        # tv_tensors.Mask fix (above) is independent of this and stays.
         obj_ids = np.unique(mask)
         obj_ids = obj_ids[1:]
 
@@ -706,6 +707,8 @@ class AugmentedCustDat(torch.utils.data.Dataset):
             obj_mask = (mask == obj)
             pos = np.where(obj_mask)
             if len(pos[0]) == 0:  # Skip if mask is empty
+                continue
+            if np.mean(obj_mask) <= 0.005:  # too small, likely noise
                 continue
             xmin = np.min(pos[1])
             xmax = np.max(pos[1])
