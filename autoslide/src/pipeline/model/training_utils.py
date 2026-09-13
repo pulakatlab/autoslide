@@ -48,7 +48,7 @@ def setup_directories(data_dir=None):
 #############################################################################
 
 
-def setup_training(model, device):
+def setup_training(model, device, batch_size=2):
     """
     Set up optimizer and other training parameters.
 
@@ -58,6 +58,10 @@ def setup_training(model, device):
     Args:
         model (torch.nn.Module): The Mask R-CNN model
         device (torch.device): Device to run the model on (CPU or GPU)
+        batch_size (int): Batch size training will run with. The base LR
+            below was tuned at batch_size=2; scale it linearly so
+            increasing batch_size (#122) doesn't silently change the
+            effective per-sample step size (#13).
 
     Returns:
         torch.optim.Optimizer: Configured optimizer for training
@@ -75,12 +79,15 @@ def setup_training(model, device):
     print(f'Total parameters: {total_params:,}')
     print(f'Trainable parameters: {trainable_params:,}')
 
-    lr = 0.005
+    base_lr = 0.005
+    reference_batch_size = 2
+    lr = base_lr * (batch_size / reference_batch_size)
     momentum = 0.9
     weight_decay = 0.0005
 
     print(f'Optimizer configuration:')
-    print(f'  Learning rate: {lr}')
+    print(
+        f'  Learning rate: {lr} (base {base_lr} scaled for batch_size={batch_size})')
     print(f'  Momentum: {momentum}')
     print(f'  Weight decay: {weight_decay}')
 
@@ -90,7 +97,40 @@ def setup_training(model, device):
     return optimizer
 
 
-def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir, n_epochs=90):
+def setup_lr_scheduler(optimizer, n_epochs, n_batches_per_epoch):
+    """
+    Build a per-iteration warmup + cosine-decay LR schedule (#13).
+
+    lr=0.005 at batch size 2 with no warmup is exactly the regime where
+    detection losses spike early in training (see the per-batch
+    non-finite-loss handling in train_model) - a short linear warmup
+    avoids that, and cosine decay over the rest of training tends to
+    outperform a fixed LR for a long, fixed-epoch-budget schedule like
+    this one.
+
+    Args:
+        optimizer (torch.optim.Optimizer): Optimizer to schedule
+        n_epochs (int): Total number of training epochs
+        n_batches_per_epoch (int): Number of batches per epoch (steps
+            the schedule once per batch, not once per epoch)
+
+    Returns:
+        torch.optim.lr_scheduler.SequentialLR: Combined warmup+decay schedule
+    """
+    total_iters = max(1, n_epochs * n_batches_per_epoch)
+    warmup_iters = min(1000, max(1, n_batches_per_epoch))
+
+    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=1 / 1000, total_iters=warmup_iters)
+    decay_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=max(1, total_iters - warmup_iters))
+
+    return torch.optim.lr_scheduler.SequentialLR(
+        optimizer, schedulers=[warmup_scheduler, decay_scheduler],
+        milestones=[warmup_iters])
+
+
+def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_dir, n_epochs=90, scheduler=None):
     """
     Train the model and evaluate on validation set.
 
@@ -110,6 +150,10 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
         plot_dir (str): Directory to save plots
         artifacts_dir (str): Directory to save model checkpoints
         n_epochs (int): Number of epochs to train for
+        scheduler (torch.optim.lr_scheduler.LRScheduler): Optional
+            per-iteration LR schedule (see setup_lr_scheduler, #13),
+            stepped once per training batch on which an update actually
+            happens
 
     Returns:
         tuple: (model, all_train_losses, all_val_losses, best_val_loss) -
@@ -138,8 +182,12 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
         for i, dt in enumerate(pbar):
             pbar.set_description(
                 f"Epoch {epoch}/{n_epochs}, Batch {i}/{n_train}")
-            imgs = [dt[0][0].to(device), dt[1][0].to(device)]
-            targ = [dt[0][1], dt[1][1]]
+            # custom_collate returns (images, targets) tuples of length
+            # batch_size, not a list of (image, target) pairs - indexing
+            # fixed positions here (dt[0][0], dt[1][0], ...) hardcoded
+            # batch_size=2 (#122). Loop over the whole batch instead.
+            imgs = [img.to(device) for img in dt[0]]
+            targ = list(dt[1])
 
             # Plot example image and mask to make sure augmentation is working
             if i == 0:
@@ -181,16 +229,18 @@ def train_model(model, train_dl, val_dl, optimizer, device, plot_dir, artifacts_
             torch.nn.utils.clip_grad_norm_(
                 [p for p in model.parameters() if p.requires_grad], max_norm=10.0)
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
 
         all_train_losses.append(train_epoch_loss)
 
         # Validation loop
         with torch.no_grad():
             for j, dt in enumerate(val_dl):
-                if len(dt) < 2:
+                imgs = [img.to(device) for img in dt[0]]
+                targ = list(dt[1])
+                if len(imgs) == 0:
                     continue
-                imgs = [dt[0][0].to(device), dt[1][0].to(device)]
-                targ = [dt[0][1], dt[1][1]]
                 targets = [{k: v.to(device) for k, v in t.items()}
                            for t in targ]
                 loss = model(imgs, targets)

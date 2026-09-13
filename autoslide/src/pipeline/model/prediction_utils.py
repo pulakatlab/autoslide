@@ -39,7 +39,14 @@ def initialize_model():
     Returns:
         torchvision.models.detection.MaskRCNN: Configured Mask R-CNN model
     """
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn()
+    # COCO-pretrained backbone/FPN/RPN instead of random init (#121) - only
+    # the box/mask predictor heads below are replaced for num_classes=2, so
+    # this is evaluated in isolation from the v2 architecture / higher
+    # mask_roi_pool resolution changes, which interact with the pretrained
+    # mask head's expected 14x14 input and are tracked as separate
+    # follow-ups rather than bundled in here.
+    weights = torchvision.models.detection.MaskRCNN_ResNet50_FPN_Weights.COCO_V1
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=weights)
 
     # Configure for binary classification (background + vessel)
     num_classes = 2

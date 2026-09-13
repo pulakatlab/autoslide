@@ -745,16 +745,20 @@ def custom_collate(data):
     """
     Custom collate function for DataLoader.
 
-    This function is used to handle variable-sized images and masks
-    in the batch without padding or resizing.
+    Handles variable-sized images/masks (no padding or resizing) by
+    leaving each sample's tensors as-is, but still groups the batch into
+    (images, targets) tuples of length batch_size instead of a list of
+    per-sample (image, target) pairs. Previously this returned the list
+    unmodified, which forced the training/validation loops to index
+    fixed positions (`dt[0]`, `dt[1]`), hardcoding batch_size=2 (#122).
 
     Args:
-        data: Batch of data from the dataset
+        data: Batch of (image, target) tuples from the dataset
 
     Returns:
-        The same data without modification
+        tuple: (images, targets), each of length batch_size
     """
-    return data
+    return tuple(zip(*data))
 
 
 def _worker_init_fn(_worker_id):
@@ -778,7 +782,8 @@ def create_dataloaders(
         train_mask_paths,
         val_img_paths,
         val_mask_paths,
-        transform
+        transform,
+        batch_size=2
 ):
     """
     Create DataLoader objects for training and validation.
@@ -792,12 +797,15 @@ def create_dataloaders(
         val_img_paths (list): List of validation image filenames
         val_mask_paths (list): List of validation mask filenames
         transform (callable): Transformation function to apply to the data
+        batch_size (int): Number of samples per batch. Previously
+            hardcoded to 2 because custom_collate and the training/
+            validation loops indexed fixed batch positions; both now
+            handle an arbitrary batch size (#122)
 
     Returns:
         tuple: (train_dl, val_dl) - DataLoader objects for training and validation
     """
     print('Creating DataLoaders...')
-    batch_size = 2
     # ElasticTransform(alpha=3000, sigma=30) alone costs ~5s/image on CPU
     # (profiled); with num_workers=1 that fully serializes augmentation and
     # leaves the GPU idle waiting on it. Parallelize across available CPUs
@@ -823,7 +831,6 @@ def create_dataloaders(
         worker_init_fn=_worker_init_fn,
         persistent_workers=True,
         pin_memory=use_cuda,
-        drop_last=True
     )
 
     # Validation must not use the training augmentation transform - model
@@ -842,7 +849,6 @@ def create_dataloaders(
         worker_init_fn=_worker_init_fn,
         persistent_workers=True,
         pin_memory=use_cuda,
-        drop_last=True
     )
 
     print(
@@ -1009,13 +1015,14 @@ def test_transformations(img_dir, mask_dir, image_names, mask_names, transform):
 # Main Preprocessing Pipeline
 #############################################################################
 
-def prepare_data(data_dir=None, use_augmentation=True):
+def prepare_data(data_dir=None, use_augmentation=True, batch_size=2):
     """
     Main data preprocessing pipeline.
 
     Args:
         data_dir (str): Root data directory
         use_augmentation (bool): Whether to use data augmentation
+        batch_size (int): DataLoader batch size (see create_dataloaders, #122)
 
     Returns:
         tuple: All necessary data components for training
@@ -1073,6 +1080,7 @@ def prepare_data(data_dir=None, use_augmentation=True):
         val_img_paths,
         val_mask_paths,
         transform_set,
+        batch_size=batch_size,
     )
 
     print("Data preprocessing pipeline complete!")
