@@ -780,7 +780,11 @@ def create_dataloaders(
     """
     print('Creating DataLoaders...')
     batch_size = 2
-    num_workers = 1
+    # ElasticTransform(alpha=3000, sigma=30) alone costs ~5s/image on CPU
+    # (profiled); with num_workers=1 that fully serializes augmentation and
+    # leaves the GPU idle waiting on it. Parallelize across available CPUs
+    # instead (capped, leaving a core free for the main process).
+    num_workers = max(1, (os.cpu_count() or 2) - 1)
     use_cuda = torch.cuda.is_available()
 
     print(f'DataLoader configuration:')
@@ -798,6 +802,7 @@ def create_dataloaders(
         shuffle=True,  # Changed to True for better training
         collate_fn=custom_collate,
         num_workers=num_workers,
+        persistent_workers=True,
         pin_memory=use_cuda,
         drop_last=True
     )
@@ -815,6 +820,7 @@ def create_dataloaders(
         shuffle=False,
         collate_fn=custom_collate,
         num_workers=num_workers,
+        persistent_workers=True,
         pin_memory=use_cuda,
         drop_last=True
     )
