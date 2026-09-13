@@ -755,6 +755,22 @@ def custom_collate(data):
     return data
 
 
+def _worker_init_fn(_worker_id):
+    """
+    Limit each DataLoader worker process to a single torch/OpenCV thread.
+
+    Without this, every worker process defaults to using intra-op thread
+    pools sized for all available CPUs, so N worker *processes* each also
+    spawn up to N *threads* for tensor ops (e.g. inside ElasticTransform's
+    Gaussian blur). Measured effect: with num_workers=7 on an 8-core box,
+    aggregate throughput was unchanged from a single worker (~5.2s/image
+    either way) because the workers were fighting each other for cores
+    instead of running in parallel. One thread per worker process fixes it.
+    """
+    torch.set_num_threads(1)
+    cv.setNumThreads(0)
+
+
 def create_dataloaders(
         train_img_paths,
         train_mask_paths,
@@ -802,6 +818,7 @@ def create_dataloaders(
         shuffle=True,  # Changed to True for better training
         collate_fn=custom_collate,
         num_workers=num_workers,
+        worker_init_fn=_worker_init_fn,
         persistent_workers=True,
         pin_memory=use_cuda,
         drop_last=True
@@ -820,6 +837,7 @@ def create_dataloaders(
         shuffle=False,
         collate_fn=custom_collate,
         num_workers=num_workers,
+        worker_init_fn=_worker_init_fn,
         persistent_workers=True,
         pin_memory=use_cuda,
         drop_last=True
