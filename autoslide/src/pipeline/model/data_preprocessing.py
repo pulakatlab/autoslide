@@ -9,12 +9,16 @@ This module handles:
 """
 
 import os
+import hashlib
+import shutil
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import torch
 import cv2 as cv
 from torchvision.transforms import v2 as T
+from torchvision.transforms.v2 import functional as F
+from torchvision import tv_tensors
 from tqdm import tqdm, trange
 import autoslide.src
 from autoslide.src import config
@@ -55,17 +59,23 @@ def load_data(data_dir=None):
     return labelled_data_dir, img_dir, mask_dir, image_names, mask_names
 
 
-def split_train_val(image_names, mask_names, train_ratio=0.9):
+def split_train_val(image_names, mask_names, train_ratio=0.9, seed=0):
     """
     Split the dataset into training and validation sets.
 
-    Randomly selects 90% of the data for training and 10% for validation,
-    ensuring that the training set has an even number of samples.
+    Randomly selects 90% of the data for training and 10% for validation.
+
+    The split is seeded (default seed=0) so it is reproducible run to run -
+    previously this used the global, unseeded np.random.choice, so every run
+    silently produced a different split (issue #51). A fixed seed also keeps
+    load_or_create_augmented_data's on-disk cache valid across runs, since
+    the cached augmented samples are derived from train_imgs.
 
     Args:
         image_names (list): List of image filenames
         mask_names (list): List of mask filenames
         train_ratio (float): Ratio of data to use for training
+        seed (int): Seed for the train/val split RNG
 
     Returns:
         tuple: (train_imgs, train_masks, val_imgs, val_masks) -
@@ -74,11 +84,10 @@ def split_train_val(image_names, mask_names, train_ratio=0.9):
     print(
         f'Splitting dataset: {len(image_names)} total images with {train_ratio:.1%} for training')
     num = int(train_ratio * len(image_names))
-    num = num if num % 2 == 0 else num + 1
-    print(
-        f'Adjusted training set size to {num} (even number for batch processing)')
+    print(f'Training set size: {num}')
 
-    train_imgs_inds = np.random.choice(
+    rng = np.random.default_rng(seed)
+    train_imgs_inds = rng.choice(
         range(len(image_names)), num, replace=False)
     val_imgs_inds = np.setdiff1d(range(len(image_names)), train_imgs_inds)
     train_imgs = np.array(image_names)[train_imgs_inds]
@@ -136,9 +145,14 @@ class RandomShear():
         """
         Apply random shear to image and mask.
 
+        Uses torchvision.transforms.v2.functional.affine rather than PIL's
+        Image.transform so this also works when mask is a tv_tensors.Mask
+        (dispatches to nearest-neighbor interpolation automatically,
+        preserving discrete instance ids - see issue #120).
+
         Args:
-            img (PIL.Image): Input image
-            mask (PIL.Image): Corresponding mask
+            img (PIL.Image or Tensor): Input image
+            mask (PIL.Image, Tensor, or tv_tensors.Mask): Corresponding mask
 
         Returns:
             tuple: (sheared_img, sheared_mask)
@@ -146,10 +160,10 @@ class RandomShear():
         if np.random.rand() < self.p:
             shear_angle = np.random.uniform(-self.shear_range,
                                             self.shear_range)
-            img = img.transform(img.size, Image.AFFINE, (1, np.tan(
-                np.radians(shear_angle)), 0, 0, 1, 0))
-            mask = mask.transform(
-                mask.size, Image.AFFINE, (1, np.tan(np.radians(shear_angle)), 0, 0, 1, 0))
+            img = F.affine(img, angle=0, translate=[0, 0], scale=1.0,
+                           shear=[float(shear_angle), 0.0])
+            mask = F.affine(mask, angle=0, translate=[0, 0], scale=1.0,
+                            shear=[float(shear_angle), 0.0])
         return img, mask
 
 
@@ -173,17 +187,22 @@ class RandomRotation90():
         """
         Apply random rotation to image and mask.
 
+        Uses torchvision.transforms.v2.functional.rotate rather than PIL's
+        Image.rotate so this also works when mask is a tv_tensors.Mask
+        (dispatches to nearest-neighbor interpolation automatically,
+        preserving discrete instance ids - see issue #120).
+
         Args:
-            img (PIL.Image): Input image
-            mask (PIL.Image): Corresponding mask
+            img (PIL.Image or Tensor): Input image
+            mask (PIL.Image, Tensor, or tv_tensors.Mask): Corresponding mask
 
         Returns:
             tuple: (rotated_img, rotated_mask)
         """
         if np.random.rand() < self.p:
-            angle = np.random.choice([90, 270])
-            img = img.rotate(angle)
-            mask = mask.rotate(angle)
+            angle = int(np.random.choice([90, 270]))
+            img = F.rotate(img, angle)
+            mask = F.rotate(mask, angle)
         return img, mask
 
 
@@ -436,13 +455,41 @@ def load_or_create_augmented_data(
     aug_img_dir = os.path.join(labelled_data_dir, 'augmented_images/')
     aug_mask_dir = os.path.join(labelled_data_dir, 'augmented_masks/')
 
-    if os.path.exists(aug_img_dir) and os.path.exists(aug_mask_dir) \
-            and len(os.listdir(aug_img_dir)) > 0 and len(os.listdir(aug_mask_dir)) > 0:
+    # Fingerprint the exact training split this cache would be derived from.
+    # Previously the cache was reused solely because the directory was
+    # non-empty, with no check that it came from the *current* train_imgs -
+    # an unseeded split_train_val (issue #51) meant every run silently reused
+    # augmented samples generated from a different, possibly overlapping-with-
+    # validation, split. Now that split_train_val is seeded, this fingerprint
+    # should normally match run to run, but this still guards against a
+    # changed seed/ratio/dataset leaving a stale, mismatched cache in place.
+    manifest_path = os.path.join(
+        labelled_data_dir, '.augmented_data_manifest.md5')
+    current_fingerprint = hashlib.md5(
+        ','.join(sorted(train_imgs)).encode()).hexdigest()
+    cached_fingerprint = None
+    if os.path.exists(manifest_path):
+        with open(manifest_path) as f:
+            cached_fingerprint = f.read().strip()
+
+    cache_valid = (
+        os.path.exists(aug_img_dir) and os.path.exists(aug_mask_dir)
+        and len(os.listdir(aug_img_dir)) > 0 and len(os.listdir(aug_mask_dir)) > 0
+        and cached_fingerprint == current_fingerprint
+    )
+
+    if cache_valid:
         print("Augmented images already exist. Skipping augmentation...")
         aug_img_names = sorted(os.listdir(aug_img_dir))
         aug_mask_names = sorted(os.listdir(aug_mask_dir))
         print(f'Loaded {len(aug_img_names)} existing augmented images')
     else:
+        if os.path.exists(aug_img_dir) or os.path.exists(aug_mask_dir):
+            print("Existing augmented data is stale (train split changed). "
+                  "Regenerating...")
+            shutil.rmtree(aug_img_dir, ignore_errors=True)
+            shutil.rmtree(aug_mask_dir, ignore_errors=True)
+
         # Create augmented dataset paths
         print("Creating augmented dataset...")
         n_augmented = int(len(train_imgs) * aug_ratio)
@@ -474,16 +521,25 @@ def load_or_create_augmented_data(
             img_name = f'aug_{i:03}.png'
             mask_name = f'aug_{i:03}_mask.png'
 
-            # Save the augmented image and mask
+            # Save the augmented image and mask. The mask must be saved as a
+            # true single-channel image, matching the original hand-labelled
+            # masks - plt.imsave(..., cmap='gray') writes an RGBA PNG instead
+            # (colormap-encoded), which broke tv_tensors.Mask-based transform
+            # dispatch (see issue #120) even though it happened to still work
+            # under the old plain-PIL mask path, since R=G=B for a grayscale
+            # colormap and the old code only ever read channel 0 back out.
             plt.imsave(os.path.join(aug_img_dir, img_name), img)
-            plt.imsave(os.path.join(aug_mask_dir, mask_name),
-                       mask, cmap='gray')
+            Image.fromarray(mask.astype(np.uint8)).convert('L').save(
+                os.path.join(aug_mask_dir, mask_name))
 
             aug_img_names.append(img_name)
             aug_mask_names.append(mask_name)
 
         print(
             f'Successfully created and saved {len(aug_img_names)} augmented images')
+
+        with open(manifest_path, 'w') as f:
+            f.write(current_fingerprint)
 
     # Validate augmented images
     print('Validating augmented image-mask pairs...')
@@ -620,40 +676,46 @@ class AugmentedCustDat(torch.utils.data.Dataset):
 
         # Check if this is an augmented image
         img = Image.open(img_path).convert("RGB")
-        mask = Image.open(mask_path)
+        mask_img = Image.open(mask_path)
+
+        # Wrap the mask as a tv_tensors.Mask so torchvision v2 transforms
+        # skip photometric ops (e.g. ColorJitter) on it entirely and use
+        # nearest-neighbor interpolation for geometric ones (e.g.
+        # ElasticTransform), instead of corrupting the instance-id values.
+        # Unlike a plain ToTensor() image, this leaves the mask unscaled
+        # (raw instance ids, not divided by 255) and without a channel dim.
+        mask_tv = tv_tensors.Mask(torch.as_tensor(np.array(mask_img)))
 
         # Apply transformations
-        img_tensor, mask_tensor = self.transform(img, mask)
+        img_tensor, mask_tensor = self.transform(img, mask_tv)
 
         # Convert mask back to numpy array
-        mask = mask_tensor.numpy()[0] * 255
-        mask = mask.astype(np.uint8)
+        mask = mask_tensor.numpy().astype(np.uint8)
 
-        # Filter objects by size
+        # Reject only degenerate (zero-area) boxes. Previously this filtered
+        # out any instance covering <0.5% of the image area, which silently
+        # dropped 27% of hand-drawn vessel annotations from the training
+        # target (see issue #117) while evaluation scored against all of
+        # them - a train/eval mismatch that tracked with the "model can't
+        # find small vessels" result.
         obj_ids = np.unique(mask)
         obj_ids = obj_ids[1:]
-        fin_objs = []
-        for obj in obj_ids:
-            if np.mean(mask == obj) > 0.005:
-                fin_objs.append(obj)
 
-        obj_ids = np.array(fin_objs)
-
-        num_objs = len(obj_ids)
-        masks = np.zeros((num_objs, mask.shape[0], mask.shape[1]))
-        for i in range(num_objs):
-            masks[i][mask == obj_ids[i]] = True
-
+        kept_masks = []
         boxes = []
-        for i in range(num_objs):
-            pos = np.where(masks[i] > 0)
+        for obj in obj_ids:
+            obj_mask = (mask == obj)
+            pos = np.where(obj_mask)
             if len(pos[0]) == 0:  # Skip if mask is empty
                 continue
             xmin = np.min(pos[1])
             xmax = np.max(pos[1])
             ymin = np.min(pos[0])
             ymax = np.max(pos[0])
+            if xmax <= xmin or ymax <= ymin:  # degenerate box, reject
+                continue
             boxes.append([xmin, ymin, xmax, ymax])
+            kept_masks.append(obj_mask)
 
         if len(boxes) == 0:  # If no valid boxes, create a dummy box
             boxes = torch.zeros((0, 4), dtype=torch.float32)
@@ -663,7 +725,8 @@ class AugmentedCustDat(torch.utils.data.Dataset):
         else:
             boxes = torch.as_tensor(boxes, dtype=torch.float32)
             labels = torch.ones((len(boxes),), dtype=torch.int64)
-            masks = torch.as_tensor(masks, dtype=torch.uint8)
+            masks = torch.as_tensor(
+                np.stack(kept_masks).astype(np.uint8))
 
         target = {}
         target["boxes"] = boxes
@@ -739,10 +802,14 @@ def create_dataloaders(
         drop_last=True
     )
 
+    # Validation must not use the training augmentation transform - model
+    # selection is driven by val_epoch_loss, so a randomly flipped/jittered/
+    # elastically-warped validation set makes that loss a noisy, irreproducible
+    # estimate of a different distribution than the one deployed (issue #118).
     val_dl = torch.utils.data.DataLoader(
         AugmentedCustDat(
             val_img_paths, val_mask_paths,
-            transform
+            T.ToTensor()
         ),
         batch_size=batch_size,
         shuffle=False,
