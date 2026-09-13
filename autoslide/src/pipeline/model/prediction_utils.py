@@ -88,7 +88,59 @@ def load_model(model_path=None, device=None):
     return model, device, transform
 
 
-def predict_single_image(model, image, device, transform, return_time=False):
+def combine_prediction_masks(masks, scores, mask_shape, score_threshold=0.3):
+    """
+    Combine per-instance predicted masks into a single confidence-weighted mask.
+
+    Instances scoring at or below `score_threshold` are dropped before
+    combining, so a single low-confidence spurious detection can no longer
+    dominate the output once it's renormalized to 0-255.
+
+    The default of 0.3 is the empirical optimum from a full 407-image
+    score_threshold x mask_threshold grid sweep (see
+    evaluation.sweep_thresholds / --threshold-sweep, issue #101): mean IoU
+    0.590 vs. 0.553 for the old unfiltered (score_threshold=0.0) behavior.
+
+    Args:
+        masks (numpy.ndarray): Raw predicted masks, shape (N, 1, H, W)
+        scores (numpy.ndarray): Confidence score per instance, shape (N,)
+        mask_shape (tuple): (H, W) to use for the empty-mask fallback
+        score_threshold (float): Minimum confidence score for an instance to
+            be included in the combination
+
+    Returns:
+        numpy.ndarray: Combined mask, uint8, 0-255
+    """
+    keep = scores > score_threshold
+    masks = masks[keep]
+    scores = scores[keep]
+
+    if len(masks) > 0:
+        # Weight masks by their confidence scores
+        combined_mask = np.zeros_like(masks[0, 0])
+        total_weight = 0
+
+        for mask, score in zip(masks, scores):
+            combined_mask += mask[0] * score
+            total_weight += score
+
+        # Normalize to 0-1 range, then convert to 0-255
+        if total_weight > 0:
+            combined_mask = combined_mask / total_weight
+
+        if combined_mask.max() > 0:
+            combined_mask = combined_mask / combined_mask.max()
+
+        # Convert to uint8 (0-255 range)
+        combined_mask = (combined_mask * 255).astype(np.uint8)
+    else:
+        combined_mask = np.zeros(mask_shape, dtype=np.uint8)
+
+    return combined_mask
+
+
+def predict_single_image(model, image, device, transform, return_time=False,
+                         score_threshold=0.3):
     """
     Perform prediction on a single image.
 
@@ -98,12 +150,11 @@ def predict_single_image(model, image, device, transform, return_time=False):
         device (torch.device): Device to run inference on
         transform (callable): Image transformation function
         return_time (bool): Whether to return prediction time
+        score_threshold (float): Minimum confidence score for a predicted
+            instance to be included in the combined mask
 
     Returns:
         numpy.ndarray or tuple: Combined predicted mask, optionally with prediction time
-
-
-    TODO: Set threshold for minimum confidence score for masks to accept
     """
     # Handle both PIL Image and file path inputs
     if isinstance(image, str):
@@ -125,31 +176,14 @@ def predict_single_image(model, image, device, transform, return_time=False):
 
     # Combine all predicted masks
     pred = predictions[0]
+    img_array = np.array(image)
     if len(pred["masks"]) > 0:
-        # Combine all masks with confidence weighting
         masks = pred["masks"].cpu().numpy()
         scores = pred["scores"].cpu().numpy()
-
-        # Weight masks by their confidence scores
-        combined_mask = np.zeros_like(masks[0, 0])
-        total_weight = 0
-
-        for mask, score in zip(masks, scores):
-            combined_mask += mask[0] * score
-            total_weight += score
-
-        # Normalize to 0-1 range, then convert to 0-255
-        if total_weight > 0:
-            combined_mask = combined_mask / total_weight
-
-        if combined_mask.max() > 0:
-            combined_mask = combined_mask / combined_mask.max()
-
-        # Convert to uint8 (0-255 range)
-        combined_mask = (combined_mask * 255).astype(np.uint8)
+        combined_mask = combine_prediction_masks(
+            masks, scores, img_array.shape[:2], score_threshold)
     else:
         # No predictions - create empty mask
-        img_array = np.array(image)
         combined_mask = np.zeros(
             (img_array.shape[0], img_array.shape[1]), dtype=np.uint8)
 
