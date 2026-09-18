@@ -82,7 +82,26 @@ def load_tracking_data(tracking_dir):
 
     for x in json_list:
         try:
-            suggested_regions_paths.append(x['suggested_regions_frame_path'])
+            path = x.get('suggested_regions_frame_path')
+            if not path or not os.path.exists(path):
+                # Fall back to locating the section_frame CSV on disk, since
+                # older tracking JSONs don't have suggested_regions_frame_path
+                # populated. Mirror the basename normalization suggest_regions.py
+                # uses to build output directory names, then glob with a
+                # wildcard suffix to absorb the scene-index suffix that
+                # multi-scene slides get appended to their folder name.
+                basename_stem = x['file_basename'].split('.')[0]
+                normalized = basename_stem.replace(' ', '_').replace('-', '_')
+                matches = glob(os.path.join(
+                    config['suggested_regions_dir'], normalized + '*', '*_section_frame.csv'))
+                path = matches[0] if matches else None
+
+            if not path:
+                print(
+                    f"No section_frame CSV found for {x['file_basename']}, skipping...")
+                continue
+
+            suggested_regions_paths.append(path)
             basename_list.append(x['file_basename'].split('.')[0])
             data_path_list.append(x['data_path'])
             scene_index_list.append(x.get('scene_index', 0))

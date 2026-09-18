@@ -59,6 +59,27 @@ def load_data(data_dir=None):
     return labelled_data_dir, img_dir, mask_dir, image_names, mask_names
 
 
+def seed_everything(seed=0):
+    """
+    Seed the global numpy/torch RNGs used by the augmentation pipeline.
+
+    split_train_val's own np.random.default_rng(seed) instance is already
+    reproducible, but everything downstream of it - negative/artificial-
+    vessel sample generation (augment_images, generate_negative_samples,
+    generate_artificial_vessels) and the per-epoch RandomShear/
+    RandomRotation90 transforms - draws from the *global* np.random/torch
+    RNG state, which was previously left unseeded. Two runs with identical
+    code and data therefore trained on a different augmented dataset each
+    time, which produced measurable IoU/Dice swings between otherwise-
+    identical retrains even though validation loss landed in the same
+    range.
+    """
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def split_train_val(image_names, mask_names, train_ratio=0.9, seed=0):
     """
     Split the dataset into training and validation sets.
@@ -761,20 +782,32 @@ def custom_collate(data):
     return tuple(zip(*data))
 
 
-def _worker_init_fn(_worker_id):
+def _worker_init_fn(worker_id):
     """
-    Limit each DataLoader worker process to a single torch/OpenCV thread.
+    Limit each DataLoader worker process to a single torch/OpenCV thread,
+    and seed its RNG deterministically.
 
-    Without this, every worker process defaults to using intra-op thread
-    pools sized for all available CPUs, so N worker *processes* each also
-    spawn up to N *threads* for tensor ops (e.g. inside ElasticTransform's
-    Gaussian blur). Measured effect: with num_workers=7 on an 8-core box,
-    aggregate throughput was unchanged from a single worker (~5.2s/image
-    either way) because the workers were fighting each other for cores
-    instead of running in parallel. One thread per worker process fixes it.
+    Without the thread-count limit, every worker process defaults to using
+    intra-op thread pools sized for all available CPUs, so N worker
+    *processes* each also spawn up to N *threads* for tensor ops (e.g.
+    inside ElasticTransform's Gaussian blur). Measured effect: with
+    num_workers=7 on an 8-core box, aggregate throughput was unchanged from
+    a single worker (~5.2s/image either way) because the workers were
+    fighting each other for cores instead of running in parallel. One
+    thread per worker process fixes it.
+
+    Each worker process forks with its own copy of the parent's RNG state,
+    so without an explicit per-worker seed here, the per-epoch on-the-fly
+    RandomShear/RandomRotation90/ColorJitter/flip draws (applied inside
+    AugmentedCustDat.__getitem__, which runs in these worker processes)
+    are not reproducible run to run even when seed_everything() has seeded
+    the main process.
     """
     torch.set_num_threads(1)
     cv.setNumThreads(0)
+    seed = 0 + worker_id
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
 
 def create_dataloaders(
@@ -819,6 +852,9 @@ def create_dataloaders(
     print(f'  CUDA available: {use_cuda}')
     print(f'  Pin memory: {use_cuda}')
 
+    shuffle_generator = torch.Generator()
+    shuffle_generator.manual_seed(0)
+
     train_dl = torch.utils.data.DataLoader(
         AugmentedCustDat(
             train_img_paths, train_mask_paths,
@@ -826,6 +862,7 @@ def create_dataloaders(
         ),
         batch_size=batch_size,
         shuffle=True,  # Changed to True for better training
+        generator=shuffle_generator,
         collate_fn=custom_collate,
         num_workers=num_workers,
         worker_init_fn=_worker_init_fn,
@@ -1028,6 +1065,8 @@ def prepare_data(data_dir=None, use_augmentation=True, batch_size=2):
         tuple: All necessary data components for training
     """
     print("Starting data preprocessing pipeline...")
+
+    seed_everything(0)
 
     # Load original data
     (

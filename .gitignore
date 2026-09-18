@@ -3,6 +3,7 @@
 *.svs
 *.cache*
 .aider*
+venv/
 /artifacts
 /plots
 *.egg-info/
