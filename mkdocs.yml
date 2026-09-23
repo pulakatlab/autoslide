@@ -74,6 +74,7 @@ nav:
     - Fibrosis Quantification: pipeline/fibrosis-quantification.md
   - Advanced Topics:
     - Color Correction: advanced/color-correction.md
+    - Color/Hue Pre-Flight Screening: advanced/color-qc-screening.md
     - Histogram Normalization: advanced/histogram-normalization.md
     - Arbitrary Directory Prediction: advanced/arbitrary-directory-prediction.md
   - Tools:
