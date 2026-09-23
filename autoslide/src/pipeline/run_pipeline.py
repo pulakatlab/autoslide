@@ -44,6 +44,11 @@ def parse_args():
                         help='Skip model training step')
     parser.add_argument('--no_augmentation', action='store_true',
                         help='Disable dataset augmentation during training')
+    parser.add_argument('--check_color_qc', action='store_true',
+                        help='Screen the suggested-regions batch for staining '
+                             'hue/color consistent with the training data before '
+                             'running prediction. Non-fatal: a flagged batch only '
+                             'logs a warning, the pipeline still runs.')
     return parser.parse_args()
 
 
@@ -111,6 +116,33 @@ def run_model_training(data_dir=None, use_augmentation=True):
         return False
 
 
+def run_color_qc_screen(data_dir=None):
+    """Screen the suggested-regions batch for staining hue/color consistent
+    with the training data. Non-fatal by design (see
+    docs/advanced/color-qc-screening.md): a flagged batch only logs a
+    warning -- the caller decides whether to stop and revalidate."""
+    logger.info("Starting color/hue pre-flight screen...")
+    from autoslide.src import config
+    from autoslide.src.utils.color_qc.screen import screen_batch, format_report
+
+    try:
+        suggested_regions_dir = config['suggested_regions_dir']
+        report = screen_batch(suggested_regions_dir)
+        logger.info("\n" + format_report(report))
+        if report['batch_overall']['verdict'] != 'in_bounds':
+            logger.warning(
+                f"Color/hue pre-flight screen flagged this batch as "
+                f"'{report['batch_overall']['verdict']}' -- staining hue looks "
+                f"unusual relative to the training data. Predictions on this "
+                f"batch may be less reliable; consider a visual spot-check. "
+                f"(Pipeline continues regardless.)"
+            )
+        return True
+    except Exception as e:
+        logger.error(f"Error in color/hue pre-flight screen: {str(e)}")
+        return False
+
+
 def run_prediction(data_dir=None):
     """Run the prediction step"""
     logger.info("Starting prediction...")
@@ -151,6 +183,11 @@ def main():
             logger.warning("Model training failed, but continuing pipeline...")
     else:
         logger.info("Skipping model training as requested")
+
+    if args.check_color_qc:
+        if not run_color_qc_screen(args.data_dir):
+            logger.warning(
+                "Color/hue pre-flight screen failed to run, but continuing pipeline...")
 
     if not run_prediction(args.data_dir):
         logger.warning("Prediction failed")
