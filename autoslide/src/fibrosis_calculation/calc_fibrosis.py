@@ -87,7 +87,8 @@ def gen_fibrosis_mask(
         # Check vessel mask format and binarize if necessary
         if vessel_mask.dtype != np.uint8:
             vessel_mask = (vessel_mask * 255).astype(np.uint8)
-        vessel_mask = vessel_mask > binarization_threshold  # Convert to binary using threshold
+        # Convert to binary using threshold
+        vessel_mask = vessel_mask > binarization_threshold
         vessel_binary = vessel_mask.astype(bool)
 
         # Set fibrosis mask to 0 where vessels are present
@@ -450,7 +451,8 @@ def process_all_fibrosis_quantification(
         print(f"Configuration:")
         print(f"  Data directory: {data_dir}")
         print(f"  Fibrosis config: {fibrosis_config}")
-        print(f"  Binarization threshold: {binarization_threshold} (uint8 format, 0-255)")
+        print(
+            f"  Binarization threshold: {binarization_threshold} (uint8 format, 0-255)")
         print(f"  Save visualizations: {save_visualizations}")
         print(f"  Max images: {max_images if max_images else 'unlimited'}")
         print(
@@ -521,8 +523,12 @@ def process_all_fibrosis_quantification(
         print(f"\nProcessing SVS: {svs_name} ({len(svs_images)} images)")
         svs_start_time = time.time()
 
-        # Process images in parallel for this SVS
-        if n_jobs > 1:
+        # Process images in parallel for this SVS. n_jobs follows joblib's
+        # convention (-1 = all cores, -2 = all but one, etc.), so only
+        # n_jobs == 1 means "run sequentially" -- `n_jobs > 1` treated the
+        # default `n_jobs=-1` as sequential, silently disabling parallelism
+        # for every run that didn't pass an explicit positive value.
+        if n_jobs != 1:
             results = Parallel(n_jobs=n_jobs, verbose=1 if verbose else 0)(
                 delayed(process_single_image_fibrosis)(
                     item, fibrosis_config, save_visualizations, vis_dir, results_dir, verbose, binarization_threshold
@@ -616,7 +622,7 @@ def process_all_fibrosis_quantification(
 def create_fibrosis_visualization(image, fibrosis_mask, binary_vessel_mask, results, image_name, vis_dir, binarization_threshold=0, verbose=False):
     """
     Create and save a visualization of fibrosis analysis results.
-    
+
     Args:
         binarization_threshold (int): Threshold used for binarizing vessel mask (0-255)
     """
