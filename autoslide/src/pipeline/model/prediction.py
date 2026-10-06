@@ -8,7 +8,6 @@ This script:
 4. Saves predicted masks to corresponding mask directories
 """
 
-from autoslide.src.pipeline import utils
 import os
 import numpy as np
 from glob import glob
@@ -225,7 +224,8 @@ def find_images_to_process(reprocess=False, verbose=False, custom_dir=None):
     return images_by_svs
 
 
-def predict_image_from_path(model, image_path, device, transform, verbose=False):
+def predict_image_from_path(model, image_path, device, transform, verbose=False,
+                            score_threshold=0.3):
     """
     Perform prediction on a single image from file path.
 
@@ -235,6 +235,8 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
         device: PyTorch device
         transform: Image transformation function
         verbose (bool): Whether to print detailed information
+        score_threshold (float): Minimum confidence score for a predicted
+            instance to be included in the combined mask
 
     Returns:
         tuple: (predicted_mask, prediction_time) or (None, None) if failed
@@ -255,7 +257,8 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
         # Time the prediction
         start_time = time.time()
         result = predict_single_image(
-            model, image_path, device, transform, return_time=False)
+            model, image_path, device, transform, return_time=False,
+            score_threshold=score_threshold)
         prediction_time = time.time() - start_time
 
         if verbose and result is not None:
@@ -277,10 +280,10 @@ def predict_image_from_path(model, image_path, device, transform, verbose=False)
 def binarize_mask(mask):
     """
     Binarize mask similar to calc_fibrosis.py approach.
-    
+
     Args:
         mask (numpy.ndarray): Input mask to binarize
-        
+
     Returns:
         numpy.ndarray: Binary mask as boolean array
     """
@@ -289,7 +292,7 @@ def binarize_mask(mask):
         mask = (mask * 255).astype(np.uint8)
     mask = mask > 0  # Convert to binary
     binary_mask = mask.astype(bool)
-    
+
     return binary_mask
 
 
@@ -314,7 +317,7 @@ def create_overlay_image(image_path, predicted_mask, overlay_path, verbose=False
 
         # Binarize mask using the same approach as calc_fibrosis.py
         binary_mask = binarize_mask(predicted_mask)
-        
+
         # Convert boolean mask to uint8 for contour detection
         binary_mask_uint8 = binary_mask.astype(np.uint8)
 
@@ -521,7 +524,8 @@ def save_prediction_visualization(image_path, mask_path, predicted_mask, plot_di
         print(f"Error creating visualization for {image_path}: {e}")
 
 
-def process_all_images(model_path=None, save_visualizations=False, max_images=None, reprocess=False, verbose=False, custom_dir=None):
+def process_all_images(model_path=None, save_visualizations=False, max_images=None, reprocess=False, verbose=False, custom_dir=None,
+                       score_threshold=0.3):
     """
     Process all images that need prediction, organized by SVS directory.
 
@@ -532,6 +536,7 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
         reprocess (bool): If True, remove existing outputs and reprocess all images
         verbose (bool): Whether to print detailed information
         custom_dir (str): Custom directory to search for images. If provided, uses this instead of config dir
+        score_threshold (float): Minimum confidence score for a predicted instance to be kept
     """
     if custom_dir:
         print(f"Starting batch prediction on custom directory: {custom_dir}")
@@ -627,7 +632,8 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
 
             # Perform prediction
             predicted_mask, prediction_time = predict_image_from_path(
-                model, image_path, device, transform, verbose=verbose)
+                model, image_path, device, transform, verbose=verbose,
+                score_threshold=score_threshold)
 
             if predicted_mask is not None:
                 # Save timing information to tracking JSON
@@ -641,14 +647,15 @@ def process_all_images(model_path=None, save_visualizations=False, max_images=No
                     binary_mask = binarize_mask(predicted_mask)
                     # Convert boolean mask to uint8 for saving (0 or 255)
                     binary_mask_uint8 = (binary_mask * 255).astype(np.uint8)
-                    
+
                     # Save binarized mask
                     mask_img = Image.fromarray(binary_mask_uint8, mode='L')
                     mask_img.save(mask_path)
 
                     if verbose:
                         print(f"    Binarized mask saved to: {mask_path}")
-                        print(f"    Mask contains {np.sum(binary_mask)} positive pixels")
+                        print(
+                            f"    Mask contains {np.sum(binary_mask)} positive pixels")
 
                     # Create and save overlay image
                     create_overlay_image(
@@ -723,6 +730,8 @@ def parse_args():
                         help='Print detailed information during processing')
     parser.add_argument('--reprocess', action='store_true',
                         help='Remove existing mask and overlay directories and reprocess all images')
+    parser.add_argument('--score-threshold', type=float, default=0.7,
+                        help='Minimum confidence score for a predicted instance to be kept (default: 0.7, the value chosen by the threshold sweep of the label-update run)')
     return parser.parse_args()
 
 
@@ -736,7 +745,8 @@ def main():
         max_images=args.max_images,
         reprocess=args.reprocess,
         verbose=args.verbose,
-        custom_dir=args.dir
+        custom_dir=args.dir,
+        score_threshold=args.score_threshold
     )
 
 
