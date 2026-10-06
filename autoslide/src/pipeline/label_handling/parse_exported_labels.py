@@ -1,240 +1,220 @@
-import pandas as pd
-from tqdm import tqdm, trange
+"""
+Parse a Labelbox ndjson export into training images and instance masks.
+
+For every row of the export this finds the image, rasterises the polygons of ALL
+annotators of that image into one mask, and writes
+
+    <data_dir>/labelled_images/images/<name>.png
+    <data_dir>/labelled_images/masks/<name>_mask.png
+    <data_dir>/labelled_images/test_plots/<name>.png     (image | mask QC plot)
+
+Mask encoding (union of annotators)
+-----------------------------------
+The polygons of all annotators are OR-ed into one binary mask and its connected
+components become the instances.  A component with id ``i`` (1..k) is stored with
+gray value ``255 - (i - 1) * (127 // k)``.  This keeps every instance distinct
+(``AugmentedCustDat`` treats each distinct gray value as an instance) and every
+instance above 0.5 once scaled to [0, 1] (the evaluation code binarises masks at
+0.5), so ``mask > 0`` is exactly the union of all polygons.  Overlapping polygons
+from different annotators (or from one annotator) merge into one instance.
+Images with no polygons get an all-zero mask (a skipped Labelbox label is a
+negative image).
+
+Usage:
+    python -m autoslide.src.pipeline.label_handling.parse_exported_labels \
+        [--ndjson PATH] [--data-dir DIR] [--extra-image-dir DIR ...]
+"""
+
+import argparse
 import os
-from glob import glob
-import matplotlib.pyplot as plt
-from PIL import Image, ImageDraw
-import numpy as np
-from autoslide.src import config
+import shutil
 
-# Get directories from config
-data_dir = config['data_dir']
-export_json_path = os.path.join(
-    # data_dir, #'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-7_30_2025.ndjson')
-    # "/home/abuzarmahmood/projects/autoslide_analysis/data/double_annotation_export.ndjson")
-    "/home/abuzarmahmood/projects/autoslide_data/labelled_images/ndjson/Export_project-trichrome_vessels_6_25-9_15_2025.ndjson")
-# data_dir, 'labelled_images/ndjson/Export_project-trichrome_vessels_6_25-6_27_2025.ndjson')
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+from PIL import Image, ImageDraw  # noqa: E402
+from scipy import ndimage  # noqa: E402
+from tqdm import tqdm, trange  # noqa: E402
 
-print(f"Loading export data from: {export_json_path}")
-if not os.path.exists(export_json_path):
-    print(f"ERROR: Export file not found at {export_json_path}")
-    exit(1)
+DEFAULT_NDJSON = os.path.join(
+    '/home/abuzarmahmood/projects/autoslide_data/labelled_images/ndjson',
+    'label_annotations_final_with_danyal.ndjson')
 
-export_df = pd.read_json(export_json_path, lines=True)
-print(f"Loaded {len(export_df)} rows from export file")
-# export_df = pd.DataFrame(export_df['data_row'].values.tolist())
+# Directories under data_dir that never hold source ROI images
+_SKIP_DIRS = {'svs', 'fibrosis_results', 'tracking', '_archive', 'artifacts', 'plots',
+              'masks', 'test_plots', 'augmented_images', 'augmented_masks', 'ndjson',
+              'overlays', 'initial_annotation', 'final_annotation', '.dvc', '.git'}
 
-filename_list = []
-polygon_list = []
-object_num_list = []
-all_filenames = set()
+MAX_INSTANCES = 127
 
-print("Parsing annotations from export data...")
-for row_ind in trange(len(export_df)):
-    # this_row = export_df.iloc[0]
-    this_row = export_df.iloc[row_ind]
-    file_name = this_row['data_row']['external_id']
-    all_filenames.add(file_name)
-    projects = this_row['projects']
-    project_keys = list(projects.keys())
 
-    # this_key = project_keys[0]
-    for this_key in project_keys:
-        labels = export_df.iloc[row_ind]['projects'][this_key]['labels']
+def instance_values(k):
+    """Gray values (descending from 255) used for instances 1..k."""
+    assert 1 <= k <= MAX_INSTANCES, f'{k} instances cannot be encoded'
+    step = 127 // k
+    return [255 - i * step for i in range(k)]
 
-        for this_label in labels:
-            objects = this_label['annotations']['objects']
-            for i, this_object in enumerate(objects):
-                polygon = this_object['polygon']
-                filename_list.append(file_name)
-                polygon_list.append(polygon)
-                object_num_list.append(i)
 
-polygon_df = pd.DataFrame(
-    {
-        'filename': filename_list,
-        'polygon': polygon_list,
-        'object_num': object_num_list
-    }
-)
+def build_instance_mask(polygons, width, height):
+    """
+    Union-of-polygons instance mask.
 
-print(f"Found {len(polygon_df)} polygon annotations across {len(all_filenames)} unique files")
+    Args:
+        polygons: iterable of polygons, each a list of (x, y) tuples
+        width, height: mask size in pixels
+    Returns:
+        (mask, n_instances): uint8 array (height, width), number of connected components
+    """
+    canvas = Image.new('L', (width, height), 0)
+    draw = ImageDraw.Draw(canvas)
+    for poly in polygons:
+        if len(poly) >= 3:
+            draw.polygon([tuple(p) for p in poly], outline=1, fill=1)
+    binary = np.array(canvas) > 0
+    labelled, k = ndimage.label(binary)  # 4-connectivity
+    mask = np.zeros((height, width), dtype=np.uint8)
+    if k:
+        lut = np.zeros(k + 1, dtype=np.uint8)
+        lut[1:] = instance_values(k)
+        mask = lut[labelled]
+    return mask, k
 
-# Find filepaths and plot overlays
-filenames = list(all_filenames)
-path_list = []
-print("Searching for image files in data directory...")
-missing_files = []
-for this_name in filenames:
-    # Search for this_name in data_dir
-    basename = os.path.basename(this_name)
-    glob_str = os.path.join(data_dir, '**', basename)
-    filepaths = glob(glob_str, recursive=True)
-    if len(filepaths) == 0:
-        path_list.append(None)
-        missing_files.append(this_name)
-    else:
-        path_list.append(filepaths[0])
 
-if missing_files:
-    print(f"WARNING: Could not find {len(missing_files)} files in data directory:")
-    for missing_file in missing_files[:5]:  # Show first 5 missing files
-        print(f"  - {missing_file}")
-    if len(missing_files) > 5:
-        print(f"  ... and {len(missing_files) - 5} more")
+def read_polygons(ndjson_path):
+    """
+    Returns:
+        filenames: list of external ids (one per row)
+        polygons: dict external_id -> list of polygons [(x, y), ...] (all annotators)
+    """
+    export_df = pd.read_json(ndjson_path, lines=True)
+    print(f'Loaded {len(export_df)} rows from {ndjson_path}')
+    filenames, polygons = [], {}
+    for row_ind in trange(len(export_df), desc='Parsing annotations'):
+        row = export_df.iloc[row_ind]
+        name = row['data_row']['external_id']
+        filenames.append(name)
+        polys = polygons.setdefault(name, [])
+        for project in row['projects'].values():
+            for label in project['labels']:
+                for obj in label['annotations']['objects']:
+                    if 'polygon' in obj:
+                        polys.append([(p['x'], p['y'])
+                                     for p in obj['polygon']])
+    return filenames, polygons
 
-path_map = dict(zip(filenames, path_list))
-polygon_df['filepath'] = polygon_df['filename'].map(path_map)
 
-rows_before = len(polygon_df)
-polygon_df = polygon_df.dropna()
-rows_after = len(polygon_df)
-if rows_before != rows_after:
-    print(f"Dropped {rows_before - rows_after} rows due to missing image files")
-print(f"Processing {rows_after} annotations with valid image paths")
+def index_images(data_dir, extra_image_dirs=()):
+    """basename -> path for every PNG under data_dir outside the excluded dirs
+    (one walk instead of one recursive glob per image) plus any extra_image_dirs
+    (e.g. a backup of a previous images/ dir that holds ROIs no longer under
+    data_dir). Earlier match wins: extra dirs / labelled_images/images, then
+    review_image_cache, then everything else."""
+    extra = [os.path.abspath(d) for d in extra_image_dirs]
 
-# Copy all images to a directory
-copy_dir = os.path.join(data_dir, 'labelled_images', 'images')
-os.makedirs(copy_dir, exist_ok=True)
-print(f"Copying images to: {copy_dir}")
-copied_count = 0
-for this_name, this_path in path_map.items():
-    if this_path is not None:
+    def priority(path):
+        if any(os.path.abspath(path).startswith(d + os.sep) for d in extra):
+            return 0
+        if f'{os.sep}labelled_images{os.sep}images{os.sep}' in path:
+            return 0
+        if 'review_image_cache' in path:
+            return 1
+        return 2
+    index = {}
+    for d in extra:
+        for f in os.listdir(d):
+            if f.endswith('.png'):
+                index[f] = os.path.join(d, f)
+    for root, dirs, files in os.walk(data_dir):
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
+        for f in files:
+            if f.endswith('.png'):
+                path = os.path.join(root, f)
+                if f not in index or priority(path) < priority(index[f]):
+                    index[f] = path
+    return index
+
+
+def main(ndjson_path=DEFAULT_NDJSON, data_dir=None, extra_image_dirs=()):
+    if data_dir is None:
+        from autoslide.src import config
+        data_dir = config['data_dir']
+    if not os.path.exists(ndjson_path):
+        raise SystemExit(f'ERROR: export file not found at {ndjson_path}')
+
+    filenames, polygons = read_polygons(ndjson_path)
+    all_names = list(dict.fromkeys(filenames))
+
+    print('Indexing image files...')
+    index = index_images(data_dir, extra_image_dirs)
+    path_map = {n: index.get(os.path.basename(n)) for n in all_names}
+    missing = [n for n, p in path_map.items() if p is None]
+    if missing:
+        print(
+            f'WARNING: {len(missing)} files not found under {data_dir}; first: {missing[:5]}')
+
+    img_dir = os.path.join(data_dir, 'labelled_images', 'images')
+    mask_dir = os.path.join(data_dir, 'labelled_images', 'masks')
+    plot_dir = os.path.join(data_dir, 'labelled_images', 'test_plots')
+    for d in (img_dir, mask_dir, plot_dir):
+        os.makedirs(d, exist_ok=True)
+
+    processed, errors = 0, 0
+    n_pos = n_neg = 0
+    for name in tqdm(all_names, desc='Writing images and masks'):
+        src = path_map[name]
+        if src is None:
+            continue
+        base = os.path.basename(name)
+        stem = os.path.splitext(base)[0]
         try:
-            os.system(f'cp {this_path} {copy_dir}')
-            copied_count += 1
-        except Exception as e:
-            print(f"ERROR copying {this_path}: {e}")
-print(f"Copied {copied_count} images")
+            img = Image.open(src)
+            width, height = img.size
+            mask, k = build_instance_mask(polygons[name], width, height)
+            dst = os.path.join(img_dir, base)
+            if os.path.abspath(src) != os.path.abspath(dst):
+                shutil.copy2(src, dst)
+            Image.fromarray(mask).save(
+                os.path.join(mask_dir, stem + '_mask.png'))
+            fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+            ax[0].imshow(img)
+            ax[1].imshow(mask, cmap='gray', vmin=0, vmax=255)
+            fig.savefig(os.path.join(plot_dir, stem + '.png'))
+            plt.close(fig)
+            processed += 1
+            n_pos += k > 0
+            n_neg += k == 0
+        except Exception as e:  # noqa: BLE001
+            print(f'ERROR processing {src}: {e}')
+            errors += 1
 
-# # Plot overlay
-# ind = 0
-# this_row = polygon_df.iloc[ind]
-# this_filepath = this_row['filepath']
-# this_polygon = this_row['polygon']
-# this_img = plt.imread(this_filepath)
-# poly_x = [x['x'] for x in this_polygon]
-# poly_y = [x['y'] for x in this_polygon]
-# plt.imshow(this_img)
-# plt.plot(poly_x, poly_y, '-o', c='y')
-# plt.show()
+    print(
+        f'Processed {processed} images ({n_pos} with vessels, {n_neg} without); {errors} errors')
 
-# Create mask and save to dir
-mask_dir = os.path.join(data_dir, 'labelled_images', 'masks')
-test_plot_dir = os.path.join(data_dir, 'labelled_images', 'test_plots')
-os.makedirs(mask_dir, exist_ok=True)
-os.makedirs(test_plot_dir, exist_ok=True)
-print(f"Creating masks in: {mask_dir}")
-print(f"Creating test plots in: {test_plot_dir}")
+    # Validation: keep only image/mask pairs that have a QC plot
+    plot_names = {p for p in os.listdir(plot_dir) if p.endswith('.png')}
+    wanted_masks = {p.replace('.png', '_mask.png') for p in plot_names}
+    for d, wanted in ((mask_dir, wanted_masks), (img_dir, plot_names)):
+        for f in os.listdir(d):
+            if f.endswith('.png') and f not in wanted:
+                os.remove(os.path.join(d, f))
+    print(
+        f'Final dataset: {len(os.listdir(img_dir))} images, {len(os.listdir(mask_dir))} masks')
+    return processed
 
-# Process all files found in ndjson, including those without annotations
-print("Processing images and creating masks...")
-processed_count = 0
-error_count = 0
-for filename in tqdm(filenames):
-    if filename not in path_map or path_map[filename] is None:
-        continue
 
-    this_filepath = path_map[filename]
-    this_filename = os.path.basename(filename)
-    filename_stem = os.path.splitext(this_filename)[0]
+def parse_args():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--ndjson', default=DEFAULT_NDJSON)
+    ap.add_argument('--data-dir', default=None,
+                    help='default: autoslide config data_dir')
+    ap.add_argument('--extra-image-dir', action='append', default=[],
+                    help='additional directory of source PNGs (repeatable)')
+    return ap.parse_args()
 
-    # Get polygons for this file (if any)
-    file_polygons = polygon_df[polygon_df['filename'] == filename]
 
-    try:
-        this_img = plt.imread(this_filepath)
-        width = this_img.shape[1]
-        height = this_img.shape[0]
-    except Exception as e:
-        print(f"ERROR reading image {this_filepath}: {e}")
-        error_count += 1
-        continue
-
-    img_list = []
-    if len(file_polygons) > 0:
-        # File has annotations - create masks from polygons
-        for this_row in file_polygons.iterrows():
-            this_polygon = this_row[1]['polygon']
-            this_obj_num = this_row[1]['object_num']
-            poly_x = [x['x'] for x in this_polygon]
-            poly_y = [x['y'] for x in this_polygon]
-
-            polygon = [(x, y) for x, y in zip(poly_x, poly_y)]
-            img = Image.new('L', (width, height), 0)
-            ImageDraw.Draw(img).polygon(
-                polygon, outline=this_obj_num+1, fill=this_obj_num+1)
-            img_list.append(img)
-
-        summed_img = np.sum(np.array(img_list), axis=0)
-        summed_img = summed_img / np.max(summed_img)
-    else:
-        # File has no annotations - create empty mask
-        summed_img = np.zeros((height, width))
-
-    mask = np.array(summed_img)*255
-    mask = mask.astype(np.uint8)
-
-    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    ax[0].imshow(this_img)
-    ax[1].imshow(summed_img)
-    # plt.show()
-    fig.savefig(os.path.join(test_plot_dir, filename_stem + '.png'))
-    plt.close(fig)
-
-    mask_filename = os.path.basename(
-        this_filepath).replace('.png', '_mask.png')
-    mask_filepath = os.path.join(mask_dir, mask_filename)
-    try:
-        Image.fromarray(mask).save(mask_filepath)
-        processed_count += 1
-    except Exception as e:
-        print(f"ERROR saving mask {mask_filepath}: {e}")
-        error_count += 1
-
-print(f"Successfully processed {processed_count} images")
-if error_count > 0:
-    print(f"Encountered {error_count} errors during processing")
-
-############################################################
-# Validation step
-############################################################
-# Many of the masks did not line up with the images.
-# If a name cannot be found in the test_plots dir, delete the mask and image
-
-print("\nStarting validation step...")
-val_img_paths = glob(os.path.join(test_plot_dir, '*.png'))
-val_basenames = [os.path.basename(x) for x in val_img_paths]
-print(f"Found {len(val_basenames)} validation plots")
-
-wanted_mask_names = [x.replace('.png', '_mask.png') for x in val_basenames]
-mask_paths = glob(os.path.join(mask_dir, '*.png'))
-img_paths = glob(os.path.join(copy_dir, '*.png'))
-print(f"Found {len(mask_paths)} masks and {len(img_paths)} images to validate")
-
-print("Cleaning up mismatched masks...")
-del_mask_count = 0
-for this_mask_path in mask_paths:
-    this_mask_name = os.path.basename(this_mask_path)
-    if this_mask_name not in wanted_mask_names:
-        try:
-            os.remove(this_mask_path)
-            del_mask_count += 1
-        except Exception as e:
-            print(f'ERROR deleting mask {this_mask_path}: {e}')
-
-print("Cleaning up mismatched images...")
-del_img_count = 0
-for this_img_path in img_paths:
-    this_img_name = os.path.basename(this_img_path)
-    if this_img_name not in val_basenames:
-        try:
-            os.remove(this_img_path)
-            del_img_count += 1
-        except Exception as e:
-            print(f'ERROR deleting image {this_img_path}: {e}')
-
-print(f"\nValidation complete:")
-print(f"  - Deleted {del_mask_count} mismatched masks")
-print(f"  - Deleted {del_img_count} mismatched images")
-print(f"  - Final dataset: {len(val_basenames)} image-mask pairs")
+if __name__ == '__main__':
+    args = parse_args()
+    main(args.ndjson, args.data_dir, args.extra_image_dir)
