@@ -73,6 +73,6 @@ def test_process_all_images_threads_threshold(image_path, tmp_path):
 
 def test_parse_args_score_threshold():
     with mock.patch.object(sys, 'argv', ['prediction.py']):
-        assert prediction.parse_args().score_threshold == 0.3
+        assert prediction.parse_args().score_threshold == 0.7
     with mock.patch.object(sys, 'argv', ['prediction.py', '--score-threshold', '0.45']):
         assert prediction.parse_args().score_threshold == 0.45

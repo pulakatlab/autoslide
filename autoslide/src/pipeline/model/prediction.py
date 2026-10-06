@@ -730,8 +730,8 @@ def parse_args():
                         help='Print detailed information during processing')
     parser.add_argument('--reprocess', action='store_true',
                         help='Remove existing mask and overlay directories and reprocess all images')
-    parser.add_argument('--score-threshold', type=float, default=0.3,
-                        help='Minimum confidence score for a predicted instance to be kept (default: 0.3)')
+    parser.add_argument('--score-threshold', type=float, default=0.7,
+                        help='Minimum confidence score for a predicted instance to be kept (default: 0.7, the value chosen by the threshold sweep of the label-update run)')
     return parser.parse_args()
 
 
